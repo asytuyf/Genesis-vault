@@ -1,8 +1,8 @@
 "use client";
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import Link from "next/link";
-import { Search, ChevronLeft, Terminal, Copy, Clock, Hash, Zap } from "lucide-react";
+import Link from "next/link"; 
+import { Search, Github, ExternalLink, Box, Activity, Cpu, TriangleAlert, Star, Calendar, Zap, FileCode, Terminal } from "lucide-react"; 
 
 export default function CommandArchive() {
   const [snippets, setSnippets] = useState<any[]>([]);
