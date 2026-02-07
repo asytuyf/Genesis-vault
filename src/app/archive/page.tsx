@@ -1,8 +1,8 @@
 "use client";
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import Link from "next/link"; 
-import { Search, Github, ExternalLink, Box, Activity, Cpu, TriangleAlert, Star, Calendar, Zap, FileCode, Terminal } from "lucide-react"; 
+import Link from "next/link";
+import { Search, ChevronLeft, Terminal, Copy, Clock, Hash, Zap } from "lucide-react";
 
 export default function CommandArchive() {
   const [snippets, setSnippets] = useState<any[]>([]);
@@ -11,23 +11,29 @@ export default function CommandArchive() {
   useEffect(() => {
     fetch("/snippets.json")
       .then(res => res.json())
-      .then(data => setSnippets([...data].reverse()));
+      .then(data => setSnippets([...data].reverse()))
+      .catch(() => setSnippets([]));
   }, []);
 
   const filtered = snippets.filter(s => 
-    s.cmd.toLowerCase().includes(search.toLowerCase()) || 
-    s.cat.toLowerCase().includes(search.toLowerCase()) ||
-    s.desc.toLowerCase().includes(search.toLowerCase())
+    s.cmd?.toLowerCase().includes(search.toLowerCase()) || 
+    s.cat?.toLowerCase().includes(search.toLowerCase()) ||
+    s.desc?.toLowerCase().includes(search.toLowerCase())
   );
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
-    alert("COMMAND_COPIED_TO_CLIPBOARD");
+    // Industrial style alert
+    const notification = document.createElement("div");
+    notification.innerText = "COMMAND_COPIED_TO_CLIPBOARD";
+    notification.style.cssText = "fixed; bottom: 50px; right: 50px; background: #facc15; color: black; padding: 10px; font-weight: bold; z-index: 9999; font-family: monospace;";
+    document.body.appendChild(notification);
+    setTimeout(() => notification.remove(), 2000);
   };
 
   return (
     <main className="relative min-h-screen bg-[#050505] text-[#f4f4f5] font-mono overflow-hidden p-12 md:p-24">
-      {/* Background FX (Same as main page) */}
+      {/* Background FX */}
       <div className="tv-static fixed inset-0 opacity-[0.03] pointer-events-none" />
       
       {/* HEADER */}
@@ -60,7 +66,7 @@ export default function CommandArchive() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             key={i} 
-            className="group bg-[#0a0a0a] border border-zinc-800 p-6 hover:border-cyan-500 transition-all"
+            className="group bg-[#0a0a0a] border border-zinc-800 p-6 hover:border-cyan-500 transition-all shadow-xl"
           >
             <div className="flex justify-between items-center mb-6">
               <span className="text-[10px] font-black px-2 py-0.5 bg-cyan-500/10 text-cyan-500 border border-cyan-500/20 rounded uppercase">
