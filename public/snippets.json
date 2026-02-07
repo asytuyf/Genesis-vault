@@ -4,5 +4,11 @@
     "cat": "nix",
     "desc": "Applies new changes of home-manager",
     "date": "2026-02-07"
+  },
+  {
+    "cmd": "home-manager switch",
+    "cat": "nix",
+    "desc": "Applies the new stuff added to home manager",
+    "date": "2026-02-07"
   }
 ]
