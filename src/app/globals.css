@@ -1,0 +1,75 @@
+/* src/app/globals.css */
+@import "tailwindcss"; /* For Tailwind v4 */
+
+/* Fallback for Tailwind v3 if v4 isn't active */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  background-color: #050505;
+}
+
+body {
+  background: #050505;
+  color: #ededed;
+  overflow-x: hidden;
+  user-select: none;
+  margin: 0;
+}
+
+/* FIX: Force icons to stay small even if Tailwind fails to load */
+img {
+  max-width: 100%;
+  display: block;
+}
+
+.icon-fix {
+  width: 16px !important;
+  height: 16px !important;
+}
+
+/* 1. SOLID YELLOW HAZARD BARS */
+.hazard-bar {
+  background-color: #facc15 !important;
+  height: 28px !important;
+  display: flex;
+  align-items: center;
+  position: fixed;
+  left: 0;
+  right: 0;
+  z-index: 9999;
+}
+
+/* 2. ROUND 3D STICKERS */
+.sticker-3d {
+  border: 6px solid #ffffff !important;
+  border-radius: 9999px !important;
+  box-shadow: 10px 10px 0px rgba(0, 0, 0, 1), 0 20px 40px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+}
+
+/* 3. SUBTLE SHIMMER */
+.holo-shimmer {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.15) 50%, rgba(255,255,255,0) 100%);
+  background-size: 200% 200%;
+  animation: shimmer 6s linear infinite;
+  pointer-events: none;
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% -200%; }
+  100% { background-position: 200% 200%; }
+}
+
+/* 4. TABLE STYLING */
+.project-row {
+  transition: all 0.2s ease;
+  background: rgba(17, 17, 17, 0.4);
+}
+.project-row:hover {
+  background: rgba(250, 204, 21, 0.05);
+  transform: translateX(10px);
+}
