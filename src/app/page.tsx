@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Search, Github, ExternalLink, Box, Activity, Cpu, TriangleAlert, Star, Calendar, Zap, FileCode } from "lucide-react";
+import { Search, Github, ExternalLink, Box, Activity, Cpu, TriangleAlert, Star, Calendar, Zap, FileCode, Terminal, Link } from "lucide-react";
 
 const LogoModule = ({ lang }: { lang: string }) => {
   const [error, setError] = useState(false);
@@ -121,7 +121,13 @@ export default function GenesisVault() {
             <h1 className="text-8xl md:text-[11rem] font-black tracking-tighter text-white uppercase leading-[0.75]">GENESIS</h1>
             <h1 className="text-8xl md:text-[11rem] font-black tracking-tighter text-zinc-900 uppercase leading-[0.75]">_VAULT.</h1>
           </div>
-
+          {/* Link to Archive */}
+          <div className="mb-12">
+            <Link href="/archive" className="inline-flex items-center gap-3 px-6 py-3 bg-[#facc15] text-black font-black uppercase text-xs border-2 border-black hover:scale-105 transition-transform shadow-[4px_4px_0px_rgba(255,255,255,0.1)]">
+              <Terminal size={16} />
+              Open_Command_Archive
+            </Link>
+          </div>
           <div className="relative max-w-md">
             <input 
               type="text" 
