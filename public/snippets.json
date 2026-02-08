@@ -10,5 +10,35 @@
     "cat": "nix",
     "desc": "Applies the new stuff added to home manager",
     "date": "2026-02-07"
+  },
+  {
+    "cmd": "nsync message",
+    "cat": "nix",
+    "desc": "Build system, apply changes, and auto-sync all configuration files to GitHub.",
+    "date": "2026-02-08"
+  },
+  {
+    "cmd": "nsync message",
+    "cat": "nix",
+    "desc": "Build system, apply changes, and auto-sync all configuration files to GitHub.",
+    "date": "2026-02-08"
+  },
+  {
+    "cmd": "nsync message",
+    "cat": "nix",
+    "desc": "Build system, apply changes, and auto-sync all configuration files to GitHub.",
+    "date": "2026-02-08"
+  },
+  {
+    "cmd": "vault-sync",
+    "cat": "git",
+    "desc": "Push my new commands to GitHub and trigger the Vercel deploy for my directory website.",
+    "date": "2026-02-08"
+  },
+  {
+    "cmd": "mycmds",
+    "cat": "terminal",
+    "desc": "Quickly view the local cheatsheet of all saved commands in the terminal.",
+    "date": "2026-02-08"
   }
 ]
