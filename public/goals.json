@@ -22,5 +22,13 @@
     "priority": "High",
     "status": "PENDING",
     "date": "2026-02-09"
+  },
+  {
+    "id": "1770592126",
+    "project": "Website",
+    "task": "Fix the show more of the description button on the homepage",
+    "priority": "Med",
+    "status": "PENDING",
+    "date": "2026-02-09"
   }
 ]
