@@ -12,8 +12,19 @@ export default function CommandArchive() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    fetch("/snippets.json").then(res => res.json()).then(data => setSnippets([...data].reverse()));
-  }, []);
+      // We fetch from GitHub Raw to get the REAL, live data
+      // Added ?t=${Date.now()} to force the browser to never use a cache
+      const liveUrl = `https://raw.githubusercontent.com/Asytuyf/nixos-config/main/public/snippets.json?t=${Date.now()}`;
+
+      fetch(liveUrl)
+        .then(res => res.json())
+        .then(data => {
+          if (Array.isArray(data)) {
+            setSnippets([...data].reverse());
+          }
+        })
+        .catch(() => setSnippets([]));
+    }, []);
 
   const nukeSnippet = async (indexInFiltered: number) => {
     if (!confirm("NUKE_THIS_ENTRY?")) return;
