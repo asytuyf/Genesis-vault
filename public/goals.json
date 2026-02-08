@@ -26,7 +26,7 @@
   {
     "id": "1770592126",
     "project": "Website",
-    "task": "Fix the show more of the description button on the homepage",
+    "task": "Fix the show more of the description button on the homepage (works on phone)",
     "priority": "Med",
     "status": "PENDING",
     "date": "2026-02-09"
