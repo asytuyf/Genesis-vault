@@ -46,5 +46,13 @@
     "priority": "High",
     "status": "PENDING",
     "date": "2026-02-09"
+  },
+  {
+    "id": "1770602846",
+    "project": "Website",
+    "task": "Make a section of the website where i can see like real time like info about my pc's that are turned on which leads to a much complicated project (AI into the site)",
+    "priority": "Med",
+    "status": "PENDING",
+    "date": "2026-02-09"
   }
 ]
