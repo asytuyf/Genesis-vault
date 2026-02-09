@@ -40,5 +40,11 @@
     "cat": "terminal",
     "desc": "Quickly view the local cheatsheet of all saved commands in the terminal.",
     "date": "2026-02-08"
+  },
+  {
+    "cmd": "exec zsh",
+    "cat": "shell",
+    "desc": "Reloads the Zsh shell to apply new configurations and activate new aliases/functions.",
+    "date": "2026-02-09"
   }
 ]
