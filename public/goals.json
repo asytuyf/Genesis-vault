@@ -54,5 +54,13 @@
     "priority": "Med",
     "status": "PENDING",
     "date": "2026-02-09"
+  },
+  {
+    "id": "1770632955",
+    "project": "Life",
+    "task": "GEt gemini trial for 1 year using uni email and link it to my personel gmail maybe",
+    "priority": "Med",
+    "status": "PENDING",
+    "date": "2026-02-09"
   }
 ]
