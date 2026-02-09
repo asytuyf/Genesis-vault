@@ -38,5 +38,13 @@
     "priority": "Low",
     "status": "PENDING",
     "date": "2026-02-09"
+  },
+  {
+    "id": "1770598987",
+    "project": "Website",
+    "task": "Add a copy icon and functionality in the command vault next to the commands themselves",
+    "priority": "High",
+    "status": "PENDING",
+    "date": "2026-02-09"
   }
 ]
