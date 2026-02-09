@@ -46,5 +46,11 @@
     "cat": "shell",
     "desc": "Reloads the Zsh shell to apply new configurations and activate new aliases/functions.",
     "date": "2026-02-09"
+  },
+  {
+    "cmd": "reveal",
+    "cat": "Shell",
+    "desc": "Reveals the files and the folders and what's insid",
+    "date": "2026-02-09"
   }
 ]
