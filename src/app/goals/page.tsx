@@ -299,18 +299,18 @@ export default function DirectiveLog() {
                 <Hash size={12} className="text-emerald-500" />
               </div>
 
-              <div className="flex justify-between items-center mb-8">
-                <div className="flex items-center gap-2 px-2 py-0.5 bg-zinc-900 border border-zinc-800 rounded text-zinc-500 text-[10px] font-black uppercase tracking-widest group-hover:border-emerald-500/30 group-hover:text-emerald-500 transition-colors">
+              <div className="flex flex-wrap items-start gap-2 mb-8">
+                <div className="flex items-center gap-2 px-2 py-0.5 bg-zinc-900 border border-zinc-800 rounded text-zinc-500 text-[10px] font-black uppercase tracking-widest group-hover:border-emerald-500/30 group-hover:text-emerald-500 transition-colors min-w-0 flex-1 break-words">
                     <Tag size={10} />
                     {g.project}
                 </div>
-                <div className="flex items-center gap-2 text-zinc-700 text-[10px] font-bold">
+                <div className="flex items-center gap-2 text-zinc-700 text-[10px] font-bold whitespace-nowrap ml-auto">
                     <Clock size={12} /> {g.date}
                 </div>
               </div>
 
               <div className="mb-8">
-                <h3 className="text-xl md:text-2xl font-bold uppercase tracking-tight text-zinc-100 group-hover:text-white transition-colors leading-tight">
+                <h3 className="text-xl md:text-2xl font-bold uppercase tracking-tight text-zinc-100 group-hover:text-white transition-colors leading-tight break-words">
                     {g.task}
                 </h3>
               </div>

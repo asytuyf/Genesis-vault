@@ -54,11 +54,13 @@ export const FileExplorer = ({ mobileOpen, setMobileOpen }: FileExplorerProps) =
             <Terminal size={20} strokeWidth={2.5} />
             <span className="text-sm font-black tracking-[0.2em] uppercase">System_Root</span>
           </div>
-          <div className="flex gap-1">
-            <div className="w-1 h-1 bg-white/20 rounded-full" />
-            <div className="w-1 h-1 bg-white/20 rounded-full" />
-            <div className="w-1 h-1 bg-white/20 rounded-full" />
-          </div>
+          {!isMobileView && (
+            <div className="flex gap-1">
+              <div className="w-1 h-1 bg-white/20 rounded-full" />
+              <div className="w-1 h-1 bg-white/20 rounded-full" />
+              <div className="w-1 h-1 bg-white/20 rounded-full" />
+            </div>
+          )}
           {isMobileView && (
             <button
               onClick={() => setMobileOpenValue(false)}
@@ -133,16 +135,28 @@ export const FileExplorer = ({ mobileOpen, setMobileOpen }: FileExplorerProps) =
                         >
                           <File
                             size={18}
-                            className="text-zinc-600 group-hover/file:text-yellow-400 transition-colors"
+                            className={`transition-colors ${
+                              isMobileView ? "text-yellow-400" : "text-zinc-600 group-hover/file:text-yellow-400"
+                            }`}
                           />
                           <span
-                            className={`text-sm font-medium text-zinc-500 group-hover/file:text-white transition-colors ${
-                              pathname === "/" ? "text-white" : ""
+                            className={`text-sm font-medium transition-colors ${
+                              isMobileView
+                                ? pathname === "/"
+                                  ? "text-yellow-400"
+                                  : "text-zinc-400"
+                                : `text-zinc-500 group-hover/file:text-white ${pathname === "/" ? "text-white" : ""}`
                             }`}
                           >
                             page.tsx
                           </span>
-                          <span className="ml-auto text-[9px] px-1.5 py-0.5 rounded bg-zinc-900/80 text-zinc-500 font-bold border border-zinc-800 group-hover/file:border-yellow-400/30 group-hover/file:text-yellow-400 transition-all">
+                          <span
+                            className={`ml-auto text-[9px] px-1.5 py-0.5 rounded bg-zinc-900/80 font-bold border transition-all ${
+                              isMobileView
+                                ? "text-yellow-400 border-yellow-400/30"
+                                : "text-zinc-500 border-zinc-800 group-hover/file:border-yellow-400/30 group-hover/file:text-yellow-400"
+                            }`}
+                          >
                             HOME
                           </span>
                         </Link>
@@ -175,16 +189,30 @@ export const FileExplorer = ({ mobileOpen, setMobileOpen }: FileExplorerProps) =
                               >
                                 <File
                                   size={18}
-                                  className="text-zinc-600 group-hover/file:text-cyan-400 transition-colors"
+                                  className={`transition-colors ${
+                                    isMobileView ? "text-cyan-400" : "text-zinc-600 group-hover/file:text-cyan-400"
+                                  }`}
                                 />
                                 <span
-                                  className={`text-sm font-medium text-zinc-500 group-hover/file:text-white transition-colors ${
-                                    pathname === "/archive" ? "text-white" : ""
+                                  className={`text-sm font-medium transition-colors ${
+                                    isMobileView
+                                      ? pathname === "/archive"
+                                        ? "text-cyan-400"
+                                        : "text-zinc-400"
+                                      : `text-zinc-500 group-hover/file:text-white ${
+                                          pathname === "/archive" ? "text-white" : ""
+                                        }`
                                   }`}
                                 >
                                   page.tsx
                                 </span>
-                                <span className="ml-auto text-[9px] px-1.5 py-0.5 rounded bg-zinc-900/80 text-zinc-500 font-bold border border-zinc-800 group-hover/file:border-cyan-400/30 group-hover/file:text-cyan-400 transition-all">
+                                <span
+                                  className={`ml-auto text-[9px] px-1.5 py-0.5 rounded bg-zinc-900/80 font-bold border transition-all ${
+                                    isMobileView
+                                      ? "text-cyan-400 border-cyan-400/30"
+                                      : "text-zinc-500 border-zinc-800 group-hover/file:border-cyan-400/30 group-hover/file:text-cyan-400"
+                                  }`}
+                                >
                                   ARCHIVE
                                 </span>
                               </Link>
@@ -220,16 +248,32 @@ export const FileExplorer = ({ mobileOpen, setMobileOpen }: FileExplorerProps) =
                               >
                                 <File
                                   size={18}
-                                  className="text-zinc-600 group-hover/file:text-emerald-400 transition-colors"
+                                  className={`transition-colors ${
+                                    isMobileView
+                                      ? "text-emerald-400"
+                                      : "text-zinc-600 group-hover/file:text-emerald-400"
+                                  }`}
                                 />
                                 <span
-                                  className={`text-sm font-medium text-zinc-500 group-hover/file:text-white transition-colors ${
-                                    pathname === "/goals" ? "text-white" : ""
+                                  className={`text-sm font-medium transition-colors ${
+                                    isMobileView
+                                      ? pathname === "/goals"
+                                        ? "text-emerald-400"
+                                        : "text-zinc-400"
+                                      : `text-zinc-500 group-hover/file:text-white ${
+                                          pathname === "/goals" ? "text-white" : ""
+                                        }`
                                   }`}
                                 >
                                   page.tsx
                                 </span>
-                                <span className="ml-auto text-[9px] px-1.5 py-0.5 rounded bg-zinc-900/80 text-zinc-500 font-bold border border-zinc-800 group-hover/file:border-emerald-400/30 group-hover/file:text-emerald-400 transition-all">
+                                <span
+                                  className={`ml-auto text-[9px] px-1.5 py-0.5 rounded bg-zinc-900/80 font-bold border transition-all ${
+                                    isMobileView
+                                      ? "text-emerald-400 border-emerald-400/30"
+                                      : "text-zinc-500 border-zinc-800 group-hover/file:border-emerald-400/30 group-hover/file:text-emerald-400"
+                                  }`}
+                                >
                                   GOALS
                                 </span>
                               </Link>

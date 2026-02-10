@@ -16,8 +16,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className={jbMono.className}>
         {/* Mobile Menu Button */}
         <button
+          type="button"
           onClick={() => setMobileExplorerOpen(true)}
-          className="fixed top-4 left-4 z-[700] p-2 bg-black/50 border border-zinc-800 rounded-lg md:hidden text-zinc-400 hover:text-white transition-colors"
+          aria-label="Open file explorer"
+          aria-expanded={mobileExplorerOpen}
+          className={`fixed left-4 top-[36px] z-[700] p-2 bg-black/50 border border-zinc-800 rounded-lg md:hidden text-zinc-400 hover:text-white transition-colors ${
+            mobileExplorerOpen ? "opacity-0 pointer-events-none" : "opacity-100"
+          }`}
         >
           <Menu size={24} />
         </button>
