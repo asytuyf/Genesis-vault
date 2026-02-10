@@ -34,5 +34,11 @@
     "cat": "shell",
     "desc": "Reveals the files and the folders inside the current directory and what's inside them",
     "date": "2026-02-10"
+  },
+  {
+    "cmd": "/resume",
+    "cat": "ClaudeAI",
+    "desc": "Resumes a conversation from where left off",
+    "date": "2026-02-10"
   }
 ]
