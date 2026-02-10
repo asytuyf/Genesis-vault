@@ -62,5 +62,13 @@
     "priority": "Med",
     "status": "PENDING",
     "date": "2026-02-09"
+  },
+  {
+    "id": "1770682881",
+    "project": "Website",
+    "task": "Make the explorer tab be moveable and closed by clicking a certain button but make it reset to be revealed by hover",
+    "priority": "Med",
+    "status": "PENDING",
+    "date": "2026-02-10"
   }
 ]

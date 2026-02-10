@@ -7,16 +7,18 @@
 @tailwind utilities;
 
 :root {
-  background-color: #050505;
+  background-color: #0d0d0d;
 }
 
 body {
-  background: #050505;
+  background: #0d0d0d;
   color: #ededed;
   overflow-x: hidden;
   user-select: none;
   margin: 0;
+  position: relative;
 }
+
 
 /* FIX: Force icons to stay small even if Tailwind fails to load */
 img {
@@ -29,7 +31,9 @@ img {
   height: 16px !important;
 }
 
-/* 1. SOLID YELLOW HAZARD BARS */
+/* Hazard bars are now dynamically styled in components, this class is no longer globally applied or needed. */
+/* Keeping this comment here for historical context. */
+/*
 .hazard-bar {
   background-color: #facc15 !important;
   height: 28px !important;
@@ -40,6 +44,7 @@ img {
   right: 0;
   z-index: 9999;
 }
+*/
 
 /* 2. ROUND 3D STICKERS */
 .sticker-3d {
@@ -47,24 +52,10 @@ img {
   border-radius: 9999px !important;
   box-shadow: 10px 10px 0px rgba(0, 0, 0, 1), 0 20px 40px rgba(0, 0, 0, 0.5);
   overflow: hidden;
+  position: relative;
 }
 
-/* 3. SUBTLE SHIMMER */
-.holo-shimmer {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(135deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.15) 50%, rgba(255,255,255,0) 100%);
-  background-size: 200% 200%;
-  animation: shimmer 6s linear infinite;
-  pointer-events: none;
-}
-
-@keyframes shimmer {
-  0% { background-position: -200% -200%; }
-  100% { background-position: 200% 200%; }
-}
-
-/* 4. TABLE STYLING */
+/* 3. TABLE STYLING */
 .project-row {
   transition: all 0.2s ease;
   background: rgba(17, 17, 17, 0.4);
@@ -72,4 +63,20 @@ img {
 .project-row:hover {
   background: rgba(250, 204, 21, 0.05);
   transform: translateX(10px);
+}
+
+/* Custom scrollbar for mobile */
+.custom-scrollbar-mobile::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.custom-scrollbar-mobile::-webkit-scrollbar-track {
+  background: #0d0d0d;
+}
+.custom-scrollbar-mobile::-webkit-scrollbar-thumb {
+  background: #222;
+  border-radius: 3px;
+}
+.custom-scrollbar-mobile::-webkit-scrollbar-thumb:hover {
+  background: #facc15;
 }

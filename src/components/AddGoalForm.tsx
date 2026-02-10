@@ -1,0 +1,117 @@
+"use client";
+import { useState } from "react";
+import { motion } from "framer-motion";
+import { Plus, X } from "lucide-react"; // Import X for close button
+import React from "react";
+
+interface Goal {
+  id: string;
+  task: string;
+  project: string;
+  priority: string;
+  date: string;
+}
+
+interface AddGoalFormProps {
+  password: string;
+  setGoals: React.Dispatch<React.SetStateAction<Goal[]>>;
+  currentGoals: Goal[];
+  setLoadingAction: React.Dispatch<React.SetStateAction<boolean>>;
+  loadingAction: boolean;
+  onClose: () => void; // Function to close the modal
+}
+
+export const AddGoalForm = ({ password, setGoals, currentGoals, setLoadingAction, loadingAction, onClose }: AddGoalFormProps) => {
+  const [task, setTask] = useState("");
+  const [project, setProject] = useState("");
+  const [priority, setPriority] = useState("Low"); // Default priority for new goals
+
+  const handleAddGoal = async () => {
+    if (!task.trim()) {
+      alert("Goal task cannot be empty.");
+      return;
+    }
+    setLoadingAction(true);
+
+    const newGoal: Goal = {
+      id: Date.now().toString(), // Simple unique ID
+      task: task.trim(),
+      project: project.trim() || "GLOBAL", // Default to GLOBAL if project is empty
+      priority: priority,
+      date: new Date().toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' }), // Current date
+    };
+
+    const updatedGoals = [...currentGoals, newGoal];
+
+    const res = await fetch('/api/goals', {
+      method: 'POST',
+      body: JSON.stringify({ password, updatedGoals: updatedGoals.reverse() }) // Reverse for GitHub storage as per nukeGoal logic
+    });
+
+    if (res.ok) {
+      setGoals(updatedGoals); // Update local state
+      setTask("");
+      setProject("");
+      setPriority("Low"); // Reset priority to default
+      alert("Goal added successfully!");
+      onClose(); // Close the modal on success
+    } else {
+      alert("Failed to add goal. AUTH_FAILURE or API_ERROR.");
+    }
+    setLoadingAction(false);
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.9 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.9 }}
+      className="fixed inset-0 z-[600] flex items-center justify-center p-4"
+    >
+      {/* Overlay */}
+      <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose}></div>
+      
+      {/* Modal Content */}
+      <div className="relative bg-[#0a0a0a] border border-zinc-800 p-8 rounded-xl shadow-2xl w-full max-w-md font-mono z-[610]">
+        <button onClick={onClose} className="absolute top-4 right-4 text-zinc-600 hover:text-emerald-400 transition-colors">
+            <X size={20} />
+        </button>
+        <h4 className="text-emerald-400 text-xl font-black uppercase tracking-wider mb-6 border-b border-zinc-700 pb-3">Add New Goal:</h4>
+        
+        <div className="flex flex-col gap-4">
+            <input
+                type="text"
+                placeholder="Task Description..."
+                className="bg-black border border-zinc-800 px-4 py-2.5 text-base outline-none focus:border-emerald-400 text-zinc-300 placeholder:text-zinc-600"
+                value={task}
+                onChange={(e) => setTask(e.target.value)}
+            />
+            <input
+                type="text"
+                placeholder="Project/Tags (e.g., UI, Backend)..."
+                className="bg-black border border-zinc-800 px-4 py-2.5 text-base outline-none focus:border-emerald-400 text-zinc-300 placeholder:text-zinc-600"
+                value={project}
+                onChange={(e) => setProject(e.target.value)}
+            />
+            <select
+                className="bg-black border border-zinc-800 px-4 py-2.5 text-base outline-none focus:border-emerald-400 text-zinc-300 appearance-none pr-8 bg-no-repeat bg-right bg-origin-content"
+                style={{backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%2371717A' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E")`}}
+                value={priority}
+                onChange={(e) => setPriority(e.target.value)}
+            >
+                <option value="Low" className="bg-zinc-800 text-zinc-300">Low Priority</option>
+                <option value="Medium" className="bg-zinc-800 text-zinc-300">Medium Priority</option>
+                <option value="High" className="bg-zinc-800 text-zinc-300">High Priority</option>
+            </select>
+            <button
+                onClick={handleAddGoal}
+                className="flex items-center justify-center gap-2 bg-emerald-700/30 text-emerald-400 px-4 py-2.5 text-base font-bold uppercase border border-emerald-500/30 hover:bg-emerald-700/50 transition-colors"
+                disabled={loadingAction}
+            >
+                <Plus size={18} /> {loadingAction ? "Adding..." : "ADD GOAL"}
+            </button>
+        </div>
+      </div>
+    </motion.div>
+  );
+};

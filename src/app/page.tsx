@@ -1,14 +1,43 @@
 "use client";
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import Link from "next/link"; 
-import { Search, Github, Cpu, Calendar, Terminal, ListTodo, ChevronDown, Star } from "lucide-react";
+import Link from "next/link";
+import { Search, Github, Cpu, Calendar, Terminal, ListTodo, ChevronDown, Star, Home } from "lucide-react";
 
 // --- SCALED TECH TAGS ---
 const LogoModule = ({ lang }: { lang: string }) => {
   const [error, setError] = useState(false);
-  const slug = lang?.toLowerCase()
-    .replace('c++', 'cplusplus').replace('javascript', 'javascript').replace('typescript', 'typescript');
+
+  const getSlug = (text: string) => {
+    if (!text) return "";
+    const lower = text.toLowerCase();
+    const map: Record<string, string> = {
+      'html': 'html5',
+      'css': 'css3',
+      'c++': 'cplusplus',
+      'c#': 'csharp',
+      'jupyter notebook': 'jupyter',
+      'shell': 'gnubash',
+      'vim script': 'vim',
+      'vue': 'vuedotjs',
+      'nix': 'nixos',
+      'java': 'openjdk', // or 'java', but openjdk is often safer for generic java
+      'python': 'python',
+      'javascript': 'javascript',
+      'typescript': 'typescript',
+      'dockerfile': 'docker',
+      'scss': 'sass',
+      'rust': 'rust',
+      'go': 'go',
+      'kotlin': 'kotlin',
+      'ruby': 'ruby',
+      'php': 'php',
+      'swift': 'swift',
+    };
+    return map[lower] || lower;
+  };
+
+  const slug = getSlug(lang);
   
   if (error || !lang) return <div className="text-[9px] md:text-[10px] font-black text-zinc-600 uppercase border border-zinc-800 px-2 py-0.5"> {lang || "RAW"} </div>;
   
@@ -24,7 +53,6 @@ export default function GenesisVault() {
   const [repos, setRepos] = useState<any[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
-  const [expandedId, setExpandedId] = useState<number | null>(null);
 
   useEffect(() => {
     fetch("https://api.github.com/users/Asytuyf/repos?sort=updated").then(res => res.json()).then(data => {
@@ -36,40 +64,95 @@ export default function GenesisVault() {
   const filtered = repos.filter(r => r.name.toLowerCase().includes(search.toLowerCase()) || (r.language && r.language.toLowerCase().includes(search.toLowerCase())));
 
   return (
-    <main className="relative min-h-screen bg-[#050505] text-[#f4f4f5] font-mono overflow-x-hidden selection:bg-[#facc15] selection:text-black">
+    <main className="relative min-h-screen bg-[#0d0d0d] text-[#f4f4f5] font-mono overflow-x-hidden selection:bg-[#facc15] selection:text-black">
       <div className="tv-static fixed inset-0 opacity-[0.02] pointer-events-none" />
+      <div className="fixed inset-0 z-0 opacity-[0.03] flex items-center justify-center pointer-events-none">
+        <div className="relative translate-y-10 md:translate-y-14">
+          <Home size={700} strokeWidth={0.5} className="text-white/40" />
+          <Home
+            size={700}
+            strokeWidth={0.5}
+            className="absolute left-0 top-0 translate-x-6 translate-y-6 text-white/10"
+          />
+        </div>
+      </div>
+
+      {/* --- 3D STICKERS WITH TAGS --- */}
+      <motion.div
+        drag
+        dragElastic={0.1}
+        dragTransition={{ bounceStiffness: 600, bounceDamping: 20 }}
+        className="fixed top-24 md:top-32 right-6 md:right-16 w-52 h-52 md:w-72 md:h-72 z-[250] cursor-grab active:cursor-grabbing"
+      >
+        <div className="sticker-3d w-full h-full">
+          <img src="/sticker.jpg" alt="Sticker" className="w-full h-full object-cover" draggable="false" />
+        </div>
+        <div className="absolute top-2 left-2 bg-[#facc15] text-black px-3 py-1.5 text-xs md:text-sm font-black border-2 border-black shadow-lg z-20">
+          art_ref_1
+        </div>
+      </motion.div>
+
+      <motion.div
+        drag
+        dragElastic={0.1}
+        dragTransition={{ bounceStiffness: 600, bounceDamping: 20 }}
+        className="fixed top-[60%] md:top-[55%] left-6 md:left-20 w-48 h-48 md:w-68 md:h-68 z-[250] cursor-grab active:cursor-grabbing"
+      >
+        <div className="sticker-3d w-full h-full">
+          <img src="/tesla.jpg" alt="Tesla" className="w-full h-full object-cover" draggable="false" />
+        </div>
+        <div className="absolute top-2 right-2 bg-[#10b981] text-black px-3 py-1.5 text-xs md:text-sm font-black border-2 border-black shadow-lg z-20">
+          exhibit_c
+        </div>
+      </motion.div>
+
+      <motion.div
+        drag
+        dragElastic={0.1}
+        dragTransition={{ bounceStiffness: 600, bounceDamping: 20 }}
+        className="fixed bottom-24 md:bottom-32 right-12 md:right-24 w-44 h-44 md:w-64 md:h-64 z-[250] cursor-grab active:cursor-grabbing"
+      >
+        <div className="sticker-3d w-full h-full">
+          <img src="/turing.jpeg" alt="Alan Turing" className="w-full h-full object-cover" draggable="false" />
+        </div>
+        <div className="absolute bottom-2 left-2 bg-[#facc15] text-black px-3 py-1.5 text-xs md:text-sm font-black border-2 border-black shadow-lg z-20">
+          art_ref_2
+        </div>
+      </motion.div>
 
       {/* --- SOLID YELLOW BARS --- */}
       <div className="fixed inset-x-0 top-0 h-[28px] bg-[#facc15] z-[300] flex items-center overflow-hidden border-b-2 border-black">
         <motion.div animate={{ x: [0, -1000] }} transition={{ repeat: Infinity, duration: 25, ease: "linear" }} className="flex whitespace-nowrap text-[10px] md:text-[12px] font-black text-black tracking-[1.5em] md:tracking-[2em]">
-          {[...Array(10)].map((_, i) => <span key={i}>MEN AT WORK // UNDER CONSTRUCTION // SYSTEM_ONLINE //</span>)}
+          {[...Array(10)].map((_, i) => <span key={i}>UNDER CONSTRUCTION // MEN AT WORK //</span>)}
         </motion.div>
       </div>
       <div className="fixed inset-x-0 bottom-0 h-[28px] bg-[#facc15] z-[300] flex items-center overflow-hidden border-t-2 border-black">
         <motion.div animate={{ x: [-1000, 0] }} transition={{ repeat: Infinity, duration: 25, ease: "linear" }} className="flex whitespace-nowrap text-[10px] md:text-[12px] font-black text-black tracking-[1.5em] md:tracking-[2em]">
-          {[...Array(10)].map((_, i) => <span key={i}>MEN AT WORK // UNDER CONSTRUCTION // SYSTEM_ONLINE //</span>)}
+          {[...Array(10)].map((_, i) => <span key={i}>UNDER CONSTRUCTION // MEN AT WORK //</span>)}
         </motion.div>
       </div>
 
       <div className="relative z-10 max-w-7xl mx-auto px-6 py-20 md:py-40">
         <header className="mb-16 md:mb-20">
           <div className="flex flex-col mb-10 select-none">
-            {/* GENESIS (White) _VAULT. (Zinc-600) */}
-            <h1 className="text-5xl md:text-9xl lg:text-[11rem] font-black tracking-tighter text-white leading-[0.85] md:leading-[0.8]">GENESIS</h1>
-            <h1 className="text-5xl md:text-9xl lg:text-[11rem] font-black tracking-tighter text-zinc-600 leading-[0.85] md:leading-[0.8]">_VAULT.</h1>
+            {/* GENESIS (White) _VAULT. (Gray) */}
+            <h1 className="text-5xl md:text-8xl font-black tracking-tighter text-white leading-[0.85] md:leading-[0.8]">GENESIS</h1>
+            <h1 className="text-5xl md:text-8xl font-black tracking-tighter text-zinc-600 leading-[0.85] md:leading-[0.8]">_VAULT.</h1>
           </div>
 
-          <div className="flex flex-wrap gap-4 md:gap-8 mb-10">
-            <Link href="/archive" className="px-6 md:px-10 py-3 md:py-5 bg-[#facc15] text-black font-black uppercase text-[10px] md:text-sm border-2 border-black hover:bg-white transition-none flex items-center justify-center gap-2 md:gap-3">
-              <Terminal size={16} strokeWidth={3} /> OPEN_ARCHIVE
-            </Link>
-            <Link href="/goals" className="px-6 md:px-10 py-3 md:py-5 bg-[#10b981] text-black font-black uppercase text-[10px] md:text-sm border-2 border-black hover:bg-white transition-none flex items-center justify-center gap-2 md:gap-3">
-              <ListTodo size={16} strokeWidth={3} /> DIRECTIVE_LOG
-            </Link>
+          <div className="text-zinc-600 mb-10 text-xs md:text-sm font-black uppercase tracking-wider">
+            <div className="flex items-center gap-2 mb-2 hidden md:flex">
+              <Terminal size={14} />
+              <span>Hover on the left edge to open file explorer</span>
+            </div>
+            <div className="flex items-center gap-2 md:hidden">
+              <Terminal size={14} />
+              <span>Tap the top-left menu to open file explorer</span>
+            </div>
           </div>
 
           <div className="relative max-w-sm">
-            <input type="text" placeholder="grep -i 'vault'..." className="w-full bg-transparent border-b-2 md:border-b-4 border-zinc-900 px-0 py-2 md:py-4 text-xs md:text-sm font-black outline-none focus:border-[#facc15] transition-all uppercase placeholder:text-zinc-800 text-[#facc15]" value={search} onChange={(e) => setSearch(e.target.value)} />
+            <input type="text" placeholder="grep -i 'vault'..." className="w-full bg-transparent border-b-2 border-zinc-900 px-0 py-2 text-sm font-black outline-none focus:border-yellow-400 transition-all uppercase placeholder:text-zinc-800 text-yellow-400" value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
         </header>
 
@@ -96,12 +179,9 @@ export default function GenesisVault() {
                   <div className="col-span-5">
                     <div className="text-base md:text-2xl font-black text-zinc-400 uppercase tracking-tighter group-hover:text-[#facc15] transition-none">{repo.name}</div>
                     <div className="mt-1 md:mt-3 flex items-start gap-2">
-                      <p className={`text-[9px] md:text-xs text-zinc-600 font-bold uppercase leading-relaxed tracking-tight group-hover:text-zinc-300 transition-none ${expandedId === repo.id ? '' : 'line-clamp-2'}`}>
+                      <p className={`text-[9px] md:text-xs text-zinc-600 font-bold uppercase leading-relaxed tracking-tight group-hover:text-zinc-300 transition-none`}>
                         {repo.description || "NO_SOURCE_DATA_AVAILABLE"}
                       </p>
-                      {repo.description && repo.description.length > 50 && (
-                        <button onClick={() => setExpandedId(expandedId === repo.id ? null : repo.id)} className="text-zinc-700 hover:text-[#facc15] mt-0.5 shrink-0"><ChevronDown size={14}/></button>
-                      )}
                     </div>
                   </div>
 
@@ -143,7 +223,7 @@ export default function GenesisVault() {
           height: 3px;
         }
         .custom-scrollbar::-webkit-scrollbar-track {
-          background: #050505;
+          background: #0d0d0d;
         }
         .custom-scrollbar::-webkit-scrollbar-thumb {
           background: #222;

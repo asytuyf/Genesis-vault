@@ -2,55 +2,37 @@
   {
     "cmd": "home-manager switch",
     "cat": "nix",
-    "desc": "Applies new changes of home-manager",
-    "date": "2026-02-07"
-  },
-  {
-    "cmd": "home-manager switch",
-    "cat": "nix",
     "desc": "Applies the new stuff added to home manager",
-    "date": "2026-02-07"
+    "date": "2026-02-10"
   },
   {
     "cmd": "nsync message",
     "cat": "nix",
     "desc": "Build system, apply changes, and auto-sync all configuration files to GitHub.",
-    "date": "2026-02-08"
-  },
-  {
-    "cmd": "nsync message",
-    "cat": "nix",
-    "desc": "Build system, apply changes, and auto-sync all configuration files to GitHub.",
-    "date": "2026-02-08"
-  },
-  {
-    "cmd": "nsync message",
-    "cat": "nix",
-    "desc": "Build system, apply changes, and auto-sync all configuration files to GitHub.",
-    "date": "2026-02-08"
+    "date": "2026-02-10"
   },
   {
     "cmd": "vault-sync",
     "cat": "git",
     "desc": "Push my new commands to GitHub and trigger the Vercel deploy for my directory website.",
-    "date": "2026-02-08"
+    "date": "2026-02-10"
   },
   {
     "cmd": "mycmds",
     "cat": "terminal",
     "desc": "Quickly view the local cheatsheet of all saved commands in the terminal.",
-    "date": "2026-02-08"
+    "date": "2026-02-10"
   },
   {
     "cmd": "exec zsh",
     "cat": "shell",
     "desc": "Reloads the Zsh shell to apply new configurations and activate new aliases/functions.",
-    "date": "2026-02-09"
+    "date": "2026-02-10"
   },
   {
     "cmd": "reveal",
-    "cat": "Shell",
-    "desc": "Reveals the files and the folders and what's insid",
-    "date": "2026-02-09"
+    "cat": "shell",
+    "desc": "Reveals the files and the folders inside the current directory and what's inside them",
+    "date": "2026-02-10"
   }
 ]
