@@ -40,5 +40,11 @@
     "cat": "ClaudeAI",
     "desc": "Resumes a conversation from where left off",
     "date": "2026-02-10"
+  },
+  {
+    "cmd": "ultrathink",
+    "cat": "ClaudeAI",
+    "desc": "Any time you put this in a prompt in claude code it forces it to think extra hard for the problem",
+    "date": "2026-02-10"
   }
 ]
