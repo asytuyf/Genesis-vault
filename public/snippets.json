@@ -46,5 +46,11 @@
     "cat": "ClaudeAI",
     "desc": "Any time you put this in a prompt in claude code it forces it to think extra hard for the problem",
     "date": "2026-02-10"
+  },
+  {
+    "cmd": "ctrl + s",
+    "cat": "Claude AI",
+    "desc": "Staches the current prompt such that if needed you can do something else before running that commands",
+    "date": "2026-02-10"
   }
 ]
