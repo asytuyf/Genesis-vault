@@ -300,9 +300,9 @@ export default function DirectiveLog() {
               </div>
 
               <div className="flex flex-wrap items-start gap-2 mb-8">
-                <div className="inline-flex items-center gap-2 px-2 py-0.5 bg-zinc-900 border border-zinc-800 rounded text-zinc-500 text-[10px] font-black uppercase tracking-widest group-hover:border-emerald-500/30 group-hover:text-emerald-500 transition-colors max-w-[70%] md:max-w-[80%] min-w-0">
+                <div className="inline-flex flex-none items-center gap-2 px-2 py-0.5 bg-zinc-900 border border-zinc-800 rounded text-zinc-500 text-[10px] font-black uppercase tracking-widest group-hover:border-emerald-500/30 group-hover:text-emerald-500 transition-colors w-fit max-w-full">
                     <Tag size={10} />
-                    <span className="truncate">{g.project}</span>
+                    <span className="whitespace-normal break-words">{g.project}</span>
                 </div>
                 <div className="flex items-center gap-2 text-zinc-700 text-[10px] font-bold whitespace-nowrap ml-auto">
                     <Clock size={12} /> {g.date}
