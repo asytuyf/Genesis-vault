@@ -52,5 +52,23 @@
     "cat": "Claude AI",
     "desc": "Staches the current prompt such that if needed you can do something else before running that commands",
     "date": "2026-02-10"
+  },
+  {
+    "cmd": "nupdate-sync",
+    "cat": "nix",
+    "desc": "Update flake.lock then run nsync (rebuild + commit + push).",
+    "date": "2026-02-11"
+  },
+  {
+    "cmd": "nstat",
+    "cat": "nix",
+    "desc": "Show /etc/nixos git status, flake.lock changes, and current system.",
+    "date": "2026-02-11"
+  },
+  {
+    "cmd": "nclean",
+    "cat": "nix",
+    "desc": "Garbage-collect old generations and optimize the Nix store.",
+    "date": "2026-02-11"
   }
 ]
