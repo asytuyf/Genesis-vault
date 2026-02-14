@@ -1,0 +1,215 @@
+"use client";
+import { useState } from "react";
+import { motion } from "framer-motion";
+import { X, Check, Plus, Square, CheckSquare, Tag, Clock, Activity } from "lucide-react";
+
+interface SubGoal {
+  id: string;
+  text: string;
+  completed: boolean;
+}
+
+interface Goal {
+  id: string;
+  task: string;
+  project: string;
+  priority: string;
+  date: string;
+  subgoals?: SubGoal[];
+}
+
+interface GoalDetailModalProps {
+  goal: Goal;
+  isAdmin: boolean;
+  password: string;
+  onClose: () => void;
+  onUpdate: (updatedGoal: Goal) => void;
+}
+
+export const GoalDetailModal = ({ goal, isAdmin, password, onClose, onUpdate }: GoalDetailModalProps) => {
+  const [subgoals, setSubgoals] = useState<SubGoal[]>(goal.subgoals || []);
+  const [newSubgoal, setNewSubgoal] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const toggleSubgoal = (id: string) => {
+    if (!isAdmin) return;
+    setSubgoals(prev =>
+      prev.map(sg => sg.id === id ? { ...sg, completed: !sg.completed } : sg)
+    );
+  };
+
+  const addSubgoal = () => {
+    if (!newSubgoal.trim() || !isAdmin) return;
+    const newSg: SubGoal = {
+      id: Date.now().toString(),
+      text: newSubgoal.trim(),
+      completed: false
+    };
+    setSubgoals(prev => [...prev, newSg]);
+    setNewSubgoal("");
+  };
+
+  const removeSubgoal = (id: string) => {
+    if (!isAdmin) return;
+    setSubgoals(prev => prev.filter(sg => sg.id !== id));
+  };
+
+  const saveChanges = async () => {
+    setSaving(true);
+    const updatedGoal = { ...goal, subgoals };
+    onUpdate(updatedGoal);
+    setSaving(false);
+    onClose();
+  };
+
+  const completedCount = subgoals.filter(sg => sg.completed).length;
+  const progress = subgoals.length > 0 ? (completedCount / subgoals.length) * 100 : 0;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[600] flex items-center justify-center p-4"
+    >
+      {/* Overlay */}
+      <div className="absolute inset-0 bg-black/90 backdrop-blur-sm" onClick={onClose} />
+
+      {/* Modal */}
+      <motion.div
+        initial={{ opacity: 0, scale: 0.9, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.9, y: 20 }}
+        className="relative bg-[#0a0a0a] border border-zinc-800 w-full max-w-lg max-h-[85vh] overflow-hidden font-mono z-[610] flex flex-col"
+      >
+        {/* Header */}
+        <div className="p-6 border-b border-zinc-800">
+          <button onClick={onClose} className="absolute top-4 right-4 text-zinc-600 hover:text-emerald-400 transition-colors">
+            <X size={20} />
+          </button>
+
+          <div className="flex flex-wrap items-center gap-2 mb-4">
+            <div className="flex items-center gap-2 px-2 py-0.5 bg-zinc-900 border border-zinc-800 rounded text-zinc-500 text-[10px] font-black uppercase">
+              <Tag size={10} />
+              {goal.project}
+            </div>
+            <div className="flex items-center gap-2 text-zinc-700 text-[10px] font-bold">
+              <Clock size={12} /> {goal.date}
+            </div>
+            <div className={`flex items-center gap-2 px-2 py-0.5 rounded text-[10px] font-black uppercase border ${
+              goal.priority === 'High'
+                ? 'bg-red-500/10 text-red-500 border-red-500/20'
+                : 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
+            }`}>
+              <Activity size={10} />
+              {goal.priority}
+            </div>
+          </div>
+
+          <h2 className="text-xl font-bold uppercase tracking-tight text-white leading-tight">
+            {goal.task}
+          </h2>
+
+          {/* Progress bar */}
+          {subgoals.length > 0 && (
+            <div className="mt-4">
+              <div className="flex justify-between text-[10px] font-bold uppercase mb-2">
+                <span className="text-zinc-600">Progress</span>
+                <span className="text-emerald-400">{completedCount}/{subgoals.length}</span>
+              </div>
+              <div className="h-1 bg-zinc-900 rounded-full overflow-hidden">
+                <motion.div
+                  className="h-full bg-emerald-500"
+                  initial={{ width: 0 }}
+                  animate={{ width: `${progress}%` }}
+                  transition={{ duration: 0.3 }}
+                />
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Subgoals list */}
+        <div className="flex-1 overflow-y-auto p-6">
+          <div className="text-[10px] font-black uppercase tracking-wider text-zinc-600 mb-4">
+            Sub-Tasks
+          </div>
+
+          {subgoals.length === 0 ? (
+            <div className="text-zinc-700 text-sm py-8 text-center border border-dashed border-zinc-800">
+              No sub-tasks yet
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {subgoals.map((sg) => (
+                <motion.div
+                  key={sg.id}
+                  layout
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  className={`flex items-start gap-3 p-3 border transition-all ${
+                    sg.completed
+                      ? 'bg-emerald-500/5 border-emerald-500/20'
+                      : 'bg-zinc-900/50 border-zinc-800 hover:border-zinc-700'
+                  }`}
+                >
+                  <button
+                    onClick={() => toggleSubgoal(sg.id)}
+                    disabled={!isAdmin}
+                    className={`mt-0.5 transition-colors ${
+                      sg.completed ? 'text-emerald-400' : 'text-zinc-700 hover:text-zinc-500'
+                    } ${!isAdmin ? 'cursor-default' : 'cursor-pointer'}`}
+                  >
+                    {sg.completed ? <CheckSquare size={18} /> : <Square size={18} />}
+                  </button>
+                  <span className={`flex-1 text-sm ${
+                    sg.completed ? 'text-emerald-400 line-through' : 'text-zinc-300'
+                  }`}>
+                    {sg.text}
+                  </span>
+                  {isAdmin && (
+                    <button
+                      onClick={() => removeSubgoal(sg.id)}
+                      className="text-zinc-800 hover:text-red-500 transition-colors"
+                    >
+                      <X size={14} />
+                    </button>
+                  )}
+                </motion.div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Add subgoal + Save (Admin only) */}
+        {isAdmin && (
+          <div className="p-6 border-t border-zinc-800 space-y-3">
+            <div className="flex gap-2">
+              <input
+                type="text"
+                placeholder="Add sub-task..."
+                value={newSubgoal}
+                onChange={(e) => setNewSubgoal(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && addSubgoal()}
+                className="flex-1 bg-black border border-zinc-800 px-3 py-2 text-sm outline-none focus:border-emerald-400 text-zinc-300 placeholder:text-zinc-700"
+              />
+              <button
+                onClick={addSubgoal}
+                className="px-3 py-2 bg-zinc-900 border border-zinc-800 text-zinc-500 hover:text-emerald-400 hover:border-emerald-400/30 transition-colors"
+              >
+                <Plus size={18} />
+              </button>
+            </div>
+            <button
+              onClick={saveChanges}
+              disabled={saving}
+              className="w-full flex items-center justify-center gap-2 bg-emerald-700/30 text-emerald-400 px-4 py-2.5 text-sm font-bold uppercase border border-emerald-500/30 hover:bg-emerald-700/50 transition-colors"
+            >
+              <Check size={16} /> {saving ? "Saving..." : "Save Changes"}
+            </button>
+          </div>
+        )}
+      </motion.div>
+    </motion.div>
+  );
+};

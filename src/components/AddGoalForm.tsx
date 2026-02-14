@@ -4,12 +4,19 @@ import { motion } from "framer-motion";
 import { Plus, X } from "lucide-react"; // Import X for close button
 import React from "react";
 
+interface SubGoal {
+  id: string;
+  text: string;
+  completed: boolean;
+}
+
 interface Goal {
   id: string;
   task: string;
   project: string;
   priority: string;
   date: string;
+  subgoals?: SubGoal[];
 }
 
 interface AddGoalFormProps {

@@ -1,18 +1,35 @@
 "use client";
 import { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion"; // Import AnimatePresence
+import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
-import { Search, ChevronLeft, Tag, Clock, Activity, Hash, Box, Lock, Unlock, Trash2, Plus, Terminal } from "lucide-react"; // Keep Plus for the button to open modal
-import { AddGoalForm } from "@/components/AddGoalForm"; // Import the new component
+import { Search, ChevronLeft, Tag, Clock, Activity, Hash, Box, Lock, Unlock, Trash2, Plus, Terminal, ListChecks } from "lucide-react";
+import { AddGoalForm } from "@/components/AddGoalForm";
+import { GoalDetailModal } from "@/components/GoalDetailModal";
+
+interface SubGoal {
+  id: string;
+  text: string;
+  completed: boolean;
+}
+
+interface Goal {
+  id: string;
+  task: string;
+  project: string;
+  priority: string;
+  date: string;
+  subgoals?: SubGoal[];
+}
 
 export default function DirectiveLog() {
-  const [goals, setGoals] = useState<any[]>([]);
+  const [goals, setGoals] = useState<Goal[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [password, setPassword] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
   const [loadingAction, setLoadingAction] = useState(false);
-  const [isAddGoalModalOpen, setIsAddGoalModalOpen] = useState(false); // State for modal visibility
+  const [isAddGoalModalOpen, setIsAddGoalModalOpen] = useState(false);
+  const [selectedGoal, setSelectedGoal] = useState<Goal | null>(null);
 
   useEffect(() => {
     // Fetch from GitHub raw to get the live data (same source we save to)
@@ -47,12 +64,27 @@ export default function DirectiveLog() {
     });
 
     if (res.ok) {
-      setGoals(remainingGoals); // Framer Motion AnimatePresence handles the exit animation
+      setGoals(remainingGoals);
     }
     setLoadingAction(false);
   };
 
+  const updateGoal = async (updatedGoal: Goal) => {
+    setLoadingAction(true);
 
+    const updatedGoals = goals.map(g => g.id === updatedGoal.id ? updatedGoal : g);
+    const goalsForGitHub = [...updatedGoals].reverse();
+
+    const res = await fetch('/api/goals', {
+      method: 'POST',
+      body: JSON.stringify({ password, updatedGoals: goalsForGitHub })
+    });
+
+    if (res.ok) {
+      setGoals(updatedGoals);
+    }
+    setLoadingAction(false);
+  };
 
   return (
     <main className="relative min-h-screen bg-[#0d0d0d] text-[#f4f4f5] font-mono overflow-hidden p-12 md:p-24">
@@ -262,7 +294,20 @@ export default function DirectiveLog() {
 
                                                     </AnimatePresence>
 
-                
+                                                    {/* Goal Detail Modal */}
+                                                    <AnimatePresence>
+                                                      {selectedGoal && (
+                                                        <GoalDetailModal
+                                                          goal={selectedGoal}
+                                                          isAdmin={isAdmin}
+                                                          password={password}
+                                                          onClose={() => setSelectedGoal(null)}
+                                                          onUpdate={updateGoal}
+                                                        />
+                                                      )}
+                                                    </AnimatePresence>
+
+
 
                                                     
 
@@ -285,13 +330,14 @@ export default function DirectiveLog() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.8, transition: { duration: 0.3 } }}
                 layout
-                key={g.id} 
-                className="group bg-[#0a0a0a] border border-zinc-800 p-8 hover:border-emerald-500 transition-all shadow-xl relative overflow-hidden"
+                key={g.id}
+                onClick={() => setSelectedGoal(g)}
+                className="group bg-[#0a0a0a] border border-zinc-800 p-8 hover:border-emerald-500 transition-all shadow-xl relative overflow-hidden cursor-pointer"
             >
               {/* NUKE BUTTON (Visible only when unlocked) */}
               {isAdmin && (
-                  <button 
-                      onClick={() => nukeGoal(g.id)}
+                  <button
+                      onClick={(e) => { e.stopPropagation(); nukeGoal(g.id); }}
                       className="absolute top-4 right-4 text-zinc-800 hover:text-red-500 transition-none z-20"
                       disabled={loadingAction}
                   >
@@ -319,10 +365,31 @@ export default function DirectiveLog() {
                 </h3>
               </div>
 
+              {/* Subgoals progress indicator */}
+              {g.subgoals && g.subgoals.length > 0 && (
+                <div className="mb-6">
+                  <div className="flex items-center justify-between text-[10px] font-bold uppercase mb-2">
+                    <span className="flex items-center gap-1.5 text-zinc-600">
+                      <ListChecks size={12} />
+                      Sub-tasks
+                    </span>
+                    <span className={g.subgoals.filter((s: SubGoal) => s.completed).length === g.subgoals.length ? 'text-emerald-400' : 'text-zinc-600'}>
+                      {g.subgoals.filter((s: SubGoal) => s.completed).length}/{g.subgoals.length}
+                    </span>
+                  </div>
+                  <div className="h-1 bg-zinc-900 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-emerald-500 transition-all duration-300"
+                      style={{ width: `${(g.subgoals.filter((s: SubGoal) => s.completed).length / g.subgoals.length) * 100}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
               <div className="flex justify-between items-center border-t border-zinc-900 pt-6">
                 <div className={`flex items-center gap-2 px-3 py-1 rounded text-[10px] font-black uppercase tracking-wider border ${
-                    g.priority === 'High' 
-                    ? 'bg-red-500/10 text-red-500 border-red-500/20' 
+                    g.priority === 'High'
+                    ? 'bg-red-500/10 text-red-500 border-red-500/20'
                     : 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
                 }`}>
                     <Activity size={10} />
