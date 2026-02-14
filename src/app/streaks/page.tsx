@@ -2,24 +2,65 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
-  Flame, GitCommit, Plus, X, Check, Target, TrendingUp
+  Flame, GitCommit, Plus, X, Check, Target, TrendingUp, Bot, Trophy, RefreshCw
 } from "lucide-react";
 
 interface Habit {
   id: string;
   name: string;
-  history: string[]; // dates completed
+  color: string;
+  history: string[];
 }
+
+interface LLMModel {
+  rank: number;
+  name: string;
+  score: number;
+  org: string;
+}
+
+const HABIT_COLORS = [
+  { name: "Orange", value: "orange", bg: "bg-orange-500", text: "text-orange-400", border: "border-orange-500" },
+  { name: "Emerald", value: "emerald", bg: "bg-emerald-500", text: "text-emerald-400", border: "border-emerald-500" },
+  { name: "Cyan", value: "cyan", bg: "bg-cyan-500", text: "text-cyan-400", border: "border-cyan-500" },
+  { name: "Purple", value: "purple", bg: "bg-purple-500", text: "text-purple-400", border: "border-purple-500" },
+  { name: "Pink", value: "pink", bg: "bg-pink-500", text: "text-pink-400", border: "border-pink-500" },
+  { name: "Yellow", value: "yellow", bg: "bg-yellow-500", text: "text-yellow-400", border: "border-yellow-500" },
+];
+
+const getHabitColor = (color: string, type: "bg" | "text" | "border") => {
+  const found = HABIT_COLORS.find(c => c.value === color);
+  if (!found) return HABIT_COLORS[0][type];
+  return found[type];
+};
+
+// Top coding LLMs - from arena.ai/leaderboard/code (Feb 2026)
+const TOP_CODING_LLMS: LLMModel[] = [
+  { rank: 1, name: "Claude Opus 4.6 Thinking", score: 1567, org: "Anthropic" },
+  { rank: 2, name: "Claude Opus 4.6", score: 1560, org: "Anthropic" },
+  { rank: 3, name: "Claude Opus 4.5 Thinking", score: 1503, org: "Anthropic" },
+  { rank: 4, name: "GPT-5.2 High", score: 1473, org: "OpenAI" },
+  { rank: 5, name: "Claude Opus 4.5", score: 1469, org: "Anthropic" },
+  { rank: 6, name: "GLM-5", score: 1449, org: "Zhipu" },
+  { rank: 7, name: "Gemini 3 Pro", score: 1449, org: "Google" },
+  { rank: 8, name: "Kimi K2.5 Thinking", score: 1447, org: "Moonshot" },
+  { rank: 9, name: "Gemini 3 Flash", score: 1444, org: "Google" },
+  { rank: 10, name: "GLM-4.7", score: 1442, org: "Zhipu" },
+];
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-export default function StreaksPage() {
+export default function TrackerPage() {
   const [habits, setHabits] = useState<Habit[]>([]);
   const [showAddHabit, setShowAddHabit] = useState(false);
   const [newHabitName, setNewHabitName] = useState("");
+  const [newHabitColor, setNewHabitColor] = useState("orange");
   const [githubUsername, setGithubUsername] = useState("");
   const [githubData, setGithubData] = useState<Record<string, number>>({});
+  const [githubEvents, setGithubEvents] = useState<any[]>([]);
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [loadingGithub, setLoadingGithub] = useState(false);
+  const [showGithubInput, setShowGithubInput] = useState(false);
 
   // Load saved data
   useEffect(() => {
@@ -27,10 +68,12 @@ export default function StreaksPage() {
       const savedHabits = localStorage.getItem("streaks_habits");
       const savedGithub = localStorage.getItem("streaks_github_username");
       const savedGithubData = localStorage.getItem("streaks_github_data");
+      const savedGithubEvents = localStorage.getItem("streaks_github_events");
 
       if (savedHabits) setHabits(JSON.parse(savedHabits));
       if (savedGithub) setGithubUsername(savedGithub);
       if (savedGithubData) setGithubData(JSON.parse(savedGithubData));
+      if (savedGithubEvents) setGithubEvents(JSON.parse(savedGithubEvents));
     }
   }, []);
 
@@ -48,6 +91,8 @@ export default function StreaksPage() {
 
       const contributions: Record<string, number> = {};
       if (Array.isArray(events)) {
+        setGithubEvents(events);
+        localStorage.setItem("streaks_github_events", JSON.stringify(events));
         events.forEach((event: any) => {
           const date = event.created_at?.split("T")[0];
           if (date) {
@@ -58,6 +103,7 @@ export default function StreaksPage() {
       setGithubData(contributions);
       localStorage.setItem("streaks_github_username", username);
       localStorage.setItem("streaks_github_data", JSON.stringify(contributions));
+      setShowGithubInput(false);
     } catch (e) {
       console.error("Failed to fetch GitHub data:", e);
     }
@@ -69,11 +115,21 @@ export default function StreaksPage() {
     const newHabit: Habit = {
       id: Date.now().toString(),
       name: newHabitName,
+      color: newHabitColor,
       history: [],
     };
     saveHabits([...habits, newHabit]);
     setNewHabitName("");
+    setNewHabitColor("orange");
     setShowAddHabit(false);
+  };
+
+  const getEventsForDay = (date: string) => {
+    return githubEvents.filter((e: any) => e.created_at?.startsWith(date));
+  };
+
+  const formatEventType = (type: string) => {
+    return type.replace(/Event$/, "").replace(/([A-Z])/g, " $1").trim();
   };
 
   const removeHabit = (id: string) => {
@@ -109,7 +165,6 @@ export default function StreaksPage() {
     return streak;
   };
 
-  // Generate last 7 days
   const getWeekDays = () => {
     const days = [];
     const today = new Date();
@@ -128,12 +183,10 @@ export default function StreaksPage() {
 
   const weekDays = getWeekDays();
   const today = new Date().toISOString().split("T")[0];
-
-  // GitHub stats
   const githubThisWeek = weekDays.reduce((acc, day) => acc + (githubData[day.date] || 0), 0);
 
   return (
-    <main className="relative min-h-screen bg-[#0d0d0d] text-[#f4f4f5] font-mono overflow-hidden">
+    <main className="relative min-h-screen bg-[#0d0d0d] text-[#f4f4f5] font-mono overflow-x-hidden px-6 pb-6 pt-[56px] md:p-24">
       {/* HAZARD BARS */}
       <div className="fixed inset-x-0 top-0 h-[28px] bg-orange-500 z-[150] flex items-center overflow-hidden border-b-2 border-black">
         <motion.div animate={{ x: [0, -1000] }} transition={{ repeat: Infinity, duration: 20, ease: "linear" }} className="flex whitespace-nowrap text-[12px] font-black text-black tracking-[2em]">
@@ -146,81 +199,195 @@ export default function StreaksPage() {
         </motion.div>
       </div>
 
-      {/* CINEMATIC BACKGROUND */}
-      <div className="fixed inset-0 z-0">
-        <div className="absolute inset-0 bg-gradient-to-b from-orange-950/20 via-transparent to-orange-950/30" />
-        <motion.div
-          animate={{ opacity: [0.02, 0.05, 0.02], scale: [1, 1.1, 1] }}
-          transition={{ repeat: Infinity, duration: 8, ease: "easeInOut" }}
-          className="absolute inset-0 flex items-center justify-center pointer-events-none"
-        >
-          <Flame size={900} strokeWidth={0.3} className="text-orange-500" />
-        </motion.div>
-        <div className="absolute inset-0 opacity-[0.015] pointer-events-none" style={{
-          backgroundImage: "repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.03) 2px, rgba(255,255,255,0.03) 4px)"
-        }} />
+      {/* BACKGROUND */}
+      <div className="fixed inset-0 z-0 opacity-[0.03] flex items-center justify-center pointer-events-none">
+        <TrendingUp size={800} strokeWidth={0.5} />
       </div>
 
       {/* MAIN CONTENT */}
-      <div className="relative z-10 min-h-screen px-6 py-20 md:px-12 lg:px-24">
+      <div className="relative z-10">
         {/* HEADER */}
-        <header className="mb-16 pt-8">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="flex flex-col"
-          >
-            <h1 className="text-5xl md:text-8xl font-black tracking-tighter text-white uppercase leading-[0.8]">STREAK</h1>
-            <h1 className="text-5xl md:text-8xl font-black tracking-tighter text-orange-500/20 uppercase leading-[0.8]">_TRACKER.</h1>
-          </motion.div>
+        <header className="mb-12">
+          <div className="flex flex-col">
+            <h1 className="text-5xl md:text-8xl font-black tracking-tighter text-white uppercase leading-[0.8]">PULSE</h1>
+            <h1 className="text-5xl md:text-8xl font-black tracking-tighter text-zinc-800 uppercase leading-[0.8]">_TRACKER.</h1>
+          </div>
         </header>
 
-        {/* WEEKLY OVERVIEW */}
+        {/* GITHUB WEEKLY */}
         <section className="mb-12">
-          <div className="flex items-center gap-3 mb-6">
-            <TrendingUp size={20} className="text-orange-400" />
-            <span className="text-xs font-black uppercase tracking-[0.2em] text-zinc-400">This Week</span>
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <GitCommit size={20} className="text-orange-400" />
+              <span className="text-xs font-black uppercase tracking-[0.2em] text-zinc-400">GitHub This Week</span>
+              {githubUsername && (
+                <span className="text-[10px] text-zinc-600">@{githubUsername}</span>
+              )}
+            </div>
+            <button
+              onClick={() => setShowGithubInput(!showGithubInput)}
+              className="p-2 text-zinc-600 hover:text-orange-400 transition-colors"
+            >
+              {githubUsername ? <RefreshCw size={14} /> : <Plus size={14} />}
+            </button>
           </div>
 
-          {/* Week Grid */}
-          <div className="grid grid-cols-7 gap-2 md:gap-4 mb-8">
-            {weekDays.map((day) => {
-              const habitsCompleted = habits.filter((h) => h.history.includes(day.date)).length;
-              const githubCount = githubData[day.date] || 0;
-              const totalActivity = habitsCompleted + githubCount;
-
-              return (
-                <motion.div
-                  key={day.date}
-                  whileHover={{ scale: 1.02 }}
-                  className={`p-3 md:p-6 border text-center transition-all ${
-                    day.isToday
-                      ? "border-orange-500 bg-orange-500/10"
-                      : totalActivity > 0
-                        ? "border-orange-500/30 bg-orange-500/5"
-                        : "border-zinc-800 bg-black/40"
-                  }`}
+          {/* GitHub Username Input */}
+          {showGithubInput && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              className="mb-4 p-4 border border-zinc-800 bg-black/60"
+            >
+              <div className="flex gap-3">
+                <input
+                  type="text"
+                  placeholder="GitHub username"
+                  value={githubUsername}
+                  onChange={(e) => setGithubUsername(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && fetchGithubData(githubUsername)}
+                  className="flex-1 bg-black border border-zinc-800 px-4 py-2 text-sm text-white outline-none focus:border-orange-500"
+                />
+                <button
+                  onClick={() => fetchGithubData(githubUsername)}
+                  disabled={loadingGithub}
+                  className="px-6 py-2 bg-orange-500/10 border border-orange-500/30 text-orange-400 text-xs font-black uppercase hover:bg-orange-500/20 disabled:opacity-50"
                 >
-                  <div className={`text-[10px] md:text-xs font-black uppercase tracking-wider mb-2 ${
-                    day.isToday ? "text-orange-400" : "text-zinc-500"
-                  }`}>
-                    {day.dayName}
+                  {loadingGithub ? "..." : "Sync"}
+                </button>
+              </div>
+            </motion.div>
+          )}
+
+          {/* Week Grid - GitHub */}
+          {githubUsername ? (
+            <>
+              <div className="grid grid-cols-7 gap-2 md:gap-4 mb-4">
+                {weekDays.map((day) => {
+                  const githubCount = githubData[day.date] || 0;
+                  const isSelected = selectedDay === day.date;
+
+                  return (
+                    <button
+                      key={day.date}
+                      onClick={() => setSelectedDay(isSelected ? null : day.date)}
+                      className={`p-3 md:p-6 border text-center transition-all ${
+                        isSelected
+                          ? "border-orange-500 bg-orange-500/20"
+                          : day.isToday
+                            ? "border-zinc-700 bg-zinc-900"
+                            : githubCount > 0
+                              ? "border-zinc-800 bg-zinc-900/50"
+                              : "border-zinc-900 bg-black/40"
+                      }`}
+                    >
+                      <div className={`text-[10px] md:text-xs font-black uppercase tracking-wider mb-2 ${
+                        day.isToday ? "text-orange-400" : "text-zinc-600"
+                      }`}>
+                        {day.dayName}
+                      </div>
+                      <div className={`text-xl md:text-3xl font-black ${
+                        githubCount > 0 ? "text-orange-400" : "text-zinc-700"
+                      }`}>
+                        {githubCount}
+                      </div>
+                      <div className="text-[8px] text-zinc-600 uppercase mt-1">commits</div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Selected Day Details */}
+              {selectedDay && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  className="p-4 border border-zinc-800 bg-black/60 mb-4"
+                >
+                  <div className="flex items-center justify-between mb-4">
+                    <span className="text-sm font-bold text-white">{selectedDay}</span>
+                    <button onClick={() => setSelectedDay(null)} className="text-zinc-600 hover:text-white">
+                      <X size={16} />
+                    </button>
                   </div>
-                  <div className={`text-xl md:text-3xl font-black ${
-                    day.isToday ? "text-orange-400" : totalActivity > 0 ? "text-orange-300" : "text-zinc-600"
-                  }`}>
-                    {day.dayNum}
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    {getEventsForDay(selectedDay).length > 0 ? (
+                      getEventsForDay(selectedDay).map((event: any, i: number) => (
+                        <div key={i} className="flex items-center gap-3 p-2 border border-zinc-900 bg-black/40">
+                          <GitCommit size={14} className="text-orange-400 shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <div className="text-xs font-bold text-zinc-300 truncate">{event.repo?.name}</div>
+                            <div className="text-[10px] text-zinc-600">{formatEventType(event.type)}</div>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-center py-4 text-zinc-600 text-xs">No activity this day</div>
+                    )}
                   </div>
-                  {totalActivity > 0 && (
-                    <div className="mt-2 flex justify-center gap-1">
-                      {[...Array(Math.min(totalActivity, 5))].map((_, i) => (
-                        <div key={i} className="w-1.5 h-1.5 rounded-full bg-orange-400" />
-                      ))}
-                    </div>
-                  )}
                 </motion.div>
-              );
-            })}
+              )}
+            </>
+          ) : (
+            <div className="p-8 border border-zinc-900 bg-black/20 text-center">
+              <GitCommit size={32} className="mx-auto mb-3 text-zinc-800" />
+              <p className="text-zinc-600 text-xs mb-4">Track your GitHub activity</p>
+              <button
+                onClick={() => setShowGithubInput(true)}
+                className="px-4 py-2 border border-orange-500/30 text-orange-400 text-xs font-black uppercase hover:bg-orange-500/10"
+              >
+                Add Username
+              </button>
+            </div>
+          )}
+        </section>
+
+        {/* CODE ARENA - TOP CODING MODELS */}
+        <section className="mb-12">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <Bot size={20} className="text-orange-400" />
+              <span className="text-xs font-black uppercase tracking-[0.2em] text-zinc-400">Code Arena Rankings</span>
+            </div>
+            <a
+              href="https://arena.ai/leaderboard/code"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[10px] text-zinc-600 hover:text-orange-400 transition-colors"
+            >
+              Live rankings →
+            </a>
+          </div>
+
+          <div className="space-y-2">
+            {TOP_CODING_LLMS.map((model) => (
+              <div
+                key={model.rank}
+                className={`p-4 border flex items-center gap-4 transition-all ${
+                  model.rank === 1
+                    ? "border-orange-500/30 bg-orange-500/5"
+                    : model.rank <= 3
+                      ? "border-zinc-800 bg-zinc-900/30"
+                      : "border-zinc-900 bg-black/40"
+                }`}
+              >
+                <div className={`w-8 h-8 flex items-center justify-center font-black ${
+                  model.rank === 1 ? "text-orange-400" : model.rank === 2 ? "text-zinc-300" : model.rank === 3 ? "text-amber-600" : "text-zinc-600"
+                }`}>
+                  {model.rank === 1 ? <Trophy size={20} /> : `#${model.rank}`}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-bold text-white truncate">{model.name}</div>
+                  <div className="text-[10px] text-zinc-600 uppercase">{model.org}</div>
+                </div>
+                <div className="text-right">
+                  <div className={`text-lg font-black ${model.rank === 1 ? "text-orange-400" : "text-zinc-400"}`}>
+                    {model.score}
+                  </div>
+                  <div className="text-[8px] text-zinc-600 uppercase">ELO</div>
+                </div>
+              </div>
+            ))}
           </div>
         </section>
 
@@ -253,12 +420,31 @@ export default function StreaksPage() {
                 value={newHabitName}
                 onChange={(e) => setNewHabitName(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && addHabit()}
-                className="w-full bg-transparent border-b-2 border-zinc-800 px-0 py-3 text-lg text-white outline-none focus:border-orange-500 mb-4 placeholder:text-zinc-700"
+                className="w-full bg-transparent border-b-2 border-zinc-800 px-0 py-3 text-lg text-white outline-none focus:border-orange-500 mb-6 placeholder:text-zinc-700"
               />
+
+              {/* Color Picker */}
+              <div className="mb-6">
+                <div className="text-[10px] font-black uppercase tracking-wider text-zinc-600 mb-3">Color</div>
+                <div className="flex gap-2 flex-wrap">
+                  {HABIT_COLORS.map((color) => (
+                    <button
+                      key={color.value}
+                      onClick={() => setNewHabitColor(color.value)}
+                      className={`w-8 h-8 rounded-full ${color.bg} transition-all ${
+                        newHabitColor === color.value
+                          ? "ring-2 ring-white ring-offset-2 ring-offset-black scale-110"
+                          : "opacity-50 hover:opacity-100"
+                      }`}
+                    />
+                  ))}
+                </div>
+              </div>
+
               <div className="flex gap-3">
                 <button
                   onClick={addHabit}
-                  className="flex-1 py-3 bg-orange-500/10 border border-orange-500/30 text-orange-400 text-xs font-black uppercase tracking-wider hover:bg-orange-500/20 transition-colors"
+                  className={`flex-1 py-3 bg-opacity-10 border border-opacity-30 text-xs font-black uppercase tracking-wider hover:bg-opacity-20 transition-colors ${getHabitColor(newHabitColor, "text")} ${getHabitColor(newHabitColor, "border")}`}
                 >
                   Create Habit
                 </button>
@@ -277,6 +463,7 @@ export default function StreaksPage() {
             {habits.map((habit) => {
               const streak = getStreak(habit);
               const completedToday = habit.history.includes(today);
+              const color = habit.color || "orange";
 
               return (
                 <motion.div
@@ -285,20 +472,18 @@ export default function StreaksPage() {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   className={`p-6 border transition-all ${
-                    completedToday
-                      ? "border-orange-500/50 bg-orange-500/5"
-                      : "border-zinc-800 bg-black/40"
+                    completedToday ? "border-zinc-700 bg-zinc-900/50" : "border-zinc-800 bg-black/40"
                   }`}
                 >
                   <div className="flex items-center justify-between mb-6">
                     <div className="flex items-center gap-4">
-                      <div className={`w-3 h-3 rounded-full ${completedToday ? "bg-orange-400" : "bg-zinc-700"}`} />
+                      <div className={`w-3 h-3 rounded-full ${completedToday ? getHabitColor(color, "bg") : "bg-zinc-700"}`} />
                       <span className="text-lg font-bold text-white">{habit.name}</span>
                     </div>
                     <div className="flex items-center gap-4">
                       <div className="flex items-center gap-2">
-                        <Flame size={16} className="text-orange-400" />
-                        <span className="text-lg font-black text-orange-400">{streak}</span>
+                        <Flame size={16} className={getHabitColor(color, "text")} />
+                        <span className={`text-lg font-black ${getHabitColor(color, "text")}`}>{streak}</span>
                         <span className="text-xs text-zinc-500 uppercase">day streak</span>
                       </div>
                       <button
@@ -320,11 +505,11 @@ export default function StreaksPage() {
                           onClick={() => toggleHabitForDate(habit.id, day.date)}
                           className={`p-3 border text-center transition-all ${
                             isCompleted
-                              ? "border-orange-500/50 bg-orange-500/20 text-orange-400"
+                              ? `${getHabitColor(color, "border")} ${getHabitColor(color, "bg")} text-black`
                               : "border-zinc-800 text-zinc-600 hover:border-zinc-700"
                           }`}
                         >
-                          <div className="text-[9px] font-bold uppercase mb-1">{day.dayName}</div>
+                          <div className={`text-[9px] font-bold uppercase mb-1 ${isCompleted ? "text-black" : ""}`}>{day.dayName}</div>
                           {isCompleted ? (
                             <Check size={18} className="mx-auto" />
                           ) : (
@@ -340,7 +525,7 @@ export default function StreaksPage() {
 
             {habits.length === 0 && !showAddHabit && (
               <div className="text-center py-16 border border-zinc-800 bg-black/20">
-                <Flame size={48} className="mx-auto mb-4 text-orange-500/20" />
+                <Flame size={48} className="mx-auto mb-4 text-zinc-800" />
                 <p className="text-zinc-600 text-sm font-bold uppercase tracking-wider mb-4">No habits yet</p>
                 <button
                   onClick={() => setShowAddHabit(true)}
@@ -353,85 +538,28 @@ export default function StreaksPage() {
           </div>
         </section>
 
-        {/* GITHUB */}
-        <section className="mb-12">
-          <div className="flex items-center gap-3 mb-6">
-            <GitCommit size={20} className="text-orange-400" />
-            <span className="text-xs font-black uppercase tracking-[0.2em] text-zinc-400">GitHub Activity</span>
-          </div>
-
-          <div className="p-6 border border-zinc-800 bg-black/40 backdrop-blur-sm">
-            <div className="flex flex-col md:flex-row gap-4 mb-6">
-              <input
-                type="text"
-                placeholder="GitHub username"
-                value={githubUsername}
-                onChange={(e) => setGithubUsername(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && fetchGithubData(githubUsername)}
-                className="flex-1 bg-black border border-zinc-800 px-4 py-3 text-sm text-white outline-none focus:border-orange-500 transition-colors placeholder:text-zinc-700"
-              />
-              <button
-                onClick={() => fetchGithubData(githubUsername)}
-                disabled={loadingGithub}
-                className="px-8 py-3 bg-orange-500/10 border border-orange-500/30 text-orange-400 text-xs font-black uppercase tracking-wider hover:bg-orange-500/20 transition-colors disabled:opacity-50"
-              >
-                {loadingGithub ? "Syncing..." : "Sync"}
-              </button>
-            </div>
-
-            {/* GitHub Week Stats */}
-            {Object.keys(githubData).length > 0 && (
-              <div className="grid grid-cols-7 gap-2">
-                {weekDays.map((day) => {
-                  const count = githubData[day.date] || 0;
-                  return (
-                    <div
-                      key={day.date}
-                      className={`p-3 border text-center ${
-                        count > 0 ? "border-orange-500/30 bg-orange-500/10" : "border-zinc-800"
-                      }`}
-                    >
-                      <div className="text-[9px] font-bold uppercase text-zinc-500 mb-1">{day.dayName}</div>
-                      <div className={`text-lg font-black ${count > 0 ? "text-orange-400" : "text-zinc-700"}`}>
-                        {count}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            {Object.keys(githubData).length === 0 && (
-              <div className="text-center py-8 text-zinc-700">
-                <GitCommit size={32} className="mx-auto mb-3 opacity-30" />
-                <p className="text-xs font-bold uppercase tracking-wider">Enter your GitHub username to track commits</p>
-              </div>
-            )}
-          </div>
-        </section>
-
         {/* STATS */}
         <section>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="p-6 border border-orange-500/20 bg-orange-500/5 text-center">
+            <div className="p-6 border border-zinc-900 bg-[#0a0a0a] text-center">
               <div className="text-3xl md:text-4xl font-black text-orange-400">{habits.length}</div>
-              <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider mt-2">Habits</div>
+              <div className="text-[10px] font-bold text-zinc-600 uppercase tracking-wider mt-2">Habits</div>
             </div>
-            <div className="p-6 border border-orange-500/20 bg-orange-500/5 text-center">
+            <div className="p-6 border border-zinc-900 bg-[#0a0a0a] text-center">
               <div className="text-3xl md:text-4xl font-black text-orange-400">
                 {habits.filter((h) => h.history.includes(today)).length}
               </div>
-              <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider mt-2">Done Today</div>
+              <div className="text-[10px] font-bold text-zinc-600 uppercase tracking-wider mt-2">Done Today</div>
             </div>
-            <div className="p-6 border border-orange-500/20 bg-orange-500/5 text-center">
+            <div className="p-6 border border-zinc-900 bg-[#0a0a0a] text-center">
               <div className="text-3xl md:text-4xl font-black text-orange-400">
                 {habits.length > 0 ? Math.max(...habits.map(getStreak)) : 0}
               </div>
-              <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider mt-2">Best Streak</div>
+              <div className="text-[10px] font-bold text-zinc-600 uppercase tracking-wider mt-2">Best Streak</div>
             </div>
-            <div className="p-6 border border-orange-500/20 bg-orange-500/5 text-center">
+            <div className="p-6 border border-zinc-900 bg-[#0a0a0a] text-center">
               <div className="text-3xl md:text-4xl font-black text-orange-400">{githubThisWeek}</div>
-              <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider mt-2">GitHub This Week</div>
+              <div className="text-[10px] font-bold text-zinc-600 uppercase tracking-wider mt-2">GitHub This Week</div>
             </div>
           </div>
         </section>
