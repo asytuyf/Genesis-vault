@@ -35,21 +35,19 @@ export default function DirectiveLog() {
   );
 
   const nukeGoal = async (idToDelete: string) => {
-    if (!confirm("NUKE_THIS_ENTRY?")) return;
     setLoadingAction(true);
 
-    const newMasterList = goals.filter(g => g.id !== idToDelete).reverse(); // Remove the goal, then reverse for GitHub storage
+    // Keep original order for GitHub (don't reverse - goals are stored oldest-first)
+    const remainingGoals = goals.filter(g => g.id !== idToDelete);
+    const goalsForGitHub = [...remainingGoals].reverse(); // Reverse back to original storage order
 
     const res = await fetch('/api/goals', {
       method: 'POST',
-      body: JSON.stringify({ password, updatedGoals: newMasterList })
+      body: JSON.stringify({ password, updatedGoals: goalsForGitHub })
     });
 
     if (res.ok) {
-      setGoals(goals.filter(g => g.id !== idToDelete));
-      alert("MANIFEST_CLEARED");
-    } else {
-      alert("AUTH_FAILURE");
+      setGoals(remainingGoals); // Framer Motion AnimatePresence handles the exit animation
     }
     setLoadingAction(false);
   };
@@ -280,11 +278,14 @@ export default function DirectiveLog() {
                 Zero_Directives_Found
             </div>
         ) : (
-          filtered.map((g, i) => (
-            <motion.div 
-                initial={{ opacity: 0, y: 20 }} 
-                animate={{ opacity: 1, y: 0 }} 
-                key={i} 
+          <AnimatePresence mode="popLayout">
+          {filtered.map((g, i) => (
+            <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.8, transition: { duration: 0.3 } }}
+                layout
+                key={g.id} 
                 className="group bg-[#0a0a0a] border border-zinc-800 p-8 hover:border-emerald-500 transition-all shadow-xl relative overflow-hidden"
             >
               {/* NUKE BUTTON (Visible only when unlocked) */}
@@ -330,7 +331,8 @@ export default function DirectiveLog() {
                 <span className="text-[10px] text-zinc-800 font-mono">REF_{g.id}</span>
               </div>
             </motion.div>
-          ))
+          ))}
+          </AnimatePresence>
         )}
       </div>
 

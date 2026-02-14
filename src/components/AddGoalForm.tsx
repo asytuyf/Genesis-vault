@@ -33,30 +33,34 @@ export const AddGoalForm = ({ password, setGoals, currentGoals, setLoadingAction
     }
     setLoadingAction(true);
 
+    // Use ISO date format (YYYY-MM-DD) to match PC addgoal function
+    const today = new Date();
+    const dateStr = today.toISOString().split('T')[0];
+
     const newGoal: Goal = {
-      id: Date.now().toString(), // Simple unique ID
+      id: Date.now().toString(),
       task: task.trim(),
-      project: project.trim() || "GLOBAL", // Default to GLOBAL if project is empty
+      project: project.trim() || "GLOBAL",
       priority: priority,
-      date: new Date().toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' }), // Current date
+      date: dateStr,
     };
 
-    const updatedGoals = [...currentGoals, newGoal];
+    // currentGoals is displayed reversed (newest first), so reverse back for storage (oldest first)
+    // then add new goal at the end
+    const goalsForStorage = [...currentGoals].reverse();
+    goalsForStorage.push(newGoal);
 
     const res = await fetch('/api/goals', {
       method: 'POST',
-      body: JSON.stringify({ password, updatedGoals: updatedGoals.reverse() }) // Reverse for GitHub storage as per nukeGoal logic
+      body: JSON.stringify({ password, updatedGoals: goalsForStorage })
     });
 
     if (res.ok) {
-      setGoals(updatedGoals); // Update local state
+      setGoals([newGoal, ...currentGoals]); // Add to front of display (newest first)
       setTask("");
       setProject("");
-      setPriority("Low"); // Reset priority to default
-      alert("Goal added successfully!");
-      onClose(); // Close the modal on success
-    } else {
-      alert("Failed to add goal. AUTH_FAILURE or API_ERROR.");
+      setPriority("Low");
+      onClose();
     }
     setLoadingAction(false);
   };
