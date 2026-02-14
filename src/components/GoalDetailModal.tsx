@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { X, Check, Plus, Square, CheckSquare, Tag, Clock, Activity } from "lucide-react";
+import { X, Plus, Tag, Clock, Activity } from "lucide-react";
 
 interface SubGoal {
   id: string;
@@ -23,7 +23,7 @@ interface GoalDetailModalProps {
   isAdmin: boolean;
   password: string;
   onClose: () => void;
-  onUpdate: (updatedGoal: Goal) => void;
+  onUpdate: (updatedGoal: Goal) => Promise<void>;
 }
 
 export const GoalDetailModal = ({ goal, isAdmin, password, onClose, onUpdate }: GoalDetailModalProps) => {
@@ -57,7 +57,7 @@ export const GoalDetailModal = ({ goal, isAdmin, password, onClose, onUpdate }: 
   const saveChanges = async () => {
     setSaving(true);
     const updatedGoal = { ...goal, subgoals };
-    onUpdate(updatedGoal);
+    await onUpdate(updatedGoal);
     setSaving(false);
     onClose();
   };
@@ -136,43 +136,43 @@ export const GoalDetailModal = ({ goal, isAdmin, password, onClose, onUpdate }: 
           </div>
 
           {subgoals.length === 0 ? (
-            <div className="text-zinc-700 text-sm py-8 text-center border border-dashed border-zinc-800">
-              No sub-tasks yet
+            <div className="text-zinc-700 text-sm py-8 text-center border border-dashed border-zinc-800 uppercase">
+              No_Sub-Tasks_Found
             </div>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-1">
               {subgoals.map((sg) => (
                 <motion.div
                   key={sg.id}
                   layout
                   initial={{ opacity: 0, x: -10 }}
                   animate={{ opacity: 1, x: 0 }}
-                  className={`flex items-start gap-3 p-3 border transition-all ${
+                  className={`flex items-center gap-3 p-3 border transition-all ${
                     sg.completed
-                      ? 'bg-emerald-500/5 border-emerald-500/20'
+                      ? 'bg-zinc-900/30 border-zinc-800'
                       : 'bg-zinc-900/50 border-zinc-800 hover:border-zinc-700'
                   }`}
                 >
                   <button
                     onClick={() => toggleSubgoal(sg.id)}
                     disabled={!isAdmin}
-                    className={`mt-0.5 transition-colors ${
-                      sg.completed ? 'text-emerald-400' : 'text-zinc-700 hover:text-zinc-500'
-                    } ${!isAdmin ? 'cursor-default' : 'cursor-pointer'}`}
+                    className={`font-mono text-sm transition-colors ${!isAdmin ? 'cursor-default' : 'cursor-pointer'}`}
                   >
-                    {sg.completed ? <CheckSquare size={18} /> : <Square size={18} />}
+                    <span className={sg.completed ? 'text-emerald-500' : 'text-zinc-700 hover:text-zinc-500'}>
+                      [{sg.completed ? <span className="text-emerald-400">■</span> : <span className="text-zinc-800">&nbsp;</span>}]
+                    </span>
                   </button>
-                  <span className={`flex-1 text-sm ${
-                    sg.completed ? 'text-emerald-400 line-through' : 'text-zinc-300'
+                  <span className={`flex-1 text-sm font-mono ${
+                    sg.completed ? 'text-zinc-600 line-through' : 'text-zinc-400'
                   }`}>
                     {sg.text}
                   </span>
                   {isAdmin && (
                     <button
                       onClick={() => removeSubgoal(sg.id)}
-                      className="text-zinc-800 hover:text-red-500 transition-colors"
+                      className="text-zinc-800 hover:text-red-500 transition-colors text-xs font-mono"
                     >
-                      <X size={14} />
+                      [DEL]
                     </button>
                   )}
                 </motion.div>
@@ -187,25 +187,25 @@ export const GoalDetailModal = ({ goal, isAdmin, password, onClose, onUpdate }: 
             <div className="flex gap-2">
               <input
                 type="text"
-                placeholder="Add sub-task..."
+                placeholder="$ add sub-task..."
                 value={newSubgoal}
                 onChange={(e) => setNewSubgoal(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && addSubgoal()}
-                className="flex-1 bg-black border border-zinc-800 px-3 py-2 text-sm outline-none focus:border-emerald-400 text-zinc-300 placeholder:text-zinc-700"
+                className="flex-1 bg-black border border-zinc-800 px-3 py-2 text-sm outline-none focus:border-emerald-500/50 text-zinc-300 placeholder:text-zinc-700 font-mono"
               />
               <button
                 onClick={addSubgoal}
-                className="px-3 py-2 bg-zinc-900 border border-zinc-800 text-zinc-500 hover:text-emerald-400 hover:border-emerald-400/30 transition-colors"
+                className="px-3 py-2 bg-zinc-900 border border-zinc-800 text-zinc-600 hover:text-emerald-400 hover:border-emerald-500/30 transition-colors font-mono text-sm"
               >
-                <Plus size={18} />
+                [+]
               </button>
             </div>
             <button
               onClick={saveChanges}
               disabled={saving}
-              className="w-full flex items-center justify-center gap-2 bg-emerald-700/30 text-emerald-400 px-4 py-2.5 text-sm font-bold uppercase border border-emerald-500/30 hover:bg-emerald-700/50 transition-colors"
+              className="w-full flex items-center justify-center gap-2 bg-zinc-900 text-emerald-500 px-4 py-2.5 text-sm font-bold uppercase border border-zinc-800 hover:border-emerald-500/30 hover:bg-zinc-900/80 transition-colors font-mono tracking-wider"
             >
-              <Check size={16} /> {saving ? "Saving..." : "Save Changes"}
+              {saving ? "SYNCING..." : "SYNC_CHANGES"}
             </button>
           </div>
         )}
