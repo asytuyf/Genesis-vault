@@ -8,22 +8,26 @@ export default function CommandArchive() {
   const [snippets, setSnippets] = useState<any[]>([]);
   const [search, setSearch] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [isTransitioning, setIsTransitioning] = useState(false);
+  const [glitchPhase, setGlitchPhase] = useState(0); // 0=normal, 1=glitching, 2=copied
 
   const copyToClipboard = (cmd: string, id: string) => {
     navigator.clipboard.writeText(cmd);
-    setIsTransitioning(true);
+
+    // Glitch sequence
+    setGlitchPhase(1);
     setTimeout(() => {
       setCopiedId(id);
-      setIsTransitioning(false);
-    }, 150);
+      setGlitchPhase(2);
+    }, 400);
+
+    // Revert after delay
     setTimeout(() => {
-      setIsTransitioning(true);
+      setGlitchPhase(1);
       setTimeout(() => {
         setCopiedId(null);
-        setIsTransitioning(false);
-      }, 150);
-    }, 1500);
+        setGlitchPhase(0);
+      }, 400);
+    }, 2000);
   };
 
 
@@ -52,22 +56,38 @@ export default function CommandArchive() {
   return (
     <main className="relative min-h-screen bg-[#0d0d0d] text-[#f4f4f5] font-mono overflow-x-hidden px-6 pb-6 pt-[56px] md:p-24">
       {/* HAZARD BARS */}
-      <div className="fixed inset-x-0 top-0 h-[28px] z-[150] flex items-center overflow-hidden border-b-2 border-black bg-cyan-500">
+      <div className={`fixed inset-x-0 top-0 h-[28px] z-[150] flex items-center overflow-hidden border-b-2 border-black transition-colors duration-100 ${glitchPhase === 1 ? 'bg-black' : 'bg-cyan-500'}`}>
         <motion.div
           animate={{ x: [0, -1000] }}
-          transition={{ repeat: Infinity, duration: 20, ease: "linear" }}
-          className={`flex whitespace-nowrap text-[12px] font-black text-black tracking-[2em] transition-opacity duration-150 ${isTransitioning ? 'opacity-0' : 'opacity-100'}`}
+          transition={{ repeat: Infinity, duration: glitchPhase === 1 ? 2 : 20, ease: "linear" }}
+          className={`flex whitespace-nowrap text-[12px] font-black tracking-[2em] transition-colors duration-100 ${glitchPhase === 1 ? 'text-cyan-500' : 'text-black'}`}
         >
-          {[...Array(10)].map((_, i) => <span key={i}>{copiedId ? 'DATA EXTRACTED // CLIPBOARD INJECTED //' : 'UNDER CONSTRUCTION // MEN AT WORK //'}</span>)}
+          {[...Array(10)].map((_, i) => (
+            <span key={i} className={glitchPhase === 1 ? 'animate-pulse' : ''}>
+              {glitchPhase === 1
+                ? '▓▒░ INJECTING ░▒▓ BUFFER_OVERFLOW ▓▒░'
+                : copiedId
+                  ? 'DATA EXTRACTED // CLIPBOARD INJECTED //'
+                  : 'UNDER CONSTRUCTION // MEN AT WORK //'}
+            </span>
+          ))}
         </motion.div>
       </div>
-      <div className="fixed inset-x-0 bottom-0 h-[28px] z-[150] flex items-center overflow-hidden border-t-2 border-black bg-cyan-500">
+      <div className={`fixed inset-x-0 bottom-0 h-[28px] z-[150] flex items-center overflow-hidden border-t-2 border-black transition-colors duration-100 ${glitchPhase === 1 ? 'bg-black' : 'bg-cyan-500'}`}>
         <motion.div
           animate={{ x: [-1000, 0] }}
-          transition={{ repeat: Infinity, duration: 20, ease: "linear" }}
-          className={`flex whitespace-nowrap text-[12px] font-black text-black tracking-[2em] transition-opacity duration-150 ${isTransitioning ? 'opacity-0' : 'opacity-100'}`}
+          transition={{ repeat: Infinity, duration: glitchPhase === 1 ? 2 : 20, ease: "linear" }}
+          className={`flex whitespace-nowrap text-[12px] font-black tracking-[2em] transition-colors duration-100 ${glitchPhase === 1 ? 'text-cyan-500' : 'text-black'}`}
         >
-          {[...Array(10)].map((_, i) => <span key={i}>{copiedId ? 'DATA EXTRACTED // CLIPBOARD INJECTED //' : 'UNDER CONSTRUCTION // MEN AT WORK //'}</span>)}
+          {[...Array(10)].map((_, i) => (
+            <span key={i} className={glitchPhase === 1 ? 'animate-pulse' : ''}>
+              {glitchPhase === 1
+                ? '▓▒░ INJECTING ░▒▓ BUFFER_OVERFLOW ▓▒░'
+                : copiedId
+                  ? 'DATA EXTRACTED // CLIPBOARD INJECTED //'
+                  : 'UNDER CONSTRUCTION // MEN AT WORK //'}
+            </span>
+          ))}
         </motion.div>
       </div>
 
