@@ -1,63 +1,70 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Terminal, Play, Pause, RotateCcw, Coffee, Zap,
-  ExternalLink, Youtube, Volume2, VolumeX, Plus, X,
-  Settings, ChevronDown, ChevronUp
+  Youtube, Volume2, VolumeX, Eye, EyeOff, Settings
 } from "lucide-react";
-
-const DEFAULT_LINKS = [
-  { name: "GitHub", url: "https://github.com", color: "text-white" },
-  { name: "Stack Overflow", url: "https://stackoverflow.com", color: "text-orange-400" },
-  { name: "MDN Docs", url: "https://developer.mozilla.org", color: "text-blue-400" },
-  { name: "ChatGPT", url: "https://chat.openai.com", color: "text-emerald-400" },
-];
-
-const FOCUS_PLAYLISTS = [
-  { name: "Lo-Fi Beats", id: "jfKfPfyJRdk" }, // lofi girl
-  { name: "Synthwave", id: "4xDzrJKXOOY" },
-  { name: "Deep Focus", id: "lTRiuFIWV54" },
-  { name: "Coding Music", id: "M5QY2_8704o" },
-];
 
 export default function FocusPage() {
   // Timer state
   const [mode, setMode] = useState<"work" | "break">("work");
-  const [timeLeft, setTimeLeft] = useState(25 * 60); // 25 minutes
+  const [timeLeft, setTimeLeft] = useState(25 * 60);
   const [isRunning, setIsRunning] = useState(false);
   const [sessions, setSessions] = useState(0);
   const [workDuration, setWorkDuration] = useState(25);
   const [breakDuration, setBreakDuration] = useState(5);
 
-  // UI state
+  // YouTube state
+  const [youtubeUrl, setYoutubeUrl] = useState("");
+  const [videoId, setVideoId] = useState("");
+  const [showVideo, setShowVideo] = useState(false); // false = audio only, true = video visible
+  const [isPlaying, setIsPlaying] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [showVideo, setShowVideo] = useState(false);
-  const [currentPlaylist, setCurrentPlaylist] = useState(FOCUS_PLAYLISTS[0]);
-  const [isMuted, setIsMuted] = useState(false);
-  const [links, setLinks] = useState(DEFAULT_LINKS);
-  const [newLinkName, setNewLinkName] = useState("");
-  const [newLinkUrl, setNewLinkUrl] = useState("");
-  const [showAddLink, setShowAddLink] = useState(false);
 
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  // Extract video ID from YouTube URL
+  const extractVideoId = (url: string) => {
+    const patterns = [
+      /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/,
+      /^([a-zA-Z0-9_-]{11})$/
+    ];
+    for (const pattern of patterns) {
+      const match = url.match(pattern);
+      if (match) return match[1];
+    }
+    return "";
+  };
 
   // Load saved data
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const savedLinks = localStorage.getItem("focus_links");
-      const savedSessions = localStorage.getItem("focus_sessions");
+      const savedSessions = localStorage.getItem("focus_sessions_today");
+      const savedDate = localStorage.getItem("focus_sessions_date");
       const savedWork = localStorage.getItem("focus_work_duration");
       const savedBreak = localStorage.getItem("focus_break_duration");
+      const savedYoutube = localStorage.getItem("focus_youtube_url");
 
-      if (savedLinks) setLinks(JSON.parse(savedLinks));
-      if (savedSessions) setSessions(parseInt(savedSessions));
+      const today = new Date().toDateString();
+      if (savedDate === today && savedSessions) {
+        setSessions(parseInt(savedSessions));
+      }
+
       if (savedWork) {
         setWorkDuration(parseInt(savedWork));
         setTimeLeft(parseInt(savedWork) * 60);
       }
       if (savedBreak) setBreakDuration(parseInt(savedBreak));
+      if (savedYoutube) {
+        setYoutubeUrl(savedYoutube);
+        setVideoId(extractVideoId(savedYoutube));
+      }
+
+      // Request notification permission
+      if ("Notification" in window && Notification.permission === "default") {
+        Notification.requestPermission();
+      }
     }
   }, []);
 
@@ -67,15 +74,14 @@ export default function FocusPage() {
       intervalRef.current = setInterval(() => {
         setTimeLeft((t) => t - 1);
       }, 1000);
-    } else if (timeLeft === 0) {
+    } else if (timeLeft === 0 && isRunning) {
       // Timer finished
       playNotification();
       if (mode === "work") {
-        setSessions((s) => {
-          const newSessions = s + 1;
-          localStorage.setItem("focus_sessions", String(newSessions));
-          return newSessions;
-        });
+        const newSessions = sessions + 1;
+        setSessions(newSessions);
+        localStorage.setItem("focus_sessions_today", String(newSessions));
+        localStorage.setItem("focus_sessions_date", new Date().toDateString());
         setMode("break");
         setTimeLeft(breakDuration * 60);
       } else {
@@ -88,20 +94,17 @@ export default function FocusPage() {
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [isRunning, timeLeft, mode, workDuration, breakDuration]);
+  }, [isRunning, timeLeft, mode, workDuration, breakDuration, sessions]);
 
   const playNotification = () => {
     if (typeof window !== "undefined" && "Notification" in window) {
       if (Notification.permission === "granted") {
-        new Notification(mode === "work" ? "Break time!" : "Back to work!", {
-          body: mode === "work" ? "Great session! Take a break." : "Let's get back to it.",
+        new Notification(mode === "work" ? "Break Time" : "Back to Work", {
+          body: mode === "work" ? "Great session. Take a break." : "Let's focus.",
           icon: "/favicon.ico"
         });
       }
     }
-    // Play beep sound
-    const audio = new Audio("data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YU");
-    audio.play().catch(() => {});
   };
 
   const formatTime = (seconds: number) => {
@@ -126,28 +129,22 @@ export default function FocusPage() {
     }
   };
 
-  const saveSettings = () => {
-    localStorage.setItem("focus_work_duration", String(workDuration));
-    localStorage.setItem("focus_break_duration", String(breakDuration));
-    setTimeLeft(mode === "work" ? workDuration * 60 : breakDuration * 60);
-    setShowSettings(false);
-  };
-
-  const addLink = () => {
-    if (newLinkName && newLinkUrl) {
-      const newLinks = [...links, { name: newLinkName, url: newLinkUrl.startsWith("http") ? newLinkUrl : `https://${newLinkUrl}`, color: "text-purple-400" }];
-      setLinks(newLinks);
-      localStorage.setItem("focus_links", JSON.stringify(newLinks));
-      setNewLinkName("");
-      setNewLinkUrl("");
-      setShowAddLink(false);
+  const handleYoutubeSubmit = () => {
+    const id = extractVideoId(youtubeUrl);
+    setVideoId(id);
+    if (id) {
+      localStorage.setItem("focus_youtube_url", youtubeUrl);
+      setIsPlaying(true);
     }
   };
 
-  const removeLink = (index: number) => {
-    const newLinks = links.filter((_, i) => i !== index);
-    setLinks(newLinks);
-    localStorage.setItem("focus_links", JSON.stringify(newLinks));
+  const saveSettings = () => {
+    localStorage.setItem("focus_work_duration", String(workDuration));
+    localStorage.setItem("focus_break_duration", String(breakDuration));
+    if (!isRunning) {
+      setTimeLeft(mode === "work" ? workDuration * 60 : breakDuration * 60);
+    }
+    setShowSettings(false);
   };
 
   const progress = mode === "work"
@@ -155,7 +152,7 @@ export default function FocusPage() {
     : ((breakDuration * 60 - timeLeft) / (breakDuration * 60)) * 100;
 
   return (
-    <main className="relative min-h-screen bg-[#0d0d0d] text-[#f4f4f5] font-mono overflow-x-hidden px-6 pb-6 pt-[56px] md:p-24">
+    <main className="relative min-h-screen bg-[#0d0d0d] text-[#f4f4f5] font-mono overflow-hidden">
       {/* HAZARD BARS */}
       <div className="fixed inset-x-0 top-0 h-[28px] bg-purple-500 z-[150] flex items-center overflow-hidden border-b-2 border-black">
         <motion.div animate={{ x: [0, -1000] }} transition={{ repeat: Infinity, duration: 20, ease: "linear" }} className="flex whitespace-nowrap text-[12px] font-black text-black tracking-[2em]">
@@ -168,272 +165,272 @@ export default function FocusPage() {
         </motion.div>
       </div>
 
-      {/* BIG BACKGROUND SYMBOL */}
-      <div className="fixed inset-0 z-0 opacity-[0.02] flex items-center justify-center pointer-events-none">
-        <Zap size={800} strokeWidth={0.5} />
+      {/* CINEMATIC BACKGROUND */}
+      <div className="fixed inset-0 z-0">
+        {/* Gradient overlay */}
+        <div className="absolute inset-0 bg-gradient-to-b from-purple-950/20 via-transparent to-purple-950/30" />
+
+        {/* Animated glow */}
+        <motion.div
+          animate={{
+            opacity: [0.03, 0.06, 0.03],
+            scale: [1, 1.1, 1],
+          }}
+          transition={{ repeat: Infinity, duration: 8, ease: "easeInOut" }}
+          className="absolute inset-0 flex items-center justify-center pointer-events-none"
+        >
+          <Zap size={900} strokeWidth={0.3} className="text-purple-500" />
+        </motion.div>
+
+        {/* Scan lines */}
+        <div className="absolute inset-0 opacity-[0.015] pointer-events-none" style={{
+          backgroundImage: "repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.03) 2px, rgba(255,255,255,0.03) 4px)"
+        }} />
       </div>
 
-      <header className="relative z-10 mb-12">
-        <div className="flex flex-col mb-8">
-          <h1 className="text-5xl md:text-8xl font-black tracking-tighter text-white uppercase leading-[0.8]">FOCUS</h1>
-          <h1 className="text-5xl md:text-8xl font-black tracking-tighter text-zinc-800 uppercase leading-[0.8]">_MODE.</h1>
-        </div>
-        <div className="flex items-center gap-4 text-zinc-600 text-xs font-black uppercase tracking-wider">
-          <div className="flex items-center gap-2">
-            <Zap size={14} className="text-purple-400" />
-            <span>{sessions} sessions completed today</span>
+      {/* MAIN CONTENT */}
+      <div className="relative z-10 min-h-screen flex flex-col items-center justify-center px-6 py-20">
+
+        {/* SESSION COUNTER */}
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-8"
+        >
+          <div className="flex items-center gap-3 px-6 py-3 border border-purple-500/20 bg-purple-500/5 backdrop-blur-sm">
+            <Zap size={16} className="text-purple-400" />
+            <span className="text-xs font-black uppercase tracking-[0.3em] text-purple-300">
+              {sessions} {sessions === 1 ? "session" : "sessions"} today
+            </span>
           </div>
+        </motion.div>
+
+        {/* MODE TOGGLE */}
+        <motion.button
+          onClick={toggleMode}
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
+          className={`mb-12 flex items-center gap-3 px-8 py-4 border-2 transition-all ${
+            mode === "work"
+              ? "border-purple-500/50 bg-purple-500/10 text-purple-300"
+              : "border-emerald-500/50 bg-emerald-500/10 text-emerald-300"
+          }`}
+        >
+          {mode === "work" ? <Zap size={20} /> : <Coffee size={20} />}
+          <span className="text-sm font-black uppercase tracking-[0.2em]">
+            {mode === "work" ? "Deep Work" : "Break Time"}
+          </span>
+        </motion.button>
+
+        {/* TIMER */}
+        <div className="relative mb-12">
+          {/* Progress ring effect */}
+          <svg className="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 200 200">
+            <circle
+              cx="100"
+              cy="100"
+              r="90"
+              fill="none"
+              stroke={mode === "work" ? "rgba(168, 85, 247, 0.1)" : "rgba(16, 185, 129, 0.1)"}
+              strokeWidth="2"
+            />
+            <circle
+              cx="100"
+              cy="100"
+              r="90"
+              fill="none"
+              stroke={mode === "work" ? "rgba(168, 85, 247, 0.5)" : "rgba(16, 185, 129, 0.5)"}
+              strokeWidth="2"
+              strokeDasharray={565}
+              strokeDashoffset={565 - (565 * progress) / 100}
+              strokeLinecap="round"
+              className="transition-all duration-1000"
+            />
+          </svg>
+
+          <motion.div
+            animate={isRunning ? { opacity: [1, 0.7, 1] } : { opacity: 1 }}
+            transition={isRunning ? { repeat: Infinity, duration: 2 } : {}}
+            className={`relative text-[100px] md:text-[160px] font-black tracking-tighter leading-none ${
+              mode === "work" ? "text-purple-400" : "text-emerald-400"
+            }`}
+            style={{ textShadow: mode === "work" ? "0 0 60px rgba(168, 85, 247, 0.3)" : "0 0 60px rgba(16, 185, 129, 0.3)" }}
+          >
+            {formatTime(timeLeft)}
+          </motion.div>
         </div>
-      </header>
 
-      <div className="relative z-10 grid gap-8 lg:grid-cols-3">
-        {/* MAIN TIMER */}
-        <div className="lg:col-span-2">
-          <div className="bg-[#0a0a0a] border border-zinc-900 p-8 md:p-12 relative overflow-hidden">
-            {/* Progress bar background */}
-            <div className="absolute inset-0 opacity-10">
-              <div
-                className={`h-full transition-all duration-1000 ${mode === "work" ? "bg-purple-500" : "bg-emerald-500"}`}
-                style={{ width: `${progress}%` }}
-              />
-            </div>
+        {/* CONTROLS */}
+        <div className="flex items-center gap-6 mb-16">
+          <motion.button
+            onClick={() => setIsRunning(!isRunning)}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            className={`flex items-center justify-center w-20 h-20 border-2 transition-all ${
+              mode === "work"
+                ? "border-purple-500 text-purple-400 hover:bg-purple-500/20"
+                : "border-emerald-500 text-emerald-400 hover:bg-emerald-500/20"
+            }`}
+          >
+            {isRunning ? <Pause size={32} /> : <Play size={32} className="ml-1" />}
+          </motion.button>
 
-            {/* Mode indicator */}
-            <div className="relative flex items-center justify-between mb-8">
-              <button
-                onClick={toggleMode}
-                className={`flex items-center gap-2 px-4 py-2 border transition-all ${
-                  mode === "work"
-                    ? "border-purple-500/30 bg-purple-500/10 text-purple-400"
-                    : "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
-                }`}
-              >
-                {mode === "work" ? <Zap size={16} /> : <Coffee size={16} />}
-                <span className="text-xs font-black uppercase tracking-wider">
-                  {mode === "work" ? "WORK_SESSION" : "BREAK_TIME"}
-                </span>
-              </button>
+          <motion.button
+            onClick={resetTimer}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            className="flex items-center justify-center w-14 h-14 border border-zinc-700 text-zinc-500 hover:text-white hover:border-zinc-500 transition-all"
+          >
+            <RotateCcw size={22} />
+          </motion.button>
 
-              <button
-                onClick={() => setShowSettings(!showSettings)}
-                className="p-2 text-zinc-600 hover:text-purple-400 transition-colors"
-              >
-                <Settings size={20} />
-              </button>
-            </div>
+          <motion.button
+            onClick={() => setShowSettings(!showSettings)}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            className="flex items-center justify-center w-14 h-14 border border-zinc-700 text-zinc-500 hover:text-purple-400 hover:border-purple-500/50 transition-all"
+          >
+            <Settings size={22} />
+          </motion.button>
+        </div>
 
-            {/* Settings panel */}
-            {showSettings && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                className="relative mb-8 p-4 border border-zinc-800 bg-black/50"
-              >
+        {/* SETTINGS PANEL */}
+        <AnimatePresence>
+          {showSettings && (
+            <motion.div
+              initial={{ opacity: 0, y: 20, height: 0 }}
+              animate={{ opacity: 1, y: 0, height: "auto" }}
+              exit={{ opacity: 0, y: 20, height: 0 }}
+              className="w-full max-w-md mb-12 overflow-hidden"
+            >
+              <div className="p-6 border border-zinc-800 bg-black/60 backdrop-blur-sm">
+                <div className="text-xs font-black uppercase tracking-[0.2em] text-zinc-500 mb-4">Timer Settings</div>
                 <div className="grid grid-cols-2 gap-4 mb-4">
                   <div>
-                    <label className="block text-[10px] font-black uppercase tracking-wider text-zinc-500 mb-2">Work (min)</label>
+                    <label className="block text-[10px] font-black uppercase tracking-wider text-zinc-600 mb-2">Work (min)</label>
                     <input
                       type="number"
                       value={workDuration}
                       onChange={(e) => setWorkDuration(Math.max(1, parseInt(e.target.value) || 25))}
-                      className="w-full bg-black border border-zinc-800 px-3 py-2 text-sm text-purple-400 outline-none focus:border-purple-500"
+                      className="w-full bg-black border border-zinc-800 px-4 py-3 text-lg text-purple-400 font-bold outline-none focus:border-purple-500 text-center"
                     />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-black uppercase tracking-wider text-zinc-500 mb-2">Break (min)</label>
+                    <label className="block text-[10px] font-black uppercase tracking-wider text-zinc-600 mb-2">Break (min)</label>
                     <input
                       type="number"
                       value={breakDuration}
                       onChange={(e) => setBreakDuration(Math.max(1, parseInt(e.target.value) || 5))}
-                      className="w-full bg-black border border-zinc-800 px-3 py-2 text-sm text-emerald-400 outline-none focus:border-emerald-500"
+                      className="w-full bg-black border border-zinc-800 px-4 py-3 text-lg text-emerald-400 font-bold outline-none focus:border-emerald-500 text-center"
                     />
                   </div>
                 </div>
                 <button
                   onClick={saveSettings}
-                  className="w-full py-2 bg-purple-500/10 border border-purple-500/30 text-purple-400 text-xs font-black uppercase tracking-wider hover:bg-purple-500/20 transition-colors"
+                  className="w-full py-3 bg-purple-500/10 border border-purple-500/30 text-purple-400 text-xs font-black uppercase tracking-wider hover:bg-purple-500/20 transition-colors"
                 >
-                  Save Settings
+                  Save
                 </button>
-              </motion.div>
-            )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-            {/* Timer display */}
-            <div className="relative text-center mb-8">
-              <div className={`text-[80px] md:text-[140px] font-black tracking-tighter leading-none ${
-                mode === "work" ? "text-purple-400" : "text-emerald-400"
-              } ${isRunning ? "animate-pulse" : ""}`}>
-                {formatTime(timeLeft)}
-              </div>
-              <div className="text-zinc-600 text-xs font-black uppercase tracking-[0.3em] mt-2">
-                {isRunning ? "// RUNNING //" : "// PAUSED //"}
-              </div>
+        {/* YOUTUBE PLAYER */}
+        <div className="w-full max-w-2xl">
+          <div className="p-6 border border-zinc-800 bg-black/40 backdrop-blur-sm">
+            <div className="flex items-center gap-3 mb-6">
+              <Youtube size={20} className="text-purple-400" />
+              <span className="text-xs font-black uppercase tracking-[0.2em] text-zinc-400">Focus Music</span>
             </div>
 
-            {/* Controls */}
-            <div className="relative flex items-center justify-center gap-4">
+            {/* URL Input */}
+            <div className="flex gap-3 mb-6">
+              <input
+                type="text"
+                placeholder="Paste YouTube URL or video ID..."
+                value={youtubeUrl}
+                onChange={(e) => setYoutubeUrl(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleYoutubeSubmit()}
+                className="flex-1 bg-black border border-zinc-800 px-4 py-3 text-sm text-white outline-none focus:border-purple-500 transition-colors placeholder:text-zinc-700"
+              />
               <button
-                onClick={() => setIsRunning(!isRunning)}
-                className={`flex items-center justify-center w-16 h-16 border-2 transition-all ${
-                  mode === "work"
-                    ? "border-purple-500 text-purple-400 hover:bg-purple-500/20"
-                    : "border-emerald-500 text-emerald-400 hover:bg-emerald-500/20"
-                }`}
+                onClick={handleYoutubeSubmit}
+                className="px-6 py-3 bg-purple-500/10 border border-purple-500/30 text-purple-400 text-xs font-black uppercase tracking-wider hover:bg-purple-500/20 transition-colors"
               >
-                {isRunning ? <Pause size={28} /> : <Play size={28} />}
-              </button>
-              <button
-                onClick={resetTimer}
-                className="flex items-center justify-center w-12 h-12 border border-zinc-800 text-zinc-500 hover:text-white hover:border-zinc-600 transition-all"
-              >
-                <RotateCcw size={20} />
-              </button>
-            </div>
-          </div>
-
-          {/* FOCUS MUSIC */}
-          <div className="mt-6 bg-[#0a0a0a] border border-zinc-900 p-6">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2 text-purple-400">
-                <Youtube size={18} />
-                <span className="text-xs font-black uppercase tracking-wider">Focus_Music</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setIsMuted(!isMuted)}
-                  className="p-2 text-zinc-600 hover:text-purple-400 transition-colors"
-                >
-                  {isMuted ? <VolumeX size={18} /> : <Volume2 size={18} />}
-                </button>
-                <button
-                  onClick={() => setShowVideo(!showVideo)}
-                  className="p-2 text-zinc-600 hover:text-purple-400 transition-colors"
-                >
-                  {showVideo ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-                </button>
-              </div>
-            </div>
-
-            {/* Playlist selector */}
-            <div className="flex flex-wrap gap-2 mb-4">
-              {FOCUS_PLAYLISTS.map((pl) => (
-                <button
-                  key={pl.id}
-                  onClick={() => setCurrentPlaylist(pl)}
-                  className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-wider border transition-all ${
-                    currentPlaylist.id === pl.id
-                      ? "border-purple-500/50 bg-purple-500/10 text-purple-400"
-                      : "border-zinc-800 text-zinc-500 hover:border-zinc-700"
-                  }`}
-                >
-                  {pl.name}
-                </button>
-              ))}
-            </div>
-
-            {/* YouTube embed */}
-            {showVideo && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                className="aspect-video bg-black border border-zinc-800 overflow-hidden"
-              >
-                <iframe
-                  width="100%"
-                  height="100%"
-                  src={`https://www.youtube.com/embed/${currentPlaylist.id}?autoplay=1&mute=${isMuted ? 1 : 0}`}
-                  title="Focus Music"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                  allowFullScreen
-                  className="w-full h-full"
-                />
-              </motion.div>
-            )}
-          </div>
-        </div>
-
-        {/* QUICK LINKS */}
-        <div className="lg:col-span-1">
-          <div className="bg-[#0a0a0a] border border-zinc-900 p-6 sticky top-20">
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-2 text-purple-400">
-                <ExternalLink size={18} />
-                <span className="text-xs font-black uppercase tracking-wider">Quick_Links</span>
-              </div>
-              <button
-                onClick={() => setShowAddLink(!showAddLink)}
-                className="p-1.5 text-zinc-600 hover:text-purple-400 transition-colors border border-zinc-800 hover:border-purple-500/30"
-              >
-                <Plus size={14} />
+                Load
               </button>
             </div>
 
-            {/* Add link form */}
-            {showAddLink && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                className="mb-4 p-3 border border-zinc-800 bg-black/50"
-              >
-                <input
-                  type="text"
-                  placeholder="Name"
-                  value={newLinkName}
-                  onChange={(e) => setNewLinkName(e.target.value)}
-                  className="w-full bg-transparent border-b border-zinc-800 px-0 py-2 text-xs text-white outline-none focus:border-purple-500 mb-2"
-                />
-                <input
-                  type="text"
-                  placeholder="URL"
-                  value={newLinkUrl}
-                  onChange={(e) => setNewLinkUrl(e.target.value)}
-                  className="w-full bg-transparent border-b border-zinc-800 px-0 py-2 text-xs text-white outline-none focus:border-purple-500 mb-3"
-                />
-                <button
-                  onClick={addLink}
-                  className="w-full py-2 bg-purple-500/10 border border-purple-500/30 text-purple-400 text-[10px] font-black uppercase tracking-wider hover:bg-purple-500/20 transition-colors"
-                >
-                  Add Link
-                </button>
-              </motion.div>
-            )}
-
-            {/* Links list */}
-            <div className="space-y-2">
-              {links.map((link, i) => (
-                <div key={i} className="group flex items-center gap-3 p-3 border border-zinc-900 hover:border-purple-500/30 transition-all bg-black/30">
-                  <a
-                    href={link.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className={`flex-1 text-sm font-bold ${link.color} hover:text-purple-300 transition-colors truncate`}
-                  >
-                    {link.name}
-                  </a>
+            {/* Video Player */}
+            {videoId && (
+              <div className="space-y-4">
+                {/* Controls */}
+                <div className="flex items-center justify-between">
                   <button
-                    onClick={() => removeLink(i)}
-                    className="opacity-0 group-hover:opacity-100 p-1 text-zinc-600 hover:text-red-400 transition-all"
+                    onClick={() => setShowVideo(!showVideo)}
+                    className={`flex items-center gap-2 px-4 py-2 border text-xs font-black uppercase tracking-wider transition-all ${
+                      showVideo
+                        ? "border-purple-500/50 text-purple-400 bg-purple-500/10"
+                        : "border-zinc-800 text-zinc-500 hover:border-zinc-700"
+                    }`}
                   >
-                    <X size={14} />
+                    {showVideo ? <Eye size={14} /> : <EyeOff size={14} />}
+                    {showVideo ? "Watching" : "Audio Only"}
+                  </button>
+
+                  <button
+                    onClick={() => setIsPlaying(!isPlaying)}
+                    className="flex items-center gap-2 px-4 py-2 border border-zinc-800 text-zinc-500 hover:text-white hover:border-zinc-700 text-xs font-black uppercase tracking-wider transition-all"
+                  >
+                    {isPlaying ? <VolumeX size={14} /> : <Volume2 size={14} />}
+                    {isPlaying ? "Stop" : "Play"}
                   </button>
                 </div>
-              ))}
-            </div>
 
-            {/* Session stats */}
-            <div className="mt-8 pt-6 border-t border-zinc-900">
-              <div className="text-[10px] font-black uppercase tracking-wider text-zinc-500 mb-4">Session_Stats</div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="p-4 border border-zinc-900 bg-black/30 text-center">
-                  <div className="text-2xl font-black text-purple-400">{sessions}</div>
-                  <div className="text-[9px] font-bold text-zinc-600 uppercase tracking-wider mt-1">Today</div>
-                </div>
-                <div className="p-4 border border-zinc-900 bg-black/30 text-center">
-                  <div className="text-2xl font-black text-emerald-400">{sessions * workDuration}</div>
-                  <div className="text-[9px] font-bold text-zinc-600 uppercase tracking-wider mt-1">Minutes</div>
-                </div>
+                {/* Iframe */}
+                <AnimatePresence>
+                  {isPlaying && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: showVideo ? "auto" : 0 }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="overflow-hidden"
+                    >
+                      <div className={`aspect-video border border-zinc-800 ${!showVideo ? "h-0 overflow-hidden" : ""}`}>
+                        <iframe
+                          width="100%"
+                          height="100%"
+                          src={`https://www.youtube.com/embed/${videoId}?autoplay=1&loop=1&playlist=${videoId}`}
+                          title="Focus Music"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                          allowFullScreen
+                          className="w-full h-full"
+                        />
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                {/* Hidden iframe for audio-only mode */}
+                {isPlaying && !showVideo && (
+                  <div className="h-0 overflow-hidden">
+                    <iframe
+                      src={`https://www.youtube.com/embed/${videoId}?autoplay=1&loop=1&playlist=${videoId}`}
+                      title="Focus Music Audio"
+                      allow="autoplay"
+                    />
+                  </div>
+                )}
               </div>
-            </div>
+            )}
+
+            {!videoId && (
+              <div className="text-center py-8 text-zinc-700">
+                <Youtube size={48} className="mx-auto mb-4 opacity-30" />
+                <p className="text-xs font-bold uppercase tracking-wider">Paste a YouTube link to add focus music</p>
+              </div>
+            )}
           </div>
         </div>
       </div>
