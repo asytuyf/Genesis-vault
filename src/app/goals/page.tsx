@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
-import { Search, ChevronLeft, Tag, Clock, Activity, Hash, Box, Lock, Unlock, Trash2, Plus, Terminal, ListChecks } from "lucide-react";
+import { Search, ChevronLeft, Tag, Clock, Activity, Hash, Box, Trash2, Plus, Terminal, ListChecks } from "lucide-react";
 import { AddGoalForm } from "@/components/AddGoalForm";
 import { GoalDetailModal } from "@/components/GoalDetailModal";
 
@@ -45,6 +45,48 @@ export default function DirectiveLog() {
       .catch(() => setGoals([]))
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const savedKey = window.localStorage.getItem("goals_admin_key") || "";
+    const savedMode = window.localStorage.getItem("goals_admin_mode") === "1";
+    setPassword(savedKey);
+    setIsAdmin(savedKey === "genesis2026" && savedMode);
+
+    const keyHandler = (event: Event) => {
+      const detail = (event as CustomEvent<string>).detail;
+      if (typeof detail === "string") {
+        setPassword(detail);
+        if (detail !== "genesis2026") {
+          setIsAdmin(false);
+        }
+      }
+    };
+
+    const modeHandler = (event: Event) => {
+      const detail = (event as CustomEvent<boolean>).detail;
+      setIsAdmin(Boolean(detail));
+    };
+
+    window.addEventListener("goals-admin-key", keyHandler as EventListener);
+    window.addEventListener("goals-admin-mode", modeHandler as EventListener);
+
+    return () => {
+      window.removeEventListener("goals-admin-key", keyHandler as EventListener);
+      window.removeEventListener("goals-admin-mode", modeHandler as EventListener);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (password !== "genesis2026" && isAdmin) {
+      setIsAdmin(false);
+    }
+  }, [password, isAdmin]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem("goals_admin_mode", isAdmin ? "1" : "0");
+  }, [isAdmin]);
 
   const filtered = goals.filter(g => 
     g.task?.toLowerCase().includes(search.toLowerCase()) || 
@@ -117,7 +159,7 @@ export default function DirectiveLog() {
         <div className="text-zinc-600 mb-10 text-xs md:text-sm font-black uppercase tracking-wider">
           <div className="flex items-center gap-2 mb-2 hidden md:flex">
             <Terminal size={14} />
-            <span>Hover on the left edge to open file explorer</span>
+            <span>Click the top-left menu to open file explorer</span>
           </div>
           <div className="flex items-center gap-2 md:hidden">
             <Terminal size={14} />
@@ -145,65 +187,6 @@ export default function DirectiveLog() {
                 
 
                                                                 <div className="flex flex-wrap items-center gap-4 mt-6"> {/* Increased gap */}
-
-                
-
-                                                                  {/* ADMIN LOGIN PANEL */}
-
-                
-
-                                                                  <div className="flex items-center gap-3 bg-zinc-950 p-2 border border-zinc-900 max-w-fit">
-
-                
-
-                                                                      <input
-
-                
-
-                                                                          type="password"
-
-                
-
-                                                                          placeholder="ADMIN_KEY"
-
-                
-
-                                                                          className="bg-black border border-zinc-800 px-3 py-1.5 text-sm w-28 outline-none focus:border-emerald-400" /* Wider input, larger text */
-
-                
-
-                                                                          value={password}
-
-                
-
-                                                                          onChange={(e) => setPassword(e.target.value)}
-
-                
-
-                                                                      />
-
-                
-
-                                                                      <button onClick={() => setIsAdmin(password === "genesis2026")} className={isAdmin ? "text-emerald-400" : "text-zinc-700"}>
-
-                
-
-                                                                          {isAdmin ? <Unlock size={20} /> : <Lock size={20} />} {/* Larger icons */}
-
-                
-
-                                                                      </button>
-
-                
-
-                                                                  </div>
-
-                
-
-                                                    
-
-                
-
                                                                   {isAdmin && (
 
                 

@@ -1,8 +1,8 @@
 "use client";
 import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
-import { Search, Github, Cpu, Calendar, Terminal, ListTodo, ChevronDown, Star, Home } from "lucide-react";
+import { Search, Github, Cpu, Calendar, Terminal, ListTodo, ChevronDown, Star, Home, Power } from "lucide-react";
 
 // --- SCALED TECH TAGS ---
 const LogoModule = ({ lang }: { lang: string }) => {
@@ -50,9 +50,19 @@ const LogoModule = ({ lang }: { lang: string }) => {
 };
 
 export default function GenesisVault() {
+  type WidgetKey = "sticker" | "tesla" | "turing";
   const [repos, setRepos] = useState<any[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
+  const [widgetVisible, setWidgetVisible] = useState<Record<WidgetKey, boolean>>({
+    sticker: true,
+    tesla: true,
+    turing: true,
+  });
+
+  const hideWidget = (key: WidgetKey) => {
+    setWidgetVisible((prev) => ({ ...prev, [key]: false }));
+  };
 
   useEffect(() => {
     fetch("https://api.github.com/users/Asytuyf/repos?sort=updated").then(res => res.json()).then(data => {
@@ -78,47 +88,103 @@ export default function GenesisVault() {
       </div>
 
       {/* --- 3D STICKERS WITH TAGS --- */}
-      <motion.div
-        drag
-        dragElastic={0.1}
-        dragTransition={{ bounceStiffness: 600, bounceDamping: 20 }}
-        className="fixed top-24 md:top-32 right-6 md:right-16 w-52 h-52 md:w-72 md:h-72 z-[250] cursor-grab active:cursor-grabbing"
-      >
-        <div className="sticker-3d w-full h-full">
-          <img src="/sticker.jpg" alt="Sticker" className="w-full h-full object-cover" draggable="false" />
-        </div>
-        <div className="absolute top-2 left-2 bg-[#facc15] text-black px-3 py-1.5 text-xs md:text-sm font-black border-2 border-black shadow-lg z-20">
-          art_ref_1
-        </div>
-      </motion.div>
+      <AnimatePresence>
+        {widgetVisible.sticker && (
+          <motion.div
+            key="widget-sticker"
+            drag
+            dragElastic={0.1}
+            dragTransition={{ bounceStiffness: 600, bounceDamping: 20 }}
+            exit={{ opacity: 0, scale: 0.7, rotate: 8 }}
+            transition={{ duration: 0.25 }}
+            className="fixed top-24 md:top-32 right-6 md:right-16 w-52 h-52 md:w-72 md:h-72 z-[250] cursor-grab active:cursor-grabbing"
+          >
+            <button
+              type="button"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                hideWidget("sticker");
+              }}
+              title="Eject widget"
+              aria-label="Close widget"
+              className="absolute -top-3 -right-3 z-30 grid h-7 w-7 place-items-center rounded-full border border-zinc-700 bg-black text-zinc-200 shadow-lg transition-transform duration-200 hover:scale-110"
+            >
+              <Power size={14} />
+            </button>
+            <div className="sticker-3d w-full h-full">
+              <img src="/sticker.jpg" alt="Sticker" className="w-full h-full object-cover" draggable="false" />
+            </div>
+            <div className="absolute top-2 left-2 bg-[#facc15] text-black px-3 py-1.5 text-xs md:text-sm font-black border-2 border-black shadow-lg z-20">
+              art_ref_1
+            </div>
+          </motion.div>
+        )}
 
-      <motion.div
-        drag
-        dragElastic={0.1}
-        dragTransition={{ bounceStiffness: 600, bounceDamping: 20 }}
-        className="fixed top-[60%] md:top-[55%] left-6 md:left-20 w-48 h-48 md:w-68 md:h-68 z-[250] cursor-grab active:cursor-grabbing"
-      >
-        <div className="sticker-3d w-full h-full">
-          <img src="/tesla.jpg" alt="Tesla" className="w-full h-full object-cover" draggable="false" />
-        </div>
-        <div className="absolute top-2 right-2 bg-[#10b981] text-black px-3 py-1.5 text-xs md:text-sm font-black border-2 border-black shadow-lg z-20">
-          exhibit_c
-        </div>
-      </motion.div>
+        {widgetVisible.tesla && (
+          <motion.div
+            key="widget-tesla"
+            drag
+            dragElastic={0.1}
+            dragTransition={{ bounceStiffness: 600, bounceDamping: 20 }}
+            exit={{ opacity: 0, scale: 0.7, rotate: -8 }}
+            transition={{ duration: 0.25 }}
+            className="fixed top-[60%] md:top-[55%] left-6 md:left-20 w-48 h-48 md:w-68 md:h-68 z-[250] cursor-grab active:cursor-grabbing"
+          >
+            <button
+              type="button"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                hideWidget("tesla");
+              }}
+              title="Eject widget"
+              aria-label="Close widget"
+              className="absolute -top-3 -left-3 z-30 grid h-7 w-7 place-items-center rounded-full border border-zinc-700 bg-black text-zinc-200 shadow-lg transition-transform duration-200 hover:scale-110"
+            >
+              <Power size={14} />
+            </button>
+            <div className="sticker-3d w-full h-full">
+              <img src="/tesla.jpg" alt="Tesla" className="w-full h-full object-cover" draggable="false" />
+            </div>
+            <div className="absolute top-2 right-2 bg-[#10b981] text-black px-3 py-1.5 text-xs md:text-sm font-black border-2 border-black shadow-lg z-20">
+              exhibit_c
+            </div>
+          </motion.div>
+        )}
 
-      <motion.div
-        drag
-        dragElastic={0.1}
-        dragTransition={{ bounceStiffness: 600, bounceDamping: 20 }}
-        className="fixed bottom-24 md:bottom-32 right-12 md:right-24 w-44 h-44 md:w-64 md:h-64 z-[250] cursor-grab active:cursor-grabbing"
-      >
-        <div className="sticker-3d w-full h-full">
-          <img src="/turing.jpeg" alt="Alan Turing" className="w-full h-full object-cover" draggable="false" />
-        </div>
-        <div className="absolute bottom-2 left-2 bg-[#facc15] text-black px-3 py-1.5 text-xs md:text-sm font-black border-2 border-black shadow-lg z-20">
-          art_ref_2
-        </div>
-      </motion.div>
+        {widgetVisible.turing && (
+          <motion.div
+            key="widget-turing"
+            drag
+            dragElastic={0.1}
+            dragTransition={{ bounceStiffness: 600, bounceDamping: 20 }}
+            exit={{ opacity: 0, scale: 0.7, rotate: 8 }}
+            transition={{ duration: 0.25 }}
+            className="fixed bottom-24 md:bottom-32 right-12 md:right-24 w-44 h-44 md:w-64 md:h-64 z-[250] cursor-grab active:cursor-grabbing"
+          >
+            <button
+              type="button"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                hideWidget("turing");
+              }}
+              title="Eject widget"
+              aria-label="Close widget"
+              className="absolute -top-3 -right-3 z-30 grid h-7 w-7 place-items-center rounded-full border border-zinc-700 bg-black text-zinc-200 shadow-lg transition-transform duration-200 hover:scale-110"
+            >
+              <Power size={14} />
+            </button>
+            <div className="sticker-3d w-full h-full">
+              <img src="/turing.jpeg" alt="Alan Turing" className="w-full h-full object-cover" draggable="false" />
+            </div>
+            <div className="absolute bottom-2 left-2 bg-[#facc15] text-black px-3 py-1.5 text-xs md:text-sm font-black border-2 border-black shadow-lg z-20">
+              art_ref_2
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* --- SOLID YELLOW BARS --- */}
       <div className="fixed inset-x-0 top-0 h-[28px] bg-[#facc15] z-[300] flex items-center overflow-hidden border-b-2 border-black">
@@ -141,10 +207,10 @@ export default function GenesisVault() {
           </div>
 
           <div className="text-zinc-600 mb-10 text-xs md:text-sm font-black uppercase tracking-wider">
-            <div className="flex items-center gap-2 mb-2 hidden md:flex">
-              <Terminal size={14} />
-              <span>Hover on the left edge to open file explorer</span>
-            </div>
+          <div className="flex items-center gap-2 mb-2 hidden md:flex">
+            <Terminal size={14} />
+            <span>Click the top-left menu to open file explorer</span>
+          </div>
             <div className="flex items-center gap-2 md:hidden">
               <Terminal size={14} />
               <span>Tap the top-left menu to open file explorer</span>

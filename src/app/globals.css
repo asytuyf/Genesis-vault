@@ -80,3 +80,38 @@ img {
 .custom-scrollbar-mobile::-webkit-scrollbar-thumb:hover {
   background: #facc15;
 }
+
+/* Holographic shimmer effect */
+.holographic {
+  position: relative;
+  overflow: hidden;
+}
+
+.holographic::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.1) 10%,
+    rgba(255, 100, 255, 0.15) 20%,
+    rgba(100, 200, 255, 0.15) 30%,
+    rgba(100, 255, 200, 0.15) 40%,
+    rgba(255, 255, 100, 0.15) 50%,
+    rgba(255, 100, 100, 0.15) 60%,
+    rgba(200, 100, 255, 0.15) 70%,
+    rgba(100, 200, 255, 0.15) 80%,
+    rgba(255, 255, 255, 0.1) 90%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: holographic-shift 3s linear infinite;
+  pointer-events: none;
+  mix-blend-mode: overlay;
+}
+
+@keyframes holographic-shift {
+  0% { background-position: -100% 0; }
+  100% { background-position: 100% 0; }
+}

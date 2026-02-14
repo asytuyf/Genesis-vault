@@ -105,7 +105,7 @@ export default function CommandArchive() {
         <div className="text-zinc-600 mb-10 text-xs md:text-sm font-black uppercase tracking-wider">
           <div className="flex items-center gap-2 mb-2 hidden md:flex">
             <Terminal size={14} />
-            <span>Hover on the left edge to open file explorer</span>
+            <span>Click the top-left menu to open file explorer</span>
           </div>
           <div className="flex items-center gap-2 md:hidden">
             <Terminal size={14} />
