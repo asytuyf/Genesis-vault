@@ -41,57 +41,16 @@ export default function CommandArchive() {
   return (
     <main className="relative min-h-screen bg-[#0d0d0d] text-[#f4f4f5] font-mono overflow-x-hidden px-6 pb-6 pt-[56px] md:p-24">
       {/* HAZARD BARS */}
-      <AnimatePresence mode="wait">
-        {copiedId ? (
-          <>
-            <motion.div
-              key="copied-top"
-              initial={{ backgroundColor: "#06b6d4" }}
-              animate={{ backgroundColor: ["#06b6d4", "#10b981", "#06b6d4"] }}
-              transition={{ duration: 0.3, times: [0, 0.5, 1] }}
-              className="fixed inset-x-0 top-0 h-[28px] z-[150] flex items-center justify-center overflow-hidden border-b-2 border-black bg-emerald-500"
-            >
-              <motion.div
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: [0, 1, 1, 0], y: 0 }}
-                transition={{ duration: 1.2, times: [0, 0.1, 0.8, 1] }}
-                className="text-[12px] font-black text-black tracking-[0.3em] uppercase"
-              >
-                {`>>`} CLIPBOARD_INJECTED {`>>`} DATA_EXTRACTED {`>>`} BUFFER_LOADED
-              </motion.div>
-            </motion.div>
-            <motion.div
-              key="copied-bottom"
-              initial={{ backgroundColor: "#06b6d4" }}
-              animate={{ backgroundColor: ["#06b6d4", "#10b981", "#06b6d4"] }}
-              transition={{ duration: 0.3, times: [0, 0.5, 1] }}
-              className="fixed inset-x-0 bottom-0 h-[28px] z-[150] flex items-center justify-center overflow-hidden border-t-2 border-black bg-emerald-500"
-            >
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: [0, 1, 1, 0], y: 0 }}
-                transition={{ duration: 1.2, times: [0, 0.1, 0.8, 1] }}
-                className="text-[12px] font-black text-black tracking-[0.3em] uppercase"
-              >
-                {`>>`} CLIPBOARD_INJECTED {`>>`} DATA_EXTRACTED {`>>`} BUFFER_LOADED
-              </motion.div>
-            </motion.div>
-          </>
-        ) : (
-          <>
-            <div key="normal-top" className="fixed inset-x-0 top-0 h-[28px] bg-cyan-500 z-[150] flex items-center overflow-hidden border-b-2 border-black">
-              <motion.div animate={{ x: [0, -1000] }} transition={{ repeat: Infinity, duration: 20, ease: "linear" }} className="flex whitespace-nowrap text-[12px] font-black text-black tracking-[2em]">
-                {[...Array(10)].map((_, i) => <span key={i}>UNDER CONSTRUCTION // MEN AT WORK //</span>)}
-              </motion.div>
-            </div>
-            <div key="normal-bottom" className="fixed inset-x-0 bottom-0 h-[28px] bg-cyan-500 z-[150] flex items-center overflow-hidden border-t-2 border-black">
-              <motion.div animate={{ x: [-1000, 0] }} transition={{ repeat: Infinity, duration: 20, ease: "linear" }} className="flex whitespace-nowrap text-[12px] font-black text-black tracking-[2em]">
-                {[...Array(10)].map((_, i) => <span key={i}>UNDER CONSTRUCTION // MEN AT WORK //</span>)}
-              </motion.div>
-            </div>
-          </>
-        )}
-      </AnimatePresence>
+      <div className={`fixed inset-x-0 top-0 h-[28px] z-[150] flex items-center overflow-hidden border-b-2 border-black transition-colors duration-200 ${copiedId ? 'bg-emerald-500' : 'bg-cyan-500'}`}>
+        <motion.div animate={{ x: [0, -1000] }} transition={{ repeat: Infinity, duration: 20, ease: "linear" }} className="flex whitespace-nowrap text-[12px] font-black text-black tracking-[2em]">
+          {[...Array(10)].map((_, i) => <span key={i}>{copiedId ? 'DATA EXTRACTED // CLIPBOARD INJECTED //' : 'UNDER CONSTRUCTION // MEN AT WORK //'}</span>)}
+        </motion.div>
+      </div>
+      <div className={`fixed inset-x-0 bottom-0 h-[28px] z-[150] flex items-center overflow-hidden border-t-2 border-black transition-colors duration-200 ${copiedId ? 'bg-emerald-500' : 'bg-cyan-500'}`}>
+        <motion.div animate={{ x: [-1000, 0] }} transition={{ repeat: Infinity, duration: 20, ease: "linear" }} className="flex whitespace-nowrap text-[12px] font-black text-black tracking-[2em]">
+          {[...Array(10)].map((_, i) => <span key={i}>{copiedId ? 'DATA EXTRACTED // CLIPBOARD INJECTED //' : 'UNDER CONSTRUCTION // MEN AT WORK //'}</span>)}
+        </motion.div>
+      </div>
 
       {/* BIG BACKGROUND SYMBOL */}
       <div className="fixed inset-0 z-0 opacity-[0.03] flex items-center justify-center pointer-events-none">
