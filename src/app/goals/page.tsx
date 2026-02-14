@@ -15,7 +15,10 @@ export default function DirectiveLog() {
   const [isAddGoalModalOpen, setIsAddGoalModalOpen] = useState(false); // State for modal visibility
 
   useEffect(() => {
-    fetch("/goals.json")
+    // Fetch from GitHub raw to get the live data (same source we save to)
+    const githubRawUrl = `https://raw.githubusercontent.com/Asytuyf/nixos-config/main/public/goals.json?t=${Date.now()}`;
+
+    fetch(githubRawUrl)
       .then(res => res.json())
       .then(data => {
         if (Array.isArray(data)) {

@@ -92,9 +92,18 @@ export default function CommandArchive() {
             </div>
             
             <div className="relative mb-4 group/cmd">
-              <code className="block bg-black p-4 border border-zinc-900 text-sm text-zinc-300 font-bold overflow-x-auto group-hover/cmd:border-zinc-700 transition-none">
+              <code className="block bg-black p-4 pr-12 border border-zinc-900 text-sm text-zinc-300 font-bold overflow-x-auto group-hover/cmd:border-zinc-700 transition-none">
                 <span className="text-cyan-500 mr-2">$</span>{s.cmd}
               </code>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(s.cmd);
+                }}
+                className="absolute top-1/2 right-2 -translate-y-1/2 p-2 text-zinc-700 hover:text-cyan-400 transition-colors"
+                title="Copy command"
+              >
+                <Copy size={16} />
+              </button>
             </div>
             <p className="text-[10px] text-zinc-500 font-bold uppercase leading-relaxed">{s.desc}</p>
           </motion.div>
