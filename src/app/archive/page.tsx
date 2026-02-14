@@ -1,12 +1,19 @@
 "use client";
 import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 import { Search, ChevronLeft, Terminal, Copy, Clock, Trash2, Lock, Unlock } from "lucide-react";
 
 export default function CommandArchive() {
   const [snippets, setSnippets] = useState<any[]>([]);
   const [search, setSearch] = useState("");
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const copyToClipboard = (cmd: string, id: string) => {
+    navigator.clipboard.writeText(cmd);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 1500);
+  };
 
 
   useEffect(() => {
@@ -92,18 +99,47 @@ export default function CommandArchive() {
             </div>
             
             <div className="relative mb-4 group/cmd">
-              <code className="block bg-black p-4 pr-12 border border-zinc-900 text-sm text-zinc-300 font-bold overflow-x-auto group-hover/cmd:border-zinc-700 transition-none">
-                <span className="text-cyan-500 mr-2">$</span>{s.cmd}
+              <code className={`block bg-black p-4 pr-12 border text-sm font-bold overflow-x-auto transition-all ${
+                copiedId === `${s.cmd}-${i}`
+                  ? 'border-cyan-500 bg-cyan-500/5'
+                  : 'border-zinc-900 group-hover/cmd:border-zinc-700'
+              }`}>
+                <span className="text-cyan-500 mr-2">$</span>
+                <span className={copiedId === `${s.cmd}-${i}` ? 'text-cyan-400' : 'text-zinc-300'}>{s.cmd}</span>
               </code>
-              <button
-                onClick={() => {
-                  navigator.clipboard.writeText(s.cmd);
-                }}
-                className="absolute top-1/2 right-2 -translate-y-1/2 p-2 text-zinc-700 hover:text-cyan-400 transition-colors"
-                title="Copy command"
-              >
-                <Copy size={16} />
-              </button>
+
+              {/* Copy button / Copied indicator */}
+              <AnimatePresence mode="wait">
+                {copiedId === `${s.cmd}-${i}` ? (
+                  <motion.div
+                    key="copied"
+                    initial={{ opacity: 0, scale: 0.8, x: 10 }}
+                    animate={{ opacity: 1, scale: 1, x: 0 }}
+                    exit={{ opacity: 0, scale: 0.8 }}
+                    className="absolute top-1/2 right-2 -translate-y-1/2 flex items-center gap-1"
+                  >
+                    <motion.span
+                      className="text-[10px] font-black text-cyan-400 tracking-wider"
+                      animate={{ opacity: [1, 0.5, 1] }}
+                      transition={{ repeat: Infinity, duration: 0.3 }}
+                    >
+                      {`>>`} INJECTED
+                    </motion.span>
+                  </motion.div>
+                ) : (
+                  <motion.button
+                    key="copy"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    onClick={() => copyToClipboard(s.cmd, `${s.cmd}-${i}`)}
+                    className="absolute top-1/2 right-2 -translate-y-1/2 p-2 text-zinc-700 hover:text-cyan-400 transition-colors"
+                    title="Copy command"
+                  >
+                    <Copy size={16} />
+                  </motion.button>
+                )}
+              </AnimatePresence>
             </div>
             <p className="text-[10px] text-zinc-500 font-bold uppercase leading-relaxed">{s.desc}</p>
           </motion.div>
