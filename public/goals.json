@@ -78,5 +78,13 @@
     "priority": "Med",
     "status": "PENDING",
     "date": "2026-02-10"
+  },
+  {
+    "id": "1771092398",
+    "project": "Website",
+    "task": "Make when go to tack page and click on a day of github you can click on any commit and go to that github commit page on a new tab",
+    "priority": "High",
+    "status": "PENDING",
+    "date": "2026-02-14"
   }
 ]
