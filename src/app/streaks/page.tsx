@@ -226,14 +226,14 @@ export default function StreaksPage() {
   return (
     <main className="relative min-h-screen bg-[#0d0d0d] text-[#f4f4f5] font-mono overflow-x-hidden px-6 pb-6 pt-[56px] md:p-24">
       {/* HAZARD BARS */}
-      <div className="holographic fixed inset-x-0 top-0 h-[28px] bg-emerald-500 z-[150] flex items-center overflow-hidden border-b-2 border-black">
+      <div className="fixed inset-x-0 top-0 h-[28px] bg-yellow-400 z-[150] flex items-center overflow-hidden border-b-2 border-black">
         <motion.div animate={{ x: [0, -1000] }} transition={{ repeat: Infinity, duration: 20, ease: "linear" }} className="flex whitespace-nowrap text-[12px] font-black text-black tracking-[2em]">
-          {[...Array(10)].map((_, i) => <span key={i}>STREAK MODE // BUILD HABITS //</span>)}
+          {[...Array(10)].map((_, i) => <span key={i}>UNDER CONSTRUCTION // MEN AT WORK //</span>)}
         </motion.div>
       </div>
-      <div className="holographic fixed inset-x-0 bottom-0 h-[28px] bg-emerald-500 z-[150] flex items-center overflow-hidden border-t-2 border-black">
+      <div className="fixed inset-x-0 bottom-0 h-[28px] bg-yellow-400 z-[150] flex items-center overflow-hidden border-t-2 border-black">
         <motion.div animate={{ x: [-1000, 0] }} transition={{ repeat: Infinity, duration: 20, ease: "linear" }} className="flex whitespace-nowrap text-[12px] font-black text-black tracking-[2em]">
-          {[...Array(10)].map((_, i) => <span key={i}>STREAK MODE // BUILD HABITS //</span>)}
+          {[...Array(10)].map((_, i) => <span key={i}>UNDER CONSTRUCTION // MEN AT WORK //</span>)}
         </motion.div>
       </div>
 
