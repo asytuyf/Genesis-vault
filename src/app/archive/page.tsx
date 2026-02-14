@@ -27,7 +27,7 @@ export default function CommandArchive() {
         setCopiedId(null);
         setGlitchPhase(0);
       }, 400);
-    }, 2000);
+    }, 4000);
   };
 
 
