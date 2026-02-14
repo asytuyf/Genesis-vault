@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { motion, useDragControls, useMotionValue, animate } from "framer-motion";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Terminal, Folder, File, ChevronRight, ChevronDown, Hash, X, Lock, Unlock } from "lucide-react";
+import { Terminal, Folder, File, ChevronRight, ChevronDown, Hash, X, Lock, Unlock, Zap, Flame } from "lucide-react";
 
 interface FileExplorerProps {
   mobileOpen?: boolean;
@@ -43,12 +43,16 @@ export const FileExplorer = ({ mobileOpen, setMobileOpen, desktopOpen }: FileExp
   const getThemeColor = () => {
     if (pathname === "/archive") return "text-cyan-400";
     if (pathname === "/goals") return "text-emerald-400";
+    if (pathname === "/focus") return "text-purple-400";
+    if (pathname === "/streaks") return "text-orange-400";
     return "text-yellow-400";
   };
 
   const getPanelGlow = () => {
     if (pathname === "/archive") return "rgba(34, 211, 238, 0.25)";
     if (pathname === "/goals") return "rgba(16, 185, 129, 0.22)";
+    if (pathname === "/focus") return "rgba(168, 85, 247, 0.22)";
+    if (pathname === "/streaks") return "rgba(249, 115, 22, 0.22)";
     return "rgba(250, 204, 21, 0.22)";
   };
 
@@ -297,6 +301,108 @@ export const FileExplorer = ({ mobileOpen, setMobileOpen, desktopOpen }: FileExp
                                   className="ml-auto text-[9px] px-1.5 py-0.5 rounded bg-zinc-900/80 font-bold border transition-all text-emerald-400 border-emerald-400/30"
                                 >
                                   GOALS
+                                </span>
+                              </Link>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* FOCUS FOLDER */}
+                        <div>
+                          <div
+                            className="flex items-center gap-2 text-white cursor-pointer py-1.5 select-none transition-colors"
+                            onClick={() => toggleFolder("focus")}
+                          >
+                            <span className="text-purple-400 transition-colors">
+                              {expandedFolders.includes("focus") ? (
+                                <ChevronDown size={20} />
+                              ) : (
+                                <ChevronRight size={20} />
+                              )}
+                            </span>
+                            <Folder
+                              size={20}
+                              className={expandedFolders.includes("focus") ? "text-purple-400" : "text-zinc-600"}
+                            />
+                            <span className="text-sm font-bold tracking-wide">focus</span>
+                          </div>
+                          {expandedFolders.includes("focus") && (
+                            <div className="ml-2 pl-2 border-l border-zinc-900 mt-1">
+                              <Link
+                                href="/focus"
+                                className="flex items-center gap-2 group/file py-1"
+                                onClick={() => isMobileView && setMobileOpenValue(false)}
+                              >
+                                <File
+                                  size={18}
+                                  className="text-purple-400 transition-colors"
+                                />
+                                <span
+                                  className={`text-sm font-medium transition-colors ${
+                                    isMobileView
+                                      ? pathname === "/focus"
+                                        ? "text-purple-400"
+                                        : "text-zinc-400"
+                                      : "text-white"
+                                  }`}
+                                >
+                                  page.tsx
+                                </span>
+                                <span
+                                  className="ml-auto text-[9px] px-1.5 py-0.5 rounded bg-zinc-900/80 font-bold border transition-all text-purple-400 border-purple-400/30"
+                                >
+                                  FOCUS
+                                </span>
+                              </Link>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* STREAKS FOLDER */}
+                        <div>
+                          <div
+                            className="flex items-center gap-2 text-white cursor-pointer py-1.5 select-none transition-colors"
+                            onClick={() => toggleFolder("streaks")}
+                          >
+                            <span className="text-orange-400 transition-colors">
+                              {expandedFolders.includes("streaks") ? (
+                                <ChevronDown size={20} />
+                              ) : (
+                                <ChevronRight size={20} />
+                              )}
+                            </span>
+                            <Folder
+                              size={20}
+                              className={expandedFolders.includes("streaks") ? "text-orange-400" : "text-zinc-600"}
+                            />
+                            <span className="text-sm font-bold tracking-wide">streaks</span>
+                          </div>
+                          {expandedFolders.includes("streaks") && (
+                            <div className="ml-2 pl-2 border-l border-zinc-900 mt-1">
+                              <Link
+                                href="/streaks"
+                                className="flex items-center gap-2 group/file py-1"
+                                onClick={() => isMobileView && setMobileOpenValue(false)}
+                              >
+                                <File
+                                  size={18}
+                                  className="text-orange-400 transition-colors"
+                                />
+                                <span
+                                  className={`text-sm font-medium transition-colors ${
+                                    isMobileView
+                                      ? pathname === "/streaks"
+                                        ? "text-orange-400"
+                                        : "text-zinc-400"
+                                      : "text-white"
+                                  }`}
+                                >
+                                  page.tsx
+                                </span>
+                                <span
+                                  className="ml-auto text-[9px] px-1.5 py-0.5 rounded bg-zinc-900/80 font-bold border transition-all text-orange-400 border-orange-400/30"
+                                >
+                                  STREAKS
                                 </span>
                               </Link>
                             </div>
