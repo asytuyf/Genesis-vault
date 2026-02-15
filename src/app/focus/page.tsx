@@ -1,10 +1,11 @@
 "use client";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Play, Pause, RotateCcw,
   Youtube, Settings,
-  ExternalLink, Plus, X, Sparkles, Layers, Clock
+  ExternalLink, Plus, X, Sparkles, Layers, Clock,
+  Volume2, VolumeX, SkipForward, SkipBack, Music
 } from "lucide-react";
 
 interface QuickLink {
@@ -28,6 +29,10 @@ export default function FocusPage() {
   const [playlistId, setPlaylistId] = useState("");
   const [showSettings, setShowSettings] = useState(false);
   const [showYoutubeInput, setShowYoutubeInput] = useState(false);
+  const [volume, setVolume] = useState(30);
+  const [isMuted, setIsMuted] = useState(false);
+  const playerRef = useRef<any>(null);
+  const [playerReady, setPlayerReady] = useState(false);
 
   // Preset playlists
   const PRESET_PLAYLISTS = [
@@ -49,6 +54,18 @@ export default function FocusPage() {
   const [showCelebration, setShowCelebration] = useState(false);
 
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Generate random stars for whimsical overlay
+  const [stars] = useState(() =>
+    Array.from({ length: 50 }, (_, i) => ({
+      id: i,
+      x: Math.random() * 100,
+      y: Math.random() * 100,
+      size: Math.random() * 3 + 1,
+      duration: Math.random() * 3 + 2,
+      delay: Math.random() * 2,
+    }))
+  );
 
   // Format time helper (defined early for tab title)
   const formatTime = (seconds: number) => {
@@ -111,8 +128,107 @@ export default function FocusPage() {
         setPlaylistId(pid);
       }
       if (savedLinks) setLinks(JSON.parse(savedLinks));
+      const savedVolume = localStorage.getItem("focus_volume");
+      if (savedVolume) setVolume(parseInt(savedVolume));
     }
   }, []);
+
+  // Load YouTube IFrame API
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!(videoId || playlistId)) return;
+
+    // Load the IFrame Player API code asynchronously
+    if (!(window as any).YT) {
+      const tag = document.createElement("script");
+      tag.src = "https://www.youtube.com/iframe_api";
+      const firstScriptTag = document.getElementsByTagName("script")[0];
+      firstScriptTag.parentNode?.insertBefore(tag, firstScriptTag);
+    }
+
+    (window as any).onYouTubeIframeAPIReady = () => {
+      createPlayer();
+    };
+
+    // If API already loaded
+    if ((window as any).YT && (window as any).YT.Player) {
+      createPlayer();
+    }
+
+    return () => {
+      if (playerRef.current) {
+        playerRef.current.destroy();
+        playerRef.current = null;
+        setPlayerReady(false);
+      }
+    };
+  }, [videoId, playlistId]);
+
+  const createPlayer = useCallback(() => {
+    if (playerRef.current) {
+      playerRef.current.destroy();
+    }
+
+    const playerVars: any = {
+      autoplay: 1,
+      loop: 1,
+      controls: 0,
+      showinfo: 0,
+      rel: 0,
+      modestbranding: 1,
+      playsinline: 1,
+    };
+
+    if (playlistId) {
+      playerVars.listType = "playlist";
+      playerVars.list = playlistId;
+    } else if (videoId) {
+      playerVars.playlist = videoId;
+    }
+
+    playerRef.current = new (window as any).YT.Player("yt-player", {
+      videoId: videoId || undefined,
+      playerVars,
+      events: {
+        onReady: (event: any) => {
+          setPlayerReady(true);
+          event.target.setVolume(volume);
+          if (isMuted) event.target.mute();
+        },
+      },
+    });
+  }, [videoId, playlistId, volume, isMuted]);
+
+  // Volume control
+  useEffect(() => {
+    if (playerRef.current && playerReady) {
+      playerRef.current.setVolume(volume);
+      localStorage.setItem("focus_volume", String(volume));
+    }
+  }, [volume, playerReady]);
+
+  // Mute control
+  useEffect(() => {
+    if (playerRef.current && playerReady) {
+      if (isMuted) {
+        playerRef.current.mute();
+      } else {
+        playerRef.current.unMute();
+      }
+    }
+  }, [isMuted, playerReady]);
+
+  const nextVideo = () => {
+    if (playerRef.current && playerReady) {
+      playerRef.current.nextVideo();
+    }
+  };
+
+  const prevVideo = () => {
+    if (playerRef.current && playerReady) {
+      playerRef.current.previousVideo();
+    }
+  };
 
   // Timer logic
   useEffect(() => {
@@ -149,14 +265,14 @@ export default function FocusPage() {
   useEffect(() => {
     if (typeof window !== "undefined") {
       if (timeLeft === 0) {
-        document.title = mode === "work" ? "BREAK TIME - FLOW.STATE" : "BACK TO WORK - FLOW.STATE";
+        document.title = mode === "work" ? "BREAK TIME" : "BACK TO WORK";
       } else {
         document.title = `${formatTime(timeLeft)} - ${mode === "work" ? "FOCUS" : "BREAK"}`;
       }
     }
     return () => {
       if (typeof window !== "undefined") {
-        document.title = "FLOW.STATE";
+        document.title = "Focus";
       }
     };
   }, [timeLeft, mode]);
@@ -234,39 +350,75 @@ export default function FocusPage() {
       {(videoId || playlistId) && (
         <div className="fixed inset-0 z-0">
           <div className="absolute inset-0 scale-150">
-            <iframe
-              src={
-                playlistId
-                  ? `https://www.youtube.com/embed/videoseries?list=${playlistId}&autoplay=1&mute=0&loop=1&controls=0&showinfo=0&rel=0&modestbranding=1&playsinline=1`
-                  : `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=0&loop=1&playlist=${videoId}&controls=0&showinfo=0&rel=0&modestbranding=1&playsinline=1`
-              }
-              title="Background Video"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-              className="w-full h-full pointer-events-none"
-              style={{ border: 'none' }}
-            />
+            <div id="yt-player" className="w-full h-full pointer-events-none" />
           </div>
           {/* Purple overlay */}
           <div className="absolute inset-0 bg-purple-950/70 mix-blend-multiply" />
           <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-black/50" />
+
+          {/* Whimsical starfield overlay */}
+          <div className="absolute inset-0 pointer-events-none overflow-hidden">
+            {stars.map((star) => (
+              <motion.div
+                key={star.id}
+                className="absolute rounded-full bg-white"
+                style={{
+                  left: `${star.x}%`,
+                  top: `${star.y}%`,
+                  width: star.size,
+                  height: star.size,
+                }}
+                animate={{
+                  opacity: [0.2, 0.8, 0.2],
+                  scale: [1, 1.5, 1],
+                }}
+                transition={{
+                  duration: star.duration,
+                  delay: star.delay,
+                  repeat: Infinity,
+                  ease: "easeInOut",
+                }}
+              />
+            ))}
+          </div>
         </div>
       )}
 
       {/* DEFAULT BACKGROUND (no video) */}
       {!videoId && !playlistId && (
-        <div className="fixed inset-0 z-0 opacity-[0.03] flex items-center justify-center pointer-events-none">
-          <Clock size={800} strokeWidth={0.5} />
+        <div className="fixed inset-0 z-0">
+          <div className="absolute inset-0 opacity-[0.03] flex items-center justify-center pointer-events-none">
+            <Clock size={800} strokeWidth={0.5} />
+          </div>
+          {/* Whimsical starfield overlay */}
+          <div className="absolute inset-0 pointer-events-none overflow-hidden">
+            {stars.map((star) => (
+              <motion.div
+                key={star.id}
+                className="absolute rounded-full bg-purple-400"
+                style={{
+                  left: `${star.x}%`,
+                  top: `${star.y}%`,
+                  width: star.size,
+                  height: star.size,
+                }}
+                animate={{
+                  opacity: [0.1, 0.4, 0.1],
+                  scale: [1, 1.5, 1],
+                }}
+                transition={{
+                  duration: star.duration,
+                  delay: star.delay,
+                  repeat: Infinity,
+                  ease: "easeInOut",
+                }}
+              />
+            ))}
+          </div>
         </div>
       )}
 
-      {/* BRANDING */}
-      <div className="fixed top-12 left-6 z-[100]">
-        <div className="text-lg font-black tracking-tighter">
-          <span className="text-white">FLOW</span>
-          <span className="text-purple-500">.</span>
-          <span className="text-zinc-600">STATE</span>
-        </div>
-      </div>
+
 
       {/* FLOATING CONTROLS */}
       <div className="fixed top-12 right-4 z-[100] flex flex-col gap-2">
@@ -296,6 +448,52 @@ export default function FocusPage() {
           <Settings size={18} />
         </button>
       </div>
+
+      {/* VOLUME & VIDEO CONTROLS - Bottom left */}
+      {(videoId || playlistId) && playerReady && (
+        <div className="fixed bottom-12 left-4 z-[100] flex items-center gap-3">
+          {/* Playlist controls */}
+          {playlistId && (
+            <div className="flex items-center gap-1 mr-2">
+              <button
+                onClick={prevVideo}
+                className="p-2 border border-zinc-800 bg-black/60 text-zinc-500 hover:text-purple-400 hover:border-purple-500/50 transition-all backdrop-blur-sm"
+                title="Previous video"
+              >
+                <SkipBack size={16} />
+              </button>
+              <button
+                onClick={nextVideo}
+                className="p-2 border border-zinc-800 bg-black/60 text-zinc-500 hover:text-purple-400 hover:border-purple-500/50 transition-all backdrop-blur-sm"
+                title="Next video"
+              >
+                <SkipForward size={16} />
+              </button>
+            </div>
+          )}
+
+          {/* Volume controls */}
+          <div className="flex items-center gap-2 px-3 py-2 border border-zinc-800 bg-black/60 backdrop-blur-sm">
+            <button
+              onClick={() => setIsMuted(!isMuted)}
+              className={`transition-colors ${isMuted ? "text-red-400" : "text-purple-400"}`}
+              title={isMuted ? "Unmute" : "Mute"}
+            >
+              {isMuted ? <VolumeX size={18} /> : <Volume2 size={18} />}
+            </button>
+            <input
+              type="range"
+              min="0"
+              max="100"
+              value={volume}
+              onChange={(e) => setVolume(parseInt(e.target.value))}
+              className="w-24 h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-purple-500"
+              title={`Volume: ${volume}%`}
+            />
+            <span className="text-[10px] font-bold text-zinc-500 w-8">{volume}%</span>
+          </div>
+        </div>
+      )}
 
       {/* YOUTUBE INPUT MODAL */}
       <AnimatePresence>
@@ -433,6 +631,7 @@ export default function FocusPage() {
 
       {/* MAIN CONTENT */}
       <div className="relative z-10 min-h-screen flex flex-col items-center justify-center px-6 py-20">
+
         {/* MODE INDICATOR */}
         <div className={`mb-6 px-4 py-2 border backdrop-blur-sm ${
           mode === "work" ? "border-purple-500/30 text-purple-400" : "border-emerald-500/30 text-emerald-400"

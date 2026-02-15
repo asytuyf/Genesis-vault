@@ -362,10 +362,10 @@ export const FileExplorer = ({ mobileOpen, setMobileOpen, desktopOpen }: FileExp
                         <div>
                           <div
                             className="flex items-center gap-2 text-white cursor-pointer py-1.5 select-none transition-colors"
-                            onClick={() => toggleFolder("signal")}
+                            onClick={() => toggleFolder("track")}
                           >
                             <span className="text-orange-400 transition-colors">
-                              {expandedFolders.includes("signal") ? (
+                              {expandedFolders.includes("track") ? (
                                 <ChevronDown size={20} />
                               ) : (
                                 <ChevronRight size={20} />
@@ -373,11 +373,11 @@ export const FileExplorer = ({ mobileOpen, setMobileOpen, desktopOpen }: FileExp
                             </span>
                             <Folder
                               size={20}
-                              className={expandedFolders.includes("signal") ? "text-orange-400" : "text-zinc-600"}
+                              className={expandedFolders.includes("track") ? "text-orange-400" : "text-zinc-600"}
                             />
-                            <span className="text-sm font-bold tracking-wide">signal</span>
+                            <span className="text-sm font-bold tracking-wide">track</span>
                           </div>
-                          {expandedFolders.includes("signal") && (
+                          {expandedFolders.includes("track") && (
                             <div className="ml-2 pl-2 border-l border-zinc-900 mt-1">
                               <Link
                                 href="/streaks"
@@ -402,7 +402,7 @@ export const FileExplorer = ({ mobileOpen, setMobileOpen, desktopOpen }: FileExp
                                 <span
                                   className="ml-auto text-[9px] px-1.5 py-0.5 rounded bg-zinc-900/80 font-bold border transition-all text-orange-400 border-orange-400/30"
                                 >
-                                  SIGNAL
+                                  TRACK
                                 </span>
                               </Link>
                             </div>

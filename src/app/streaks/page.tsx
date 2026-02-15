@@ -1,8 +1,8 @@
 "use client";
 import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
-  Flame, GitCommit, Plus, X, Check, Target, TrendingUp, Bot, Trophy, RefreshCw
+  Flame, GitCommit, Plus, X, Check, Target, TrendingUp, Bot, Trophy, RefreshCw, ExternalLink
 } from "lucide-react";
 
 interface Habit {
@@ -206,10 +206,11 @@ export default function TrackerPage() {
 
       {/* MAIN CONTENT */}
       <div className="relative z-10">
+        
         {/* HEADER */}
         <header className="mb-12">
           <div className="flex flex-col">
-            <h1 className="text-5xl md:text-8xl font-black tracking-tighter text-white uppercase leading-[0.8]">PULSE</h1>
+            <h1 className="text-5xl md:text-8xl font-black tracking-tighter text-white uppercase leading-[0.8]">GEMINI</h1>
             <h1 className="text-5xl md:text-8xl font-black tracking-tighter text-zinc-800 uppercase leading-[0.8]">_TRACKER.</h1>
           </div>
         </header>
@@ -219,7 +220,7 @@ export default function TrackerPage() {
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
               <GitCommit size={20} className="text-orange-400" />
-              <span className="text-xs font-black uppercase tracking-[0.2em] text-zinc-400">GitHub This Week</span>
+              <span className="text-xs font-black uppercase tracking-[0.2em] text-zinc-400">Commits This Week</span>
               {githubUsername && (
                 <span className="text-[10px] text-zinc-600">@{githubUsername}</span>
               )}
@@ -233,31 +234,34 @@ export default function TrackerPage() {
           </div>
 
           {/* GitHub Username Input */}
-          {showGithubInput && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              className="mb-4 p-4 border border-zinc-800 bg-black/60"
-            >
-              <div className="flex gap-3">
-                <input
-                  type="text"
-                  placeholder="GitHub username"
-                  value={githubUsername}
-                  onChange={(e) => setGithubUsername(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && fetchGithubData(githubUsername)}
-                  className="flex-1 bg-black border border-zinc-800 px-4 py-2 text-sm text-white outline-none focus:border-orange-500"
-                />
-                <button
-                  onClick={() => fetchGithubData(githubUsername)}
-                  disabled={loadingGithub}
-                  className="px-6 py-2 bg-orange-500/10 border border-orange-500/30 text-orange-400 text-xs font-black uppercase hover:bg-orange-500/20 disabled:opacity-50"
-                >
-                  {loadingGithub ? "..." : "Sync"}
-                </button>
-              </div>
-            </motion.div>
-          )}
+          <AnimatePresence>
+            {showGithubInput && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                className="mb-4 p-4 border border-zinc-800 bg-black/60 overflow-hidden"
+              >
+                <div className="flex gap-3">
+                  <input
+                    type="text"
+                    placeholder="GitHub username"
+                    value={githubUsername}
+                    onChange={(e) => setGithubUsername(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && fetchGithubData(githubUsername)}
+                    className="flex-1 bg-black border border-zinc-800 px-4 py-2 text-sm text-white outline-none focus:border-orange-500"
+                  />
+                  <button
+                    onClick={() => fetchGithubData(githubUsername)}
+                    disabled={loadingGithub}
+                    className="px-6 py-2 bg-orange-500/10 border border-orange-500/30 text-orange-400 text-xs font-black uppercase hover:bg-orange-500/20 disabled:opacity-50"
+                  >
+                    {loadingGithub ? "..." : "Sync"}
+                  </button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {/* Week Grid - GitHub */}
           {githubUsername ? (
@@ -312,15 +316,62 @@ export default function TrackerPage() {
                   </div>
                   <div className="space-y-2 max-h-48 overflow-y-auto">
                     {getEventsForDay(selectedDay).length > 0 ? (
-                      getEventsForDay(selectedDay).map((event: any, i: number) => (
-                        <div key={i} className="flex items-center gap-3 p-2 border border-zinc-900 bg-black/40">
-                          <GitCommit size={14} className="text-orange-400 shrink-0" />
-                          <div className="flex-1 min-w-0">
-                            <div className="text-xs font-bold text-zinc-300 truncate">{event.repo?.name}</div>
-                            <div className="text-[10px] text-zinc-600">{formatEventType(event.type)}</div>
-                          </div>
-                        </div>
-                      ))
+                      getEventsForDay(selectedDay).map((event: any, i: number) => {
+                        const repoName = event.repo?.name;
+                        const baseUrl = repoName ? `https://github.com/${repoName}` : "#";
+
+                        // Handle PushEvent to show individual commits
+                        if (event.type === "PushEvent" && event.payload && event.payload.commits && event.payload.commits.length > 0) {
+                          return event.payload.commits.map((commit: any, commitIndex: number) => {
+                            const commitUrl = repoName ? `https://github.com/${repoName}/commit/${commit.sha}` : "#";
+                            return (
+                              <a
+                                key={`${i}-commit-${commitIndex}`}
+                                href={commitUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-3 p-2 border border-zinc-900 bg-black/40 hover:bg-zinc-800 transition-colors cursor-pointer group"
+                              >
+                                <GitCommit size={14} className="text-orange-400 shrink-0" />
+                                <div className="flex-1 min-w-0">
+                                  <div className="text-xs font-bold text-zinc-300 truncate group-hover:text-white">{repoName}</div>
+                                  <div className="text-[10px] text-zinc-600 truncate">{commit.message}</div>
+                                </div>
+                                <ExternalLink size={12} className="text-zinc-500 group-hover:text-orange-400" />
+                              </a>
+                            );
+                          });
+                        } else {
+                          // Handle other event types
+                          let eventUrl = baseUrl;
+                          if (event.type === "PushEvent" && event.payload?.head) {
+                             eventUrl = repoName ? `https://github.com/${repoName}/commit/${event.payload.head}` : baseUrl;
+                          } else if (event.payload?.pull_request?.html_url) {
+                              eventUrl = event.payload.pull_request.html_url;
+                          } else if (event.payload?.issue?.html_url) {
+                              eventUrl = event.payload.issue.html_url;
+                          } else if (event.payload?.release?.html_url) {
+                               eventUrl = event.payload.release.html_url;
+                          }
+
+                          return (
+                            <a
+                              key={i}
+                              href={eventUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-3 p-2 border border-zinc-900 bg-black/40 hover:bg-zinc-800 transition-colors cursor-pointer group"
+                            >
+                              <GitCommit size={14} className="text-orange-400 shrink-0" />
+                              <div className="flex-1 min-w-0">
+                                <div className="text-xs font-bold text-zinc-300 truncate group-hover:text-white">{repoName}</div>
+                                <div className="text-[10px] text-zinc-600">{formatEventType(event.type)}</div>
+                              </div>
+                              {eventUrl && <ExternalLink size={12} className="text-zinc-500 group-hover:text-orange-400" />}
+                            </a>
+                          );
+                        }
+                      })
                     ) : (
                       <div className="text-center py-4 text-zinc-600 text-xs">No activity this day</div>
                     )}
@@ -342,55 +393,6 @@ export default function TrackerPage() {
           )}
         </section>
 
-        {/* CODE ARENA - TOP CODING MODELS */}
-        <section className="mb-12">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <Bot size={20} className="text-orange-400" />
-              <span className="text-xs font-black uppercase tracking-[0.2em] text-zinc-400">Code Arena Rankings</span>
-            </div>
-            <a
-              href="https://arena.ai/leaderboard/code"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-[10px] text-zinc-600 hover:text-orange-400 transition-colors"
-            >
-              Live rankings →
-            </a>
-          </div>
-
-          <div className="space-y-2">
-            {TOP_CODING_LLMS.map((model) => (
-              <div
-                key={model.rank}
-                className={`p-4 border flex items-center gap-4 transition-all ${
-                  model.rank === 1
-                    ? "border-orange-500/30 bg-orange-500/5"
-                    : model.rank <= 3
-                      ? "border-zinc-800 bg-zinc-900/30"
-                      : "border-zinc-900 bg-black/40"
-                }`}
-              >
-                <div className={`w-8 h-8 flex items-center justify-center font-black ${
-                  model.rank === 1 ? "text-orange-400" : model.rank === 2 ? "text-zinc-300" : model.rank === 3 ? "text-amber-600" : "text-zinc-600"
-                }`}>
-                  {model.rank === 1 ? <Trophy size={20} /> : `#${model.rank}`}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="font-bold text-white truncate">{model.name}</div>
-                  <div className="text-[10px] text-zinc-600 uppercase">{model.org}</div>
-                </div>
-                <div className="text-right">
-                  <div className={`text-lg font-black ${model.rank === 1 ? "text-orange-400" : "text-zinc-400"}`}>
-                    {model.score}
-                  </div>
-                  <div className="text-[8px] text-zinc-600 uppercase">ELO</div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-
         {/* HABITS */}
         <section className="mb-12">
           <div className="flex items-center justify-between mb-6">
@@ -408,55 +410,58 @@ export default function TrackerPage() {
           </div>
 
           {/* Add Habit Form */}
-          {showAddHabit && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              className="mb-6 p-6 border border-zinc-800 bg-black/60 backdrop-blur-sm"
-            >
-              <input
-                type="text"
-                placeholder="New habit name..."
-                value={newHabitName}
-                onChange={(e) => setNewHabitName(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && addHabit()}
-                className="w-full bg-transparent border-b-2 border-zinc-800 px-0 py-3 text-lg text-white outline-none focus:border-orange-500 mb-6 placeholder:text-zinc-700"
-              />
+          <AnimatePresence>
+            {showAddHabit && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                className="mb-6 p-6 border border-zinc-800 bg-black/60 backdrop-blur-sm overflow-hidden"
+              >
+                <input
+                  type="text"
+                  placeholder="New habit name..."
+                  value={newHabitName}
+                  onChange={(e) => setNewHabitName(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && addHabit()}
+                  className="w-full bg-transparent border-b-2 border-zinc-800 px-0 py-3 text-lg text-white outline-none focus:border-orange-500 mb-6 placeholder:text-zinc-700"
+                />
 
-              {/* Color Picker */}
-              <div className="mb-6">
-                <div className="text-[10px] font-black uppercase tracking-wider text-zinc-600 mb-3">Color</div>
-                <div className="flex gap-2 flex-wrap">
-                  {HABIT_COLORS.map((color) => (
-                    <button
-                      key={color.value}
-                      onClick={() => setNewHabitColor(color.value)}
-                      className={`w-8 h-8 rounded-full ${color.bg} transition-all ${
-                        newHabitColor === color.value
-                          ? "ring-2 ring-white ring-offset-2 ring-offset-black scale-110"
-                          : "opacity-50 hover:opacity-100"
-                      }`}
-                    />
-                  ))}
+                {/* Color Picker */}
+                <div className="mb-6">
+                  <div className="text-[10px] font-black uppercase tracking-wider text-zinc-600 mb-3">Color</div>
+                  <div className="flex gap-2 flex-wrap">
+                    {HABIT_COLORS.map((color) => (
+                      <button
+                        key={color.value}
+                        onClick={() => setNewHabitColor(color.value)}
+                        className={`w-8 h-8 rounded-full ${color.bg} transition-all ${
+                          newHabitColor === color.value
+                            ? "ring-2 ring-white ring-offset-2 ring-offset-black scale-110"
+                            : "opacity-50 hover:opacity-100"
+                        }`}
+                      />
+                    ))}
+                  </div>
                 </div>
-              </div>
 
-              <div className="flex gap-3">
-                <button
-                  onClick={addHabit}
-                  className={`flex-1 py-3 bg-opacity-10 border border-opacity-30 text-xs font-black uppercase tracking-wider hover:bg-opacity-20 transition-colors ${getHabitColor(newHabitColor, "text")} ${getHabitColor(newHabitColor, "border")}`}
-                >
-                  Create Habit
-                </button>
-                <button
-                  onClick={() => setShowAddHabit(false)}
-                  className="px-6 py-3 border border-zinc-800 text-zinc-500 text-xs font-black uppercase tracking-wider hover:border-zinc-700 transition-colors"
-                >
-                  Cancel
-                </button>
-              </div>
-            </motion.div>
-          )}
+                <div className="flex gap-3">
+                  <button
+                    onClick={addHabit}
+                    className={`flex-1 py-3 bg-opacity-10 border border-opacity-30 text-xs font-black uppercase tracking-wider hover:bg-opacity-20 transition-colors ${getHabitColor(newHabitColor, "text")} ${getHabitColor(newHabitColor, "border")}`}
+                  >
+                    Create Habit
+                  </button>
+                  <button
+                    onClick={() => setShowAddHabit(false)}
+                    className="px-6 py-3 border border-zinc-800 text-zinc-500 text-xs font-black uppercase tracking-wider hover:border-zinc-700 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {/* Habit Cards */}
           <div className="space-y-4">
@@ -539,7 +544,7 @@ export default function TrackerPage() {
         </section>
 
         {/* STATS */}
-        <section>
+        <section className="mb-12">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="p-6 border border-zinc-900 bg-[#0a0a0a] text-center">
               <div className="text-3xl md:text-4xl font-black text-orange-400">{habits.length}</div>
@@ -559,8 +564,69 @@ export default function TrackerPage() {
             </div>
             <div className="p-6 border border-zinc-900 bg-[#0a0a0a] text-center">
               <div className="text-3xl md:text-4xl font-black text-orange-400">{githubThisWeek}</div>
-              <div className="text-[10px] font-bold text-zinc-600 uppercase tracking-wider mt-2">GitHub This Week</div>
+              <div className="text-[10px] font-bold text-zinc-600 uppercase tracking-wider mt-2">Commits This Week</div>
             </div>
+          </div>
+        </section>
+
+        {/* BOTTOM GRID - CODE ARENA & FUTURE */}
+        <section>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            
+            {/* CODE ARENA - COLUMN 1 */}
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Bot size={20} className="text-orange-400" />
+                  <span className="text-xs font-black uppercase tracking-[0.2em] text-zinc-400">Code Arena</span>
+                </div>
+                <a
+                  href="https://arena.ai/leaderboard/code"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[10px] text-zinc-600 hover:text-orange-400 transition-colors"
+                >
+                  Live →
+                </a>
+              </div>
+
+              <div className="space-y-2">
+                {TOP_CODING_LLMS.map((model) => (
+                  <div
+                    key={model.rank}
+                    className={`p-3 border flex items-center gap-3 transition-all ${
+                      model.rank === 1
+                        ? "border-orange-500/30 bg-orange-500/5"
+                        : model.rank <= 3
+                          ? "border-zinc-800 bg-zinc-900/30"
+                          : "border-zinc-900 bg-black/40"
+                    }`}
+                  >
+                    <div className={`w-6 h-6 flex items-center justify-center font-black text-xs ${
+                      model.rank === 1 ? "text-orange-400" : model.rank === 2 ? "text-zinc-300" : model.rank === 3 ? "text-amber-600" : "text-zinc-600"
+                    }`}>
+                      {model.rank === 1 ? <Trophy size={14} /> : `#${model.rank}`}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-bold text-xs text-white truncate">{model.name}</div>
+                      <div className="text-[8px] text-zinc-600 uppercase">{model.org}</div>
+                    </div>
+                    <div className="text-right">
+                      <div className={`text-sm font-black ${model.rank === 1 ? "text-orange-400" : "text-zinc-400"}`}>
+                        {model.score}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* FUTURE COLUMN 2 */}
+            <div></div>
+
+            {/* FUTURE COLUMN 3 */}
+            <div></div>
+
           </div>
         </section>
       </div>
