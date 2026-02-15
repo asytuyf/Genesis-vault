@@ -1,11 +1,11 @@
 "use client";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Play, Pause, RotateCcw,
   Youtube, Settings,
   ExternalLink, Plus, X, Sparkles, Layers, Clock,
-  Volume2, VolumeX, SkipForward, SkipBack, Music
+  Volume2, VolumeX, SkipForward
 } from "lucide-react";
 
 interface QuickLink {
@@ -29,10 +29,39 @@ export default function FocusPage() {
   const [playlistId, setPlaylistId] = useState("");
   const [showSettings, setShowSettings] = useState(false);
   const [showYoutubeInput, setShowYoutubeInput] = useState(false);
-  const [volume, setVolume] = useState(30);
-  const [isMuted, setIsMuted] = useState(false);
-  const playerRef = useRef<any>(null);
-  const [playerReady, setPlayerReady] = useState(false);
+  const [isMuted, setIsMuted] = useState(true);
+  const [volume, setVolume] = useState(50);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+
+  // Send commands to YouTube iframe via postMessage
+  const sendYouTubeCommand = (func: string, args?: any[]) => {
+    if (iframeRef.current?.contentWindow) {
+      iframeRef.current.contentWindow.postMessage(
+        JSON.stringify({ event: "command", func, args: args || [] }),
+        "*"
+      );
+    }
+  };
+
+  // Handle volume changes
+  const handleVolumeChange = (newVolume: number) => {
+    setVolume(newVolume);
+    if (newVolume === 0) {
+      setIsMuted(true);
+      sendYouTubeCommand("mute");
+    } else {
+      if (isMuted) {
+        setIsMuted(false);
+        sendYouTubeCommand("unMute");
+      }
+      sendYouTubeCommand("setVolume", [newVolume]);
+    }
+  };
+
+  // Handle skip to next video
+  const handleSkip = () => {
+    sendYouTubeCommand("nextVideo");
+  };
 
   // Preset playlists
   const PRESET_PLAYLISTS = [
@@ -55,17 +84,37 @@ export default function FocusPage() {
 
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Generate random stars for whimsical overlay
-  const [stars] = useState(() =>
-    Array.from({ length: 50 }, (_, i) => ({
-      id: i,
-      x: Math.random() * 100,
-      y: Math.random() * 100,
-      size: Math.random() * 3 + 1,
-      duration: Math.random() * 3 + 2,
-      delay: Math.random() * 2,
-    }))
-  );
+  // Pre-calculated star positions to avoid hydration mismatch
+  const stars = [
+    { id: 0, x: 8.33, y: 10, size: 35, hue: 0 },
+    { id: 1, x: 25, y: 10, size: 40, hue: 12 },
+    { id: 2, x: 41.67, y: 10, size: 35, hue: 24 },
+    { id: 3, x: 58.33, y: 10, size: 30, hue: 36 },
+    { id: 4, x: 75, y: 10, size: 35, hue: 48 },
+    { id: 5, x: 91.67, y: 10, size: 40, hue: 60 },
+    { id: 6, x: 16.67, y: 30, size: 38, hue: 72 },
+    { id: 7, x: 33.33, y: 30, size: 35, hue: 84 },
+    { id: 8, x: 50, y: 30, size: 32, hue: 96 },
+    { id: 9, x: 66.67, y: 30, size: 35, hue: 108 },
+    { id: 10, x: 83.33, y: 30, size: 38, hue: 120 },
+    { id: 11, x: 8.33, y: 50, size: 35, hue: 132 },
+    { id: 12, x: 25, y: 50, size: 40, hue: 144 },
+    { id: 13, x: 41.67, y: 50, size: 35, hue: 156 },
+    { id: 14, x: 58.33, y: 50, size: 30, hue: 168 },
+    { id: 15, x: 75, y: 50, size: 35, hue: 180 },
+    { id: 16, x: 91.67, y: 50, size: 40, hue: 192 },
+    { id: 17, x: 16.67, y: 70, size: 38, hue: 204 },
+    { id: 18, x: 33.33, y: 70, size: 35, hue: 216 },
+    { id: 19, x: 50, y: 70, size: 32, hue: 228 },
+    { id: 20, x: 66.67, y: 70, size: 35, hue: 240 },
+    { id: 21, x: 83.33, y: 70, size: 38, hue: 252 },
+    { id: 22, x: 8.33, y: 90, size: 35, hue: 264 },
+    { id: 23, x: 25, y: 90, size: 40, hue: 276 },
+    { id: 24, x: 41.67, y: 90, size: 35, hue: 288 },
+    { id: 25, x: 58.33, y: 90, size: 30, hue: 300 },
+    { id: 26, x: 75, y: 90, size: 35, hue: 312 },
+    { id: 27, x: 91.67, y: 90, size: 40, hue: 324 },
+  ];
 
   // Format time helper (defined early for tab title)
   const formatTime = (seconds: number) => {
@@ -128,107 +177,8 @@ export default function FocusPage() {
         setPlaylistId(pid);
       }
       if (savedLinks) setLinks(JSON.parse(savedLinks));
-      const savedVolume = localStorage.getItem("focus_volume");
-      if (savedVolume) setVolume(parseInt(savedVolume));
     }
   }, []);
-
-  // Load YouTube IFrame API
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (!(videoId || playlistId)) return;
-
-    // Load the IFrame Player API code asynchronously
-    if (!(window as any).YT) {
-      const tag = document.createElement("script");
-      tag.src = "https://www.youtube.com/iframe_api";
-      const firstScriptTag = document.getElementsByTagName("script")[0];
-      firstScriptTag.parentNode?.insertBefore(tag, firstScriptTag);
-    }
-
-    (window as any).onYouTubeIframeAPIReady = () => {
-      createPlayer();
-    };
-
-    // If API already loaded
-    if ((window as any).YT && (window as any).YT.Player) {
-      createPlayer();
-    }
-
-    return () => {
-      if (playerRef.current) {
-        playerRef.current.destroy();
-        playerRef.current = null;
-        setPlayerReady(false);
-      }
-    };
-  }, [videoId, playlistId]);
-
-  const createPlayer = useCallback(() => {
-    if (playerRef.current) {
-      playerRef.current.destroy();
-    }
-
-    const playerVars: any = {
-      autoplay: 1,
-      loop: 1,
-      controls: 0,
-      showinfo: 0,
-      rel: 0,
-      modestbranding: 1,
-      playsinline: 1,
-    };
-
-    if (playlistId) {
-      playerVars.listType = "playlist";
-      playerVars.list = playlistId;
-    } else if (videoId) {
-      playerVars.playlist = videoId;
-    }
-
-    playerRef.current = new (window as any).YT.Player("yt-player", {
-      videoId: videoId || undefined,
-      playerVars,
-      events: {
-        onReady: (event: any) => {
-          setPlayerReady(true);
-          event.target.setVolume(volume);
-          if (isMuted) event.target.mute();
-        },
-      },
-    });
-  }, [videoId, playlistId, volume, isMuted]);
-
-  // Volume control
-  useEffect(() => {
-    if (playerRef.current && playerReady) {
-      playerRef.current.setVolume(volume);
-      localStorage.setItem("focus_volume", String(volume));
-    }
-  }, [volume, playerReady]);
-
-  // Mute control
-  useEffect(() => {
-    if (playerRef.current && playerReady) {
-      if (isMuted) {
-        playerRef.current.mute();
-      } else {
-        playerRef.current.unMute();
-      }
-    }
-  }, [isMuted, playerReady]);
-
-  const nextVideo = () => {
-    if (playerRef.current && playerReady) {
-      playerRef.current.nextVideo();
-    }
-  };
-
-  const prevVideo = () => {
-    if (playerRef.current && playerReady) {
-      playerRef.current.previousVideo();
-    }
-  };
 
   // Timer logic
   useEffect(() => {
@@ -350,36 +300,86 @@ export default function FocusPage() {
       {(videoId || playlistId) && (
         <div className="fixed inset-0 z-0">
           <div className="absolute inset-0 scale-150">
-            <div id="yt-player" className="w-full h-full pointer-events-none" />
+            <iframe
+              ref={iframeRef}
+              src={
+                playlistId
+                  ? `https://www.youtube.com/embed/videoseries?list=${playlistId}&autoplay=1&mute=1&loop=1&controls=0&showinfo=0&rel=0&modestbranding=1&playsinline=1&enablejsapi=1`
+                  : `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&loop=1&playlist=${videoId}&controls=0&showinfo=0&rel=0&modestbranding=1&playsinline=1&enablejsapi=1`
+              }
+              title="Background Video"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; autoplay"
+              className="w-full h-full pointer-events-none"
+              style={{ border: 'none' }}
+            />
           </div>
           {/* Purple overlay */}
           <div className="absolute inset-0 bg-purple-950/70 mix-blend-multiply" />
           <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-black/50" />
 
-          {/* Whimsical starfield overlay */}
+          {/* Psychedelic starburst overlay - diffraction glasses effect */}
           <div className="absolute inset-0 pointer-events-none overflow-hidden">
-            {stars.map((star) => (
-              <motion.div
-                key={star.id}
-                className="absolute rounded-full bg-white"
-                style={{
-                  left: `${star.x}%`,
-                  top: `${star.y}%`,
-                  width: star.size,
-                  height: star.size,
-                }}
-                animate={{
-                  opacity: [0.2, 0.8, 0.2],
-                  scale: [1, 1.5, 1],
-                }}
-                transition={{
-                  duration: star.duration,
-                  delay: star.delay,
-                  repeat: Infinity,
-                  ease: "easeInOut",
-                }}
-              />
-            ))}
+            {/* Rainbow gradient definition */}
+            <svg className="absolute w-0 h-0">
+              <defs>
+                <linearGradient id="rainbow-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stopColor="#ff00ff" />
+                  <stop offset="25%" stopColor="#00ffff" />
+                  <stop offset="50%" stopColor="#ffff00" />
+                  <stop offset="75%" stopColor="#ff00ff" />
+                  <stop offset="100%" stopColor="#00ffff" />
+                </linearGradient>
+              </defs>
+            </svg>
+            {stars.map((star) => {
+              // Stars intensify as progress increases (time running out)
+              const intensity = isRunning ? 0.2 + (progress / 100) * 0.8 : 0.3;
+              const starScale = 1 + (progress / 100) * 0.5;
+              const glowAmount = progress / 100 * 20;
+
+              return (
+                <motion.div
+                  key={star.id}
+                  className="absolute -translate-x-1/2 -translate-y-1/2"
+                  style={{
+                    left: `${star.x}%`,
+                    top: `${star.y}%`,
+                    width: star.size * starScale,
+                    height: star.size * starScale,
+                    filter: `drop-shadow(0 0 ${glowAmount}px rgba(255, 100, 255, ${intensity}))`,
+                  }}
+                  animate={{
+                    opacity: [intensity * 0.5, intensity, intensity * 0.5],
+                    scale: [0.9, 1.1, 0.9],
+                    rotate: [0, 360],
+                  }}
+                  transition={{
+                    opacity: { duration: 6 - (progress / 100) * 3, delay: star.id * 0.1, repeat: Infinity, ease: "easeInOut" },
+                    scale: { duration: 6 - (progress / 100) * 3, delay: star.id * 0.1, repeat: Infinity, ease: "easeInOut" },
+                    rotate: { duration: 18 - (progress / 100) * 10, repeat: Infinity, ease: "linear" },
+                  }}
+                >
+                  <svg viewBox="0 0 100 100" className="w-full h-full" style={{ filter: `hue-rotate(${star.hue + progress * 2}deg) saturate(${1 + progress / 50})` }}>
+                    {/* 6-point star - pre-calculated coordinates */}
+                    <line x1="50" y1="50" x2="98" y2="50" stroke="url(#rainbow-grad)" strokeWidth={2.5 + progress / 40} strokeLinecap="round" opacity={0.5 + intensity * 0.5} />
+                    <line x1="50" y1="50" x2="74" y2="8" stroke="url(#rainbow-grad)" strokeWidth={2.5 + progress / 40} strokeLinecap="round" opacity={0.5 + intensity * 0.5} />
+                    <line x1="50" y1="50" x2="26" y2="8" stroke="url(#rainbow-grad)" strokeWidth={2.5 + progress / 40} strokeLinecap="round" opacity={0.5 + intensity * 0.5} />
+                    <line x1="50" y1="50" x2="2" y2="50" stroke="url(#rainbow-grad)" strokeWidth={2.5 + progress / 40} strokeLinecap="round" opacity={0.5 + intensity * 0.5} />
+                    <line x1="50" y1="50" x2="26" y2="92" stroke="url(#rainbow-grad)" strokeWidth={2.5 + progress / 40} strokeLinecap="round" opacity={0.5 + intensity * 0.5} />
+                    <line x1="50" y1="50" x2="74" y2="92" stroke="url(#rainbow-grad)" strokeWidth={2.5 + progress / 40} strokeLinecap="round" opacity={0.5 + intensity * 0.5} />
+                    {/* Secondary rays */}
+                    <line x1="50" y1="50" x2="78" y2="27" stroke="url(#rainbow-grad)" strokeWidth={1.5 + progress / 60} strokeLinecap="round" opacity={0.3 + intensity * 0.4} />
+                    <line x1="50" y1="50" x2="50" y2="2" stroke="url(#rainbow-grad)" strokeWidth={1.5 + progress / 60} strokeLinecap="round" opacity={0.3 + intensity * 0.4} />
+                    <line x1="50" y1="50" x2="22" y2="27" stroke="url(#rainbow-grad)" strokeWidth={1.5 + progress / 60} strokeLinecap="round" opacity={0.3 + intensity * 0.4} />
+                    <line x1="50" y1="50" x2="22" y2="73" stroke="url(#rainbow-grad)" strokeWidth={1.5 + progress / 60} strokeLinecap="round" opacity={0.3 + intensity * 0.4} />
+                    <line x1="50" y1="50" x2="50" y2="98" stroke="url(#rainbow-grad)" strokeWidth={1.5 + progress / 60} strokeLinecap="round" opacity={0.3 + intensity * 0.4} />
+                    <line x1="50" y1="50" x2="78" y2="73" stroke="url(#rainbow-grad)" strokeWidth={1.5 + progress / 60} strokeLinecap="round" opacity={0.3 + intensity * 0.4} />
+                    <circle cx="50" cy="50" r={5 + progress / 20} fill="white" opacity={0.7 + intensity * 0.3} />
+                    <circle cx="50" cy="50" r={10 + progress / 10} fill="white" opacity={0.1 + intensity * 0.2} />
+                  </svg>
+                </motion.div>
+              );
+            })}
           </div>
         </div>
       )}
@@ -390,30 +390,56 @@ export default function FocusPage() {
           <div className="absolute inset-0 opacity-[0.03] flex items-center justify-center pointer-events-none">
             <Clock size={800} strokeWidth={0.5} />
           </div>
-          {/* Whimsical starfield overlay */}
+          {/* Psychedelic starburst overlay - diffraction glasses effect */}
           <div className="absolute inset-0 pointer-events-none overflow-hidden">
-            {stars.map((star) => (
-              <motion.div
-                key={star.id}
-                className="absolute rounded-full bg-purple-400"
-                style={{
-                  left: `${star.x}%`,
-                  top: `${star.y}%`,
-                  width: star.size,
-                  height: star.size,
-                }}
-                animate={{
-                  opacity: [0.1, 0.4, 0.1],
-                  scale: [1, 1.5, 1],
-                }}
-                transition={{
-                  duration: star.duration,
-                  delay: star.delay,
-                  repeat: Infinity,
-                  ease: "easeInOut",
-                }}
-              />
-            ))}
+            <svg className="absolute w-0 h-0">
+              <defs>
+                <linearGradient id="purple-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stopColor="#a855f7" />
+                  <stop offset="50%" stopColor="#c084fc" />
+                  <stop offset="100%" stopColor="#a855f7" />
+                </linearGradient>
+              </defs>
+            </svg>
+            {stars.map((star) => {
+              const intensity = isRunning ? 0.1 + (progress / 100) * 0.6 : 0.2;
+              const starScale = 0.5 + (progress / 100) * 0.3;
+              const glowAmount = progress / 100 * 15;
+
+              return (
+                <motion.div
+                  key={star.id}
+                  className="absolute -translate-x-1/2 -translate-y-1/2"
+                  style={{
+                    left: `${star.x}%`,
+                    top: `${star.y}%`,
+                    width: star.size * starScale,
+                    height: star.size * starScale,
+                    filter: `drop-shadow(0 0 ${glowAmount}px rgba(168, 85, 247, ${intensity}))`,
+                  }}
+                  animate={{
+                    opacity: [intensity * 0.5, intensity, intensity * 0.5],
+                    scale: [0.9, 1.1, 0.9],
+                    rotate: [0, 360],
+                  }}
+                  transition={{
+                    opacity: { duration: 6 - (progress / 100) * 3, delay: star.id * 0.1, repeat: Infinity, ease: "easeInOut" },
+                    scale: { duration: 6 - (progress / 100) * 3, delay: star.id * 0.1, repeat: Infinity, ease: "easeInOut" },
+                    rotate: { duration: 18 - (progress / 100) * 10, repeat: Infinity, ease: "linear" },
+                  }}
+                >
+                  <svg viewBox="0 0 100 100" className="w-full h-full" style={{ filter: `saturate(${1 + progress / 50})` }}>
+                    <line x1="50" y1="50" x2="95" y2="50" stroke="url(#purple-grad)" strokeWidth={2 + progress / 50} strokeLinecap="round" opacity={0.4 + intensity * 0.5} />
+                    <line x1="50" y1="50" x2="72" y2="11" stroke="url(#purple-grad)" strokeWidth={2 + progress / 50} strokeLinecap="round" opacity={0.4 + intensity * 0.5} />
+                    <line x1="50" y1="50" x2="28" y2="11" stroke="url(#purple-grad)" strokeWidth={2 + progress / 50} strokeLinecap="round" opacity={0.4 + intensity * 0.5} />
+                    <line x1="50" y1="50" x2="5" y2="50" stroke="url(#purple-grad)" strokeWidth={2 + progress / 50} strokeLinecap="round" opacity={0.4 + intensity * 0.5} />
+                    <line x1="50" y1="50" x2="28" y2="89" stroke="url(#purple-grad)" strokeWidth={2 + progress / 50} strokeLinecap="round" opacity={0.4 + intensity * 0.5} />
+                    <line x1="50" y1="50" x2="72" y2="89" stroke="url(#purple-grad)" strokeWidth={2 + progress / 50} strokeLinecap="round" opacity={0.4 + intensity * 0.5} />
+                    <circle cx="50" cy="50" r={4 + progress / 25} fill="#a855f7" opacity={0.6 + intensity * 0.4} />
+                  </svg>
+                </motion.div>
+              );
+            })}
           </div>
         </div>
       )}
@@ -449,51 +475,53 @@ export default function FocusPage() {
         </button>
       </div>
 
-      {/* VOLUME & VIDEO CONTROLS - Bottom left */}
-      {(videoId || playlistId) && playerReady && (
-        <div className="fixed bottom-12 left-4 z-[100] flex items-center gap-3">
-          {/* Playlist controls */}
+      {/* MUSIC CONTROLS - Bottom left */}
+      {(videoId || playlistId) && (
+        <div className="fixed bottom-12 left-4 z-[100] flex items-center gap-3 px-4 py-3 border border-zinc-800/50 bg-black/60 backdrop-blur-sm rounded-lg">
+          <button
+            onClick={() => {
+              if (isMuted) {
+                setIsMuted(false);
+                sendYouTubeCommand("unMute");
+                sendYouTubeCommand("setVolume", [volume]);
+              } else {
+                setIsMuted(true);
+                sendYouTubeCommand("mute");
+              }
+            }}
+            className={`transition-all ${
+              isMuted ? "text-zinc-500" : "text-purple-400"
+            }`}
+            title={isMuted ? "Unmute" : "Mute"}
+          >
+            {isMuted ? <VolumeX size={18} /> : <Volume2 size={18} />}
+          </button>
+
+          <input
+            type="range"
+            min="0"
+            max="100"
+            value={isMuted ? 0 : volume}
+            onChange={(e) => handleVolumeChange(parseInt(e.target.value))}
+            className="w-24 h-1 accent-purple-500 cursor-pointer"
+            title={`Volume: ${isMuted ? 0 : volume}%`}
+          />
+
           {playlistId && (
-            <div className="flex items-center gap-1 mr-2">
+            <>
+              <div className="w-px h-4 bg-zinc-700" />
               <button
-                onClick={prevVideo}
-                className="p-2 border border-zinc-800 bg-black/60 text-zinc-500 hover:text-purple-400 hover:border-purple-500/50 transition-all backdrop-blur-sm"
-                title="Previous video"
-              >
-                <SkipBack size={16} />
-              </button>
-              <button
-                onClick={nextVideo}
-                className="p-2 border border-zinc-800 bg-black/60 text-zinc-500 hover:text-purple-400 hover:border-purple-500/50 transition-all backdrop-blur-sm"
+                onClick={handleSkip}
+                className="text-zinc-500 hover:text-purple-400 transition-all"
                 title="Next video"
               >
-                <SkipForward size={16} />
+                <SkipForward size={18} />
               </button>
-            </div>
+            </>
           )}
-
-          {/* Volume controls */}
-          <div className="flex items-center gap-2 px-3 py-2 border border-zinc-800 bg-black/60 backdrop-blur-sm">
-            <button
-              onClick={() => setIsMuted(!isMuted)}
-              className={`transition-colors ${isMuted ? "text-red-400" : "text-purple-400"}`}
-              title={isMuted ? "Unmute" : "Mute"}
-            >
-              {isMuted ? <VolumeX size={18} /> : <Volume2 size={18} />}
-            </button>
-            <input
-              type="range"
-              min="0"
-              max="100"
-              value={volume}
-              onChange={(e) => setVolume(parseInt(e.target.value))}
-              className="w-24 h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-purple-500"
-              title={`Volume: ${volume}%`}
-            />
-            <span className="text-[10px] font-bold text-zinc-500 w-8">{volume}%</span>
-          </div>
         </div>
       )}
+
 
       {/* YOUTUBE INPUT MODAL */}
       <AnimatePresence>
@@ -643,26 +671,15 @@ export default function FocusPage() {
 
         {/* TIMER */}
         <div className="relative mb-8">
-          <svg className="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 200 200">
-            <circle cx="100" cy="100" r="90" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="2" />
-            <circle
-              cx="100" cy="100" r="90" fill="none"
-              stroke={mode === "work" ? "rgba(168, 85, 247, 0.5)" : "rgba(16, 185, 129, 0.5)"}
-              strokeWidth="2"
-              strokeDasharray={565}
-              strokeDashoffset={565 - (565 * progress) / 100}
-              strokeLinecap="round"
-              className="transition-all duration-1000"
-            />
-          </svg>
-
           <motion.div
             animate={isRunning ? { opacity: [1, 0.7, 1] } : { opacity: 1 }}
             transition={isRunning ? { repeat: Infinity, duration: 2 } : {}}
             className={`relative text-[80px] md:text-[140px] font-black tracking-tighter leading-none ${
               mode === "work" ? "text-white" : "text-emerald-400"
             }`}
-            style={{ textShadow: "0 0 80px rgba(168, 85, 247, 0.4)" }}
+            style={{
+              textShadow: `0 0 ${40 + progress * 0.6}px rgba(168, 85, 247, ${0.3 + progress * 0.007})`
+            }}
           >
             {formatTime(timeLeft)}
           </motion.div>
