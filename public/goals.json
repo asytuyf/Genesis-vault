@@ -94,5 +94,13 @@
     "priority": "Med",
     "status": "PENDING",
     "date": "2026-02-16"
+  },
+  {
+    "id": "1771243758",
+    "project": "NixOS",
+    "task": "Make a Nixos config for arm based machines since mine will only work for x86-64 systems",
+    "priority": "Med",
+    "status": "PENDING",
+    "date": "2026-02-16"
   }
 ]
