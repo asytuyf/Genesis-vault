@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Search, Plus, X, BookOpen, Tag, Clock, Trash2,
@@ -15,6 +15,126 @@ interface Tutorial {
   createdAt: string;
   updatedAt: string;
 }
+
+// IndexedDB helper for storing images separately
+const DB_NAME = "library_images_db";
+const STORE_NAME = "images";
+
+const openImageDB = (): Promise<IDBDatabase> => {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, 1);
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => resolve(request.result);
+    request.onupgradeneeded = (event) => {
+      const db = (event.target as IDBOpenDBRequest).result;
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        db.createObjectStore(STORE_NAME, { keyPath: "id" });
+      }
+    };
+  });
+};
+
+const saveImageToDB = async (id: string, data: string): Promise<void> => {
+  const db = await openImageDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, "readwrite");
+    tx.objectStore(STORE_NAME).put({ id, data });
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+};
+
+const getImageFromDB = async (id: string): Promise<string | null> => {
+  const db = await openImageDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, "readonly");
+    const request = tx.objectStore(STORE_NAME).get(id);
+    request.onsuccess = () => resolve(request.result?.data || null);
+    request.onerror = () => reject(request.error);
+  });
+};
+
+// Compress image before storing
+const compressImage = (file: File, maxWidth = 1200, quality = 0.8): Promise<string> => {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = document.createElement("img");
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        let { width, height } = img;
+
+        if (width > maxWidth) {
+          height = (height * maxWidth) / width;
+          width = maxWidth;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d")!;
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL("image/jpeg", quality));
+      };
+      img.src = e.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+  });
+};
+
+// Component to load and display images from IndexedDB
+const IDBImage = ({ imageId, alt, cache, onLoad }: {
+  imageId: string;
+  alt: string;
+  cache: Record<string, string>;
+  onLoad: (id: string, data: string) => void;
+}) => {
+  const [src, setSrc] = useState<string | null>(cache[imageId] || null);
+  const [loading, setLoading] = useState(!cache[imageId]);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    if (cache[imageId]) {
+      setSrc(cache[imageId]);
+      setLoading(false);
+      return;
+    }
+
+    getImageFromDB(imageId)
+      .then((data) => {
+        if (data) {
+          setSrc(data);
+          onLoad(imageId, data);
+        } else {
+          setError(true);
+        }
+      })
+      .catch(() => setError(true))
+      .finally(() => setLoading(false));
+  }, [imageId, cache, onLoad]);
+
+  if (loading) {
+    return (
+      <div className="my-4 bg-zinc-900 border border-zinc-800 rounded p-8 flex items-center justify-center">
+        <span className="text-zinc-600 text-sm">Loading image...</span>
+      </div>
+    );
+  }
+
+  if (error || !src) {
+    return (
+      <div className="my-4 bg-zinc-900 border border-red-900/50 rounded p-8 flex items-center justify-center">
+        <span className="text-red-400 text-sm">Image not found</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="my-4">
+      <img src={src} alt={alt} className="max-w-full rounded border border-zinc-800" />
+      {alt && alt !== "image" && <p className="text-xs text-zinc-600 mt-1">{alt}</p>}
+    </div>
+  );
+};
 
 export default function LibraryPage() {
   const [tutorials, setTutorials] = useState<Tutorial[]>([]);
@@ -47,11 +167,55 @@ export default function LibraryPage() {
   const [newImagePath, setNewImagePath] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Handle pasting images directly into content
-  const handlePaste = async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
-    const items = e.clipboardData?.items;
-    if (!items) return;
+  // Image cache for IndexedDB images
+  const [imageCache, setImageCache] = useState<Record<string, string>>({});
 
+  // Helper to insert image markdown at cursor
+  const insertImageMarkdown = useCallback((src: string, alt = "image") => {
+    const textarea = textareaRef.current;
+    if (!textarea) {
+      setFormContent(prev => prev + `\n![${alt}](${src})\n`);
+      return;
+    }
+
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const imageMarkdown = `\n![${alt}](${src})\n`;
+
+    setFormContent(prev => prev.slice(0, start) + imageMarkdown + prev.slice(end));
+
+    setTimeout(() => {
+      textarea.selectionStart = textarea.selectionEnd = start + imageMarkdown.length;
+      textarea.focus();
+    }, 0);
+  }, []);
+
+  // Handle pasting images or URLs directly into content
+  const handlePaste = async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const clipboardData = e.clipboardData;
+    if (!clipboardData) return;
+
+    // Check for pasted text first (could be an image URL)
+    const text = clipboardData.getData("text/plain");
+    if (text && /^https?:\/\/.+\.(jpg|jpeg|png|gif|webp|svg)(\?.*)?$/i.test(text)) {
+      e.preventDefault();
+      insertImageMarkdown(text);
+      return;
+    }
+
+    // Check for HTML (e.g., copying an image from a webpage)
+    const html = clipboardData.getData("text/html");
+    if (html) {
+      const imgMatch = html.match(/<img[^>]+src=["']([^"']+)["']/i);
+      if (imgMatch && imgMatch[1].startsWith("http")) {
+        e.preventDefault();
+        insertImageMarkdown(imgMatch[1]);
+        return;
+      }
+    }
+
+    // Check for actual image file (screenshot, etc.)
+    const items = clipboardData.items;
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
       if (item.type.startsWith("image/")) {
@@ -59,44 +223,34 @@ export default function LibraryPage() {
         const file = item.getAsFile();
         if (!file) continue;
 
-        // Convert to base64
-        const reader = new FileReader();
-        reader.onload = () => {
-          const base64 = reader.result as string;
-          const textarea = textareaRef.current;
-          if (!textarea) return;
+        // Compress and store in IndexedDB
+        const compressed = await compressImage(file);
+        const imageId = `img_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        await saveImageToDB(imageId, compressed);
 
-          // Insert at cursor position
-          const start = textarea.selectionStart;
-          const end = textarea.selectionEnd;
-          const imageMarkdown = `\n![image](${base64})\n`;
-          const newContent = formContent.slice(0, start) + imageMarkdown + formContent.slice(end);
-          setFormContent(newContent);
+        // Cache it for immediate display
+        setImageCache(prev => ({ ...prev, [imageId]: compressed }));
 
-          // Move cursor after the inserted image
-          setTimeout(() => {
-            textarea.selectionStart = textarea.selectionEnd = start + imageMarkdown.length;
-            textarea.focus();
-          }, 0);
-        };
-        reader.readAsDataURL(file);
+        insertImageMarkdown(`idb://${imageId}`);
         break;
       }
     }
   };
 
   // Handle file input for images
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !file.type.startsWith("image/")) return;
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      const base64 = reader.result as string;
-      const imageMarkdown = `\n![image](${base64})\n`;
-      setFormContent(formContent + imageMarkdown);
-    };
-    reader.readAsDataURL(file);
+    // Compress and store in IndexedDB
+    const compressed = await compressImage(file);
+    const imageId = `img_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    await saveImageToDB(imageId, compressed);
+
+    // Cache it for immediate display
+    setImageCache(prev => ({ ...prev, [imageId]: compressed }));
+
+    insertImageMarkdown(`idb://${imageId}`);
     e.target.value = ""; // Reset input
   };
 
@@ -254,14 +408,25 @@ export default function LibraryPage() {
       if (imgMatch) {
         const alt = imgMatch[1];
         let src = imgMatch[2];
+
+        // Handle IndexedDB images
+        if (src.startsWith("idb://")) {
+          const imageId = src.slice(6);
+          elements.push(
+            <IDBImage key={index} imageId={imageId} alt={alt} cache={imageCache} onLoad={(id, data) => setImageCache(prev => ({ ...prev, [id]: data }))} />
+          );
+          return;
+        }
+
         // If it's just a filename, prepend /tutorials/
-        if (!src.startsWith("/") && !src.startsWith("http")) {
+        // But don't modify data: URLs (base64 images) or absolute paths/URLs
+        if (!src.startsWith("/") && !src.startsWith("http") && !src.startsWith("data:")) {
           src = `/tutorials/${src}`;
         }
         elements.push(
           <div key={index} className="my-4">
             <img src={src} alt={alt} className="max-w-full rounded border border-zinc-800" />
-            {alt && <p className="text-xs text-zinc-600 mt-1">{alt}</p>}
+            {alt && alt !== "image" && <p className="text-xs text-zinc-600 mt-1">{alt}</p>}
           </div>
         );
         return;
