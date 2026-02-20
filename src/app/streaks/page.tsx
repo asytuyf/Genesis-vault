@@ -55,12 +55,28 @@ export default function TrackerPage() {
   const [showAddHabit, setShowAddHabit] = useState(false);
   const [newHabitName, setNewHabitName] = useState("");
   const [newHabitColor, setNewHabitColor] = useState("orange");
-  const [githubUsername, setGithubUsername] = useState("");
+  const [githubUsername, setGithubUsername] = useState("asytuyf");
   const [githubData, setGithubData] = useState<Record<string, number>>({});
   const [githubEvents, setGithubEvents] = useState<any[]>([]);
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [loadingGithub, setLoadingGithub] = useState(false);
   const [showGithubInput, setShowGithubInput] = useState(false);
+  const [adminMode, setAdminMode] = useState(false);
+
+  // Listen for admin mode changes
+  useEffect(() => {
+    const checkAdmin = () => {
+      const stored = localStorage.getItem("goals_admin_mode");
+      setAdminMode(stored === "1");
+    };
+    checkAdmin();
+    window.addEventListener("goals-admin-mode", checkAdmin);
+    window.addEventListener("storage", checkAdmin);
+    return () => {
+      window.removeEventListener("goals-admin-mode", checkAdmin);
+      window.removeEventListener("storage", checkAdmin);
+    };
+  }, []);
 
   // Load saved data
   useEffect(() => {
@@ -71,11 +87,48 @@ export default function TrackerPage() {
       const savedGithubEvents = localStorage.getItem("streaks_github_events");
 
       if (savedHabits) setHabits(JSON.parse(savedHabits));
-      if (savedGithub) setGithubUsername(savedGithub);
-      if (savedGithubData) setGithubData(JSON.parse(savedGithubData));
-      if (savedGithubEvents) setGithubEvents(JSON.parse(savedGithubEvents));
+      // Always use "asytuyf" as the default username
+      const username = savedGithub || "asytuyf";
+      setGithubUsername(username);
+      if (savedGithubData) {
+        setGithubData(JSON.parse(savedGithubData));
+      }
+      if (savedGithubEvents) {
+        setGithubEvents(JSON.parse(savedGithubEvents));
+      }
+      // Auto-fetch if no cached data
+      if (!savedGithubData) {
+        fetchGithubDataInitial(username);
+      }
     }
   }, []);
+
+  // Initial fetch function (defined separately to avoid useEffect dependency issues)
+  const fetchGithubDataInitial = async (username: string) => {
+    if (!username) return;
+    setLoadingGithub(true);
+    try {
+      const res = await fetch(`https://api.github.com/users/${username}/events/public?per_page=100`);
+      const events = await res.json();
+      const contributions: Record<string, number> = {};
+      if (Array.isArray(events)) {
+        setGithubEvents(events);
+        localStorage.setItem("streaks_github_events", JSON.stringify(events));
+        events.forEach((event: any) => {
+          const date = event.created_at?.split("T")[0];
+          if (date) {
+            contributions[date] = (contributions[date] || 0) + 1;
+          }
+        });
+      }
+      setGithubData(contributions);
+      localStorage.setItem("streaks_github_username", username);
+      localStorage.setItem("streaks_github_data", JSON.stringify(contributions));
+    } catch (e) {
+      console.error("Failed to fetch GitHub data:", e);
+    }
+    setLoadingGithub(false);
+  };
 
   const saveHabits = (newHabits: Habit[]) => {
     setHabits(newHabits);
@@ -225,12 +278,14 @@ export default function TrackerPage() {
                 <span className="text-[10px] text-zinc-600">@{githubUsername}</span>
               )}
             </div>
-            <button
-              onClick={() => setShowGithubInput(!showGithubInput)}
-              className="p-2 text-zinc-600 hover:text-orange-400 transition-colors"
-            >
-              {githubUsername ? <RefreshCw size={14} /> : <Plus size={14} />}
-            </button>
+            {adminMode && (
+              <button
+                onClick={() => setShowGithubInput(!showGithubInput)}
+                className="p-2 text-zinc-600 hover:text-orange-400 transition-colors"
+              >
+                {githubUsername ? <RefreshCw size={14} /> : <Plus size={14} />}
+              </button>
+            )}
           </div>
 
           {/* GitHub Username Input */}
@@ -400,13 +455,15 @@ export default function TrackerPage() {
               <Target size={20} className="text-orange-400" />
               <span className="text-xs font-black uppercase tracking-[0.2em] text-zinc-400">Habits</span>
             </div>
-            <button
-              onClick={() => setShowAddHabit(!showAddHabit)}
-              className="flex items-center gap-2 px-4 py-2 border border-orange-500/30 text-orange-400 text-xs font-black uppercase tracking-wider hover:bg-orange-500/10 transition-colors"
-            >
-              <Plus size={14} />
-              Add
-            </button>
+            {adminMode && (
+              <button
+                onClick={() => setShowAddHabit(!showAddHabit)}
+                className="flex items-center gap-2 px-4 py-2 border border-orange-500/30 text-orange-400 text-xs font-black uppercase tracking-wider hover:bg-orange-500/10 transition-colors"
+              >
+                <Plus size={14} />
+                Add
+              </button>
+            )}
           </div>
 
           {/* Add Habit Form */}
@@ -491,12 +548,14 @@ export default function TrackerPage() {
                         <span className={`text-lg font-black ${getHabitColor(color, "text")}`}>{streak}</span>
                         <span className="text-xs text-zinc-500 uppercase">day streak</span>
                       </div>
-                      <button
-                        onClick={() => removeHabit(habit.id)}
-                        className="p-2 text-zinc-700 hover:text-red-400 transition-colors"
-                      >
-                        <X size={16} />
-                      </button>
+                      {adminMode && (
+                        <button
+                          onClick={() => removeHabit(habit.id)}
+                          className="p-2 text-zinc-700 hover:text-red-400 transition-colors"
+                        >
+                          <X size={16} />
+                        </button>
+                      )}
                     </div>
                   </div>
 
@@ -532,12 +591,14 @@ export default function TrackerPage() {
               <div className="text-center py-16 border border-zinc-800 bg-black/20">
                 <Flame size={48} className="mx-auto mb-4 text-zinc-800" />
                 <p className="text-zinc-600 text-sm font-bold uppercase tracking-wider mb-4">No habits yet</p>
-                <button
-                  onClick={() => setShowAddHabit(true)}
-                  className="px-6 py-3 border border-orange-500/30 text-orange-400 text-xs font-black uppercase tracking-wider hover:bg-orange-500/10 transition-colors"
-                >
-                  Create Your First Habit
-                </button>
+                {adminMode && (
+                  <button
+                    onClick={() => setShowAddHabit(true)}
+                    className="px-6 py-3 border border-orange-500/30 text-orange-400 text-xs font-black uppercase tracking-wider hover:bg-orange-500/10 transition-colors"
+                  >
+                    Create Your First Habit
+                  </button>
+                )}
               </div>
             )}
           </div>

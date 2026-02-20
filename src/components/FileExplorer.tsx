@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { motion, useDragControls, useMotionValue, animate } from "framer-motion";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Terminal, Folder, File, ChevronRight, ChevronDown, Hash, X, Lock, Unlock, Zap, Flame } from "lucide-react";
+import { Terminal, Folder, File, ChevronRight, ChevronDown, Hash, X, Lock, Unlock, Zap, Flame, Sun } from "lucide-react";
 
 interface FileExplorerProps {
   mobileOpen?: boolean;
@@ -17,6 +17,7 @@ export const FileExplorer = ({ mobileOpen, setMobileOpen, desktopOpen }: FileExp
   const [internalMobileOpen, setInternalMobileOpen] = useState(false);
   const [adminKey, setAdminKey] = useState("");
   const [adminMode, setAdminMode] = useState(false);
+  const [bgBrightness, setBgBrightness] = useState(0);
   const dragControls = useDragControls();
   const panelX = useMotionValue(-350);
   const panelY = useMotionValue(0);
@@ -31,6 +32,7 @@ export const FileExplorer = ({ mobileOpen, setMobileOpen, desktopOpen }: FileExp
     if (typeof window === "undefined") return;
     const savedKey = window.localStorage.getItem("goals_admin_key") || "";
     const savedMode = window.localStorage.getItem("goals_admin_mode") === "1";
+    const savedBrightness = window.localStorage.getItem("global_bg_brightness");
     setAdminKey(savedKey);
     if (savedKey === "genesis2026") {
       setAdminMode(savedMode);
@@ -38,13 +40,37 @@ export const FileExplorer = ({ mobileOpen, setMobileOpen, desktopOpen }: FileExp
       setAdminMode(false);
       window.localStorage.setItem("goals_admin_mode", "0");
     }
+    if (savedBrightness) {
+      const brightness = parseInt(savedBrightness);
+      setBgBrightness(brightness);
+      applyBrightness(brightness);
+    }
   }, []);
+
+  const applyBrightness = (value: number) => {
+    // Apply brightness overlay to body
+    let overlay = document.getElementById("global-brightness-overlay");
+    if (!overlay) {
+      overlay = document.createElement("div");
+      overlay.id = "global-brightness-overlay";
+      overlay.style.cssText = "position:fixed;inset:0;pointer-events:none;z-index:1;transition:background-color 0.2s";
+      document.body.appendChild(overlay);
+    }
+    overlay.style.backgroundColor = value > 0 ? `rgba(255,255,255,${value / 100 * 0.3})` : "transparent";
+  };
+
+  const updateBrightness = (value: number) => {
+    setBgBrightness(value);
+    window.localStorage.setItem("global_bg_brightness", String(value));
+    applyBrightness(value);
+  };
 
   const getThemeColor = () => {
     if (pathname === "/archive") return "text-cyan-400";
     if (pathname === "/goals") return "text-emerald-400";
     if (pathname === "/focus") return "text-purple-400";
     if (pathname === "/streaks") return "text-orange-400";
+    if (pathname === "/library") return "text-red-400";
     return "text-yellow-400";
   };
 
@@ -53,6 +79,7 @@ export const FileExplorer = ({ mobileOpen, setMobileOpen, desktopOpen }: FileExp
     if (pathname === "/goals") return "rgba(16, 185, 129, 0.22)";
     if (pathname === "/focus") return "rgba(168, 85, 247, 0.22)";
     if (pathname === "/streaks") return "rgba(249, 115, 22, 0.22)";
+    if (pathname === "/library") return "rgba(239, 68, 68, 0.22)";
     return "rgba(250, 204, 21, 0.22)";
   };
 
@@ -89,7 +116,7 @@ export const FileExplorer = ({ mobileOpen, setMobileOpen, desktopOpen }: FileExp
 
   const renderFileTreeContent = (isMobileView: boolean) => {
     return (
-      <div className="relative h-full">
+      <div className="relative h-full flex flex-col overflow-hidden">
         {/* NOISE OVERLAY */}
         <div className="absolute inset-0 opacity-[0.03] pointer-events-none bg-[url('https://grainy-gradients.vercel.app/noise.svg')]" />
         <div
@@ -102,7 +129,7 @@ export const FileExplorer = ({ mobileOpen, setMobileOpen, desktopOpen }: FileExp
 
         {/* Header */}
         <div
-          className={`h-14 flex items-center justify-between px-4 border-b border-zinc-900 bg-zinc-950 relative z-10 ${
+          className={`h-14 flex-shrink-0 flex items-center justify-between px-4 border-b border-zinc-900 bg-zinc-950 relative z-10 ${
             isMobileView ? "" : "cursor-grab active:cursor-grabbing"
           }`}
           onPointerDown={isMobileView ? undefined : (e) => dragControls.start(e)}
@@ -123,7 +150,7 @@ export const FileExplorer = ({ mobileOpen, setMobileOpen, desktopOpen }: FileExp
 
         {/* File Tree */}
         <div
-          className={`flex-1 p-4 overflow-y-auto relative z-10 ${
+          className={`flex-1 p-4 overflow-y-auto overscroll-contain relative z-10 ${
             isMobileView ? "custom-scrollbar-mobile" : "custom-scrollbar"
           }`}
         >
@@ -409,6 +436,57 @@ export const FileExplorer = ({ mobileOpen, setMobileOpen, desktopOpen }: FileExp
                           )}
                         </div>
 
+                        {/* LIBRARY FOLDER */}
+                        <div>
+                          <div
+                            className="flex items-center gap-2 text-white cursor-pointer py-1.5 select-none transition-colors"
+                            onClick={() => toggleFolder("library")}
+                          >
+                            <span className="text-red-400 transition-colors">
+                              {expandedFolders.includes("library") ? (
+                                <ChevronDown size={20} />
+                              ) : (
+                                <ChevronRight size={20} />
+                              )}
+                            </span>
+                            <Folder
+                              size={20}
+                              className={expandedFolders.includes("library") ? "text-red-400" : "text-zinc-600"}
+                            />
+                            <span className="text-sm font-bold tracking-wide">library</span>
+                          </div>
+                          {expandedFolders.includes("library") && (
+                            <div className="ml-2 pl-2 border-l border-zinc-900 mt-1">
+                              <Link
+                                href="/library"
+                                className="flex items-center gap-2 group/file py-1"
+                                onClick={() => isMobileView && setMobileOpenValue(false)}
+                              >
+                                <File
+                                  size={18}
+                                  className="text-red-400 transition-colors"
+                                />
+                                <span
+                                  className={`text-sm font-medium transition-colors ${
+                                    isMobileView
+                                      ? pathname === "/library"
+                                        ? "text-red-400"
+                                        : "text-zinc-400"
+                                      : "text-white"
+                                  }`}
+                                >
+                                  page.tsx
+                                </span>
+                                <span
+                                  className="ml-auto text-[9px] px-1.5 py-0.5 rounded bg-zinc-900/80 font-bold border transition-all text-red-400 border-red-400/30"
+                                >
+                                  LIBRARY
+                                </span>
+                              </Link>
+                            </div>
+                          )}
+                        </div>
+
                         <div className="flex items-center gap-2 text-zinc-600 py-1.5 opacity-50">
                           <File size={18} />
                           <span className="text-sm">layout.tsx</span>
@@ -425,7 +503,8 @@ export const FileExplorer = ({ mobileOpen, setMobileOpen, desktopOpen }: FileExp
             </div>
           </div>
 
-          {pathname === "/goals" && (
+          {/* AUTH_CONSOLE - Show on pages that need admin protection */}
+          {["/goals", "/library", "/streaks", "/focus"].includes(pathname) && (
             <div className="mt-6 border border-zinc-900 bg-black/40">
               <div className="flex items-center gap-2 px-3 py-2 border-b border-zinc-900 text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">
                 <Lock size={14} className={themeColorClass} />
@@ -465,6 +544,29 @@ export const FileExplorer = ({ mobileOpen, setMobileOpen, desktopOpen }: FileExp
               </div>
             </div>
           )}
+
+          {/* BRIGHTNESS CONTROL - Always visible */}
+          <div className="mt-6 mb-4 border border-zinc-900 bg-black/40">
+            <div className="flex items-center gap-2 px-3 py-2 border-b border-zinc-900 text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">
+              <Sun size={14} className={themeColorClass} />
+              <span>DISPLAY</span>
+            </div>
+            <div className="px-3 py-3">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[9px] text-zinc-600 uppercase">Dark</span>
+                <span className="text-xs text-zinc-400 font-bold">{bgBrightness}%</span>
+                <span className="text-[9px] text-zinc-600 uppercase">Light</span>
+              </div>
+              <input
+                type="range"
+                min="0"
+                max="50"
+                value={bgBrightness}
+                onChange={(e) => updateBrightness(parseInt(e.target.value))}
+                className={`w-full h-1.5 cursor-pointer accent-current ${themeColorClass}`}
+              />
+            </div>
+          </div>
         </div>
       </div>
     );

@@ -5,12 +5,18 @@ import {
   Play, Pause, RotateCcw,
   Youtube, Settings,
   ExternalLink, Plus, X, Sparkles, Layers, Clock,
-  Volume2, VolumeX, SkipForward
+  Volume2, VolumeX, SkipForward, CheckSquare, Square, Trash2, ListTodo
 } from "lucide-react";
 
 interface QuickLink {
   name: string;
   url: string;
+}
+
+interface SessionTask {
+  id: string;
+  text: string;
+  completed: boolean;
 }
 
 export default function FocusPage() {
@@ -74,10 +80,16 @@ export default function FocusPage() {
   const [newLinkName, setNewLinkName] = useState("");
   const [newLinkUrl, setNewLinkUrl] = useState("");
 
+  // Session tasks state (not persisted - clears on refresh)
+  const [sessionTasks, setSessionTasks] = useState<SessionTask[]>([]);
+  const [newTaskText, setNewTaskText] = useState("");
+  const [showAddTask, setShowAddTask] = useState(false);
+
   // Widget visibility
   const [showWidgets, setShowWidgets] = useState(true);
   const [showStats, setShowStats] = useState(true);
   const [showLinks, setShowLinks] = useState(true);
+  const [showSessionTasks, setShowSessionTasks] = useState(true);
 
   // Fun state
   const [showCelebration, setShowCelebration] = useState(false);
@@ -276,6 +288,33 @@ export default function FocusPage() {
     const newLinks = links.filter((_, i) => i !== index);
     setLinks(newLinks);
     localStorage.setItem("focus_quick_links", JSON.stringify(newLinks));
+  };
+
+  // Session task functions
+  const addSessionTask = () => {
+    if (!newTaskText.trim()) return;
+    const newTask: SessionTask = {
+      id: Date.now().toString(),
+      text: newTaskText.trim(),
+      completed: false
+    };
+    setSessionTasks([...sessionTasks, newTask]);
+    setNewTaskText("");
+    setShowAddTask(false);
+  };
+
+  const toggleSessionTask = (id: string) => {
+    setSessionTasks(sessionTasks.map(task =>
+      task.id === id ? { ...task, completed: !task.completed } : task
+    ));
+  };
+
+  const removeSessionTask = (id: string) => {
+    setSessionTasks(sessionTasks.filter(task => task.id !== id));
+  };
+
+  const clearSessionTasks = () => {
+    setSessionTasks([]);
   };
 
   const progress = mode === "work"
@@ -644,6 +683,10 @@ export default function FocusPage() {
                   <input type="checkbox" checked={showLinks} onChange={(e) => setShowLinks(e.target.checked)} className="accent-purple-500" />
                   <span className="text-sm text-zinc-400">Show Quick Links</span>
                 </label>
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input type="checkbox" checked={showSessionTasks} onChange={(e) => setShowSessionTasks(e.target.checked)} className="accent-purple-500" />
+                  <span className="text-sm text-zinc-400">Show Session Tasks</span>
+                </label>
               </div>
 
               <button
@@ -717,7 +760,7 @@ export default function FocusPage() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 20 }}
-              className="w-full max-w-3xl grid md:grid-cols-2 gap-4"
+              className="w-full max-w-4xl grid md:grid-cols-3 gap-4"
             >
               {/* STATS */}
               {showStats && (
@@ -788,6 +831,80 @@ export default function FocusPage() {
                     ))}
                     {links.length === 0 && !showAddLink && (
                       <div className="text-center py-3 text-zinc-700 text-[10px]">No links yet</div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* SESSION TASKS */}
+              {showSessionTasks && (
+                <div className="p-5 border border-zinc-800/50 bg-black/40 backdrop-blur-md">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <ListTodo size={16} className="text-purple-400" />
+                      <span className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">Session Tasks</span>
+                      {sessionTasks.length > 0 && (
+                        <span className="text-[9px] px-1.5 py-0.5 bg-purple-500/20 text-purple-400 rounded">
+                          {sessionTasks.filter(t => t.completed).length}/{sessionTasks.length}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {sessionTasks.length > 0 && (
+                        <button onClick={clearSessionTasks} className="text-zinc-600 hover:text-red-400" title="Clear all">
+                          <Trash2 size={12} />
+                        </button>
+                      )}
+                      <button onClick={() => setShowAddTask(!showAddTask)} className="text-zinc-600 hover:text-purple-400">
+                        <Plus size={14} />
+                      </button>
+                    </div>
+                  </div>
+
+                  {showAddTask && (
+                    <div className="mb-3 p-3 border border-zinc-800/50 bg-black/30">
+                      <input
+                        type="text"
+                        placeholder="What needs to be done?"
+                        value={newTaskText}
+                        onChange={(e) => setNewTaskText(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && addSessionTask()}
+                        className="w-full bg-transparent border-b border-zinc-800 px-0 py-1 text-xs text-white outline-none focus:border-purple-500 mb-2"
+                        autoFocus
+                      />
+                      <button onClick={addSessionTask} className="w-full py-2 bg-purple-500/10 text-purple-400 text-[9px] font-black uppercase">
+                        Add Task
+                      </button>
+                    </div>
+                  )}
+
+                  <div className="space-y-2 max-h-32 overflow-y-auto">
+                    {sessionTasks.map((task) => (
+                      <div key={task.id} className="group flex items-center gap-2 p-2 border border-zinc-800/50 bg-black/30 hover:border-purple-500/30">
+                        <button
+                          onClick={() => toggleSessionTask(task.id)}
+                          className="flex-shrink-0 w-4 h-4 rounded-sm border-2 flex items-center justify-center transition-all"
+                          style={{
+                            borderColor: task.completed ? "#a855f7" : "#52525b",
+                            backgroundColor: task.completed ? "#a855f7" : "transparent"
+                          }}
+                        >
+                          {task.completed && (
+                            <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                              <path d="M2 5L4 7L8 3" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                            </svg>
+                          )}
+                        </button>
+                        <span className={`flex-1 text-xs truncate ${task.completed ? "text-zinc-600 line-through" : "text-zinc-300"}`}>
+                          {task.text}
+                        </span>
+                        <button onClick={() => removeSessionTask(task.id)} className="opacity-0 group-hover:opacity-100 text-zinc-600 hover:text-red-400">
+                          <X size={12} />
+                        </button>
+                      </div>
+                    ))}
+                    {sessionTasks.length === 0 && !showAddTask && (
+                      <div className="text-center py-3 text-zinc-700 text-[10px]">No tasks for this session</div>
                     )}
                   </div>
                 </div>
