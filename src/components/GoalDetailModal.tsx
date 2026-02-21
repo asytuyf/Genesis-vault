@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { X, Plus, Tag, Clock, Activity } from "lucide-react";
+import { X, Plus, Tag, Clock, Activity, Timer, AlertTriangle } from "lucide-react";
 
 interface SubGoal {
   id: string;
@@ -15,8 +15,32 @@ interface Goal {
   project: string;
   priority: string;
   date: string;
+  deadline?: string;
   subgoals?: SubGoal[];
 }
+
+const formatCountdown = (deadline: string): { text: string; urgent: boolean; overdue: boolean } => {
+  const now = new Date().getTime();
+  const target = new Date(deadline).getTime();
+  const diff = target - now;
+
+  if (diff < 0) {
+    const absDiff = Math.abs(diff);
+    const days = Math.floor(absDiff / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((absDiff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    if (days > 0) return { text: `${days}d ${hours}h overdue`, urgent: true, overdue: true };
+    if (hours > 0) return { text: `${hours}h overdue`, urgent: true, overdue: true };
+    return { text: "Just passed", urgent: true, overdue: true };
+  }
+
+  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+  const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+  const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+
+  if (days > 0) return { text: `${days}d ${hours}h`, urgent: days < 2, overdue: false };
+  if (hours > 0) return { text: `${hours}h ${minutes}m`, urgent: hours < 6, overdue: false };
+  return { text: `${minutes}m`, urgent: true, overdue: false };
+};
 
 interface GoalDetailModalProps {
   goal: Goal;
@@ -30,6 +54,8 @@ export const GoalDetailModal = ({ goal, isAdmin, password, onClose, onUpdate }: 
   const [subgoals, setSubgoals] = useState<SubGoal[]>(goal.subgoals || []);
   const [newSubgoal, setNewSubgoal] = useState("");
   const [saving, setSaving] = useState(false);
+  const [deadline, setDeadline] = useState(goal.deadline || "");
+  const [showDeadlineInput, setShowDeadlineInput] = useState(false);
 
   const toggleSubgoal = (id: string) => {
     if (!isAdmin) return;
@@ -56,7 +82,14 @@ export const GoalDetailModal = ({ goal, isAdmin, password, onClose, onUpdate }: 
 
   const saveChanges = async () => {
     setSaving(true);
-    const updatedGoal = { ...goal, subgoals };
+    const updatedGoal = {
+      ...goal,
+      subgoals,
+      ...(deadline ? { deadline } : {}),
+      ...(!deadline && goal.deadline ? { deadline: undefined } : {}),
+    };
+    // Clean up undefined deadline
+    if (!deadline) delete updatedGoal.deadline;
     await onUpdate(updatedGoal);
     setSaving(false);
     onClose();
@@ -109,6 +142,87 @@ export const GoalDetailModal = ({ goal, isAdmin, password, onClose, onUpdate }: 
           <h2 className="text-xl font-bold uppercase tracking-tight text-white leading-tight">
             {goal.task}
           </h2>
+
+          {/* Deadline display/edit */}
+          {(deadline || showDeadlineInput) && (
+            <div className="mt-4">
+              {deadline && !showDeadlineInput && (
+                <div
+                  className={`flex items-center justify-between p-3 border rounded ${
+                    (() => {
+                      const cd = formatCountdown(deadline);
+                      return cd.overdue
+                        ? "bg-red-500/10 border-red-500/30"
+                        : cd.urgent
+                          ? "bg-yellow-500/10 border-yellow-500/30"
+                          : "bg-zinc-900 border-zinc-800";
+                    })()
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    {formatCountdown(deadline).overdue ? (
+                      <AlertTriangle size={16} className="text-red-400" />
+                    ) : (
+                      <Timer size={16} className={formatCountdown(deadline).urgent ? "text-yellow-400" : "text-emerald-400"} />
+                    )}
+                    <span className={`text-sm font-bold ${
+                      formatCountdown(deadline).overdue
+                        ? "text-red-400"
+                        : formatCountdown(deadline).urgent
+                          ? "text-yellow-400"
+                          : "text-emerald-400"
+                    }`}>
+                      {formatCountdown(deadline).text}
+                    </span>
+                    <span className="text-[10px] text-zinc-600 uppercase">
+                      {formatCountdown(deadline).overdue ? "overdue" : "remaining"}
+                    </span>
+                  </div>
+                  {isAdmin && (
+                    <button
+                      onClick={() => setShowDeadlineInput(true)}
+                      className="text-[10px] text-zinc-600 hover:text-emerald-400 uppercase font-bold"
+                    >
+                      Edit
+                    </button>
+                  )}
+                </div>
+              )}
+              {showDeadlineInput && isAdmin && (
+                <div className="flex gap-2">
+                  <input
+                    type="datetime-local"
+                    value={deadline}
+                    onChange={(e) => setDeadline(e.target.value)}
+                    className="flex-1 bg-black border border-zinc-800 px-3 py-2 text-sm outline-none focus:border-emerald-500/50 text-zinc-300"
+                  />
+                  <button
+                    onClick={() => setShowDeadlineInput(false)}
+                    className="px-3 py-2 bg-zinc-900 border border-zinc-800 text-zinc-600 hover:text-emerald-400 text-xs font-bold uppercase"
+                  >
+                    Done
+                  </button>
+                  <button
+                    onClick={() => { setDeadline(""); setShowDeadlineInput(false); }}
+                    className="px-3 py-2 bg-zinc-900 border border-zinc-800 text-zinc-600 hover:text-red-400 text-xs font-bold uppercase"
+                  >
+                    Clear
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Add deadline button if none set */}
+          {!deadline && !showDeadlineInput && isAdmin && (
+            <button
+              onClick={() => setShowDeadlineInput(true)}
+              className="mt-3 flex items-center gap-2 text-[10px] text-zinc-600 hover:text-emerald-400 uppercase font-bold transition-colors"
+            >
+              <Timer size={12} />
+              Add deadline
+            </button>
+          )}
 
           {/* Progress bar */}
           {subgoals.length > 0 && (

@@ -1,8 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import Link from "next/link";
-import { Search, ChevronLeft, Tag, Clock, Activity, Hash, Box, Trash2, Plus, Terminal, ListChecks } from "lucide-react";
+import { Search, Tag, Clock, Activity, Hash, Box, Trash2, Plus, Terminal, ListChecks, Timer } from "lucide-react";
 import { AddGoalForm } from "@/components/AddGoalForm";
 import { GoalDetailModal } from "@/components/GoalDetailModal";
 
@@ -18,8 +17,33 @@ interface Goal {
   project: string;
   priority: string;
   date: string;
+  deadline?: string;
   subgoals?: SubGoal[];
 }
+
+// Helper to format countdown
+const formatCountdown = (deadline: string): { text: string; urgent: boolean; overdue: boolean } => {
+  const now = new Date().getTime();
+  const target = new Date(deadline).getTime();
+  const diff = target - now;
+
+  if (diff < 0) {
+    const absDiff = Math.abs(diff);
+    const days = Math.floor(absDiff / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((absDiff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    if (days > 0) return { text: `${days}d ${hours}h overdue`, urgent: true, overdue: true };
+    if (hours > 0) return { text: `${hours}h overdue`, urgent: true, overdue: true };
+    return { text: "Just passed", urgent: true, overdue: true };
+  }
+
+  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+  const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+  const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+
+  if (days > 0) return { text: `${days}d ${hours}h`, urgent: days < 2, overdue: false };
+  if (hours > 0) return { text: `${hours}h ${minutes}m`, urgent: hours < 6, overdue: false };
+  return { text: `${minutes}m`, urgent: true, overdue: false };
+};
 
 export default function DirectiveLog() {
   const [goals, setGoals] = useState<Goal[]>([]);
@@ -30,6 +54,13 @@ export default function DirectiveLog() {
   const [loadingAction, setLoadingAction] = useState(false);
   const [isAddGoalModalOpen, setIsAddGoalModalOpen] = useState(false);
   const [selectedGoal, setSelectedGoal] = useState<Goal | null>(null);
+  const [, forceUpdate] = useState(0); // For countdown refresh
+
+  // Refresh countdowns every minute
+  useEffect(() => {
+    const interval = setInterval(() => forceUpdate(n => n + 1), 60000);
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     // Fetch from GitHub raw to get the live data (same source we save to)
@@ -88,8 +119,8 @@ export default function DirectiveLog() {
     window.localStorage.setItem("goals_admin_mode", isAdmin ? "1" : "0");
   }, [isAdmin]);
 
-  const filtered = goals.filter(g => 
-    g.task?.toLowerCase().includes(search.toLowerCase()) || 
+  const filtered = goals.filter(g =>
+    g.task?.toLowerCase().includes(search.toLowerCase()) ||
     g.project?.toLowerCase().includes(search.toLowerCase())
   );
 
@@ -131,7 +162,7 @@ export default function DirectiveLog() {
   return (
     <main className="relative min-h-screen bg-[#0d0d0d] text-[#f4f4f5] font-mono overflow-hidden p-12 md:p-24">
       <div className="tv-static fixed inset-0 opacity-[0.03] pointer-events-none" />
-      
+
       {/* HAZARD BARS */}
       <div className="fixed inset-x-0 top-0 h-[28px] bg-emerald-500 z-[150] flex items-center overflow-hidden border-b-2 border-black">
         <motion.div animate={{ x: [0, -1000] }} transition={{ repeat: Infinity, duration: 20, ease: "linear" }} className="flex whitespace-nowrap text-[12px] font-black text-black tracking-[2em]">
@@ -145,8 +176,6 @@ export default function DirectiveLog() {
       </div>
 
       <header className="relative z-10 mb-20 py-10">
-
-        
         <div className="flex flex-col mb-10 select-none">
           <h1 className="text-5xl md:text-8xl font-black tracking-tighter text-white leading-[0.85] md:leading-[0.8]">
             TASK
@@ -166,149 +195,69 @@ export default function DirectiveLog() {
             <span>Tap the top-left menu to open file explorer</span>
           </div>
         </div>
-                        <div className="relative max-w-md">
 
-                          <input
+        <div className="relative max-w-md">
+          <input
+            type="text"
+            placeholder="grep -i 'goals log'..."
+            className="w-full bg-transparent border-b-2 border-zinc-900 px-0 py-2 text-sm font-black outline-none focus:border-emerald-400 transition-all uppercase placeholder:text-zinc-800 text-emerald-400"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
 
-                            type="text"
+        <div className="flex flex-wrap items-center gap-4 mt-6">
+          {isAdmin && (
+            <button
+              onClick={() => setIsAddGoalModalOpen(true)}
+              className="flex items-center gap-2 bg-emerald-700/30 text-emerald-400 px-5 py-2.5 text-base font-bold uppercase border border-emerald-500/30 hover:bg-emerald-700/50 transition-colors"
+            >
+              <Plus size={20} /> ADD NEW GOAL
+            </button>
+          )}
+        </div>
+      </header>
 
-                            placeholder="grep -i 'goals log'..."
+      <AnimatePresence>
+        {isAddGoalModalOpen && isAdmin && (
+          <AddGoalForm
+            password={password}
+            setGoals={setGoals}
+            currentGoals={goals}
+            setLoadingAction={setLoadingAction}
+            loadingAction={loadingAction}
+            onClose={() => setIsAddGoalModalOpen(false)}
+          />
+        )}
+      </AnimatePresence>
 
-                            className="w-full bg-transparent border-b-2 border-zinc-900 px-0 py-2 text-sm font-black outline-none focus:border-emerald-400 transition-all uppercase placeholder:text-zinc-800 text-emerald-400"
+      {/* Goal Detail Modal */}
+      <AnimatePresence>
+        {selectedGoal && (
+          <GoalDetailModal
+            goal={selectedGoal}
+            isAdmin={isAdmin}
+            password={password}
+            onClose={() => setSelectedGoal(null)}
+            onUpdate={updateGoal}
+          />
+        )}
+      </AnimatePresence>
 
-                            value={search}
-
-                            onChange={(e) => setSearch(e.target.value)}
-
-                          />
-
-                        </div>
-
-                
-
-                                                                <div className="flex flex-wrap items-center gap-4 mt-6"> {/* Increased gap */}
-                                                                  {isAdmin && (
-
-                
-
-                                                                      <button
-
-                
-
-                                                                          onClick={() => setIsAddGoalModalOpen(true)}
-
-                
-
-                                                                          className="flex items-center gap-2 bg-emerald-700/30 text-emerald-400 px-5 py-2.5 text-base font-bold uppercase border border-emerald-500/30 hover:bg-emerald-700/50 transition-colors mt-0 md:mt-0" /* Larger button, text, padding */
-
-                
-
-                                                                      >
-
-                
-
-                                                                          <Plus size={20} /> ADD NEW GOAL
-
-                
-
-                                                                      </button>
-
-                
-
-                                                                  )}
-
-                
-
-                                                                </div>
-
-                
-
-                                                    </header>
-
-                
-
-                                              
-
-                
-
-                                                    <AnimatePresence>
-
-                
-
-                                                      {isAddGoalModalOpen && isAdmin && (
-
-                
-
-                                                        <AddGoalForm
-
-                
-
-                                                          password={password}
-
-                
-
-                                                          setGoals={setGoals}
-
-                
-
-                                                          currentGoals={goals}
-
-                
-
-                                                          setLoadingAction={setLoadingAction}
-
-                
-
-                                                          loadingAction={loadingAction}
-
-                
-
-                                                          onClose={() => setIsAddGoalModalOpen(false)}
-
-                
-
-                                                        />
-
-                
-
-                                                      )}
-
-                
-
-                                                    </AnimatePresence>
-
-                                                    {/* Goal Detail Modal */}
-                                                    <AnimatePresence>
-                                                      {selectedGoal && (
-                                                        <GoalDetailModal
-                                                          goal={selectedGoal}
-                                                          isAdmin={isAdmin}
-                                                          password={password}
-                                                          onClose={() => setSelectedGoal(null)}
-                                                          onUpdate={updateGoal}
-                                                        />
-                                                      )}
-                                                    </AnimatePresence>
-
-
-
-                                                    
-
-                
-
-                                                    <div className="relative z-10 grid gap-6 md:grid-cols-2 lg:grid-cols-3 pb-20">
+      {/* TASKS GRID */}
+      <div className="relative z-10 grid gap-6 md:grid-cols-2 lg:grid-cols-3 pb-20">
         {loading ? (
-            <div className="col-span-full py-20 text-zinc-800 uppercase font-black text-2xl animate-pulse text-center">
-                Accessing Manifest...
-            </div>
+          <div className="col-span-full py-20 text-zinc-800 uppercase font-black text-2xl animate-pulse text-center">
+            Accessing Manifest...
+          </div>
         ) : filtered.length === 0 ? (
-            <div className="col-span-full py-20 text-zinc-800 uppercase font-black text-xl text-center border border-dashed border-zinc-900">
-                Zero_Directives_Found
-            </div>
+          <div className="col-span-full py-20 text-zinc-800 uppercase font-black text-xl text-center border border-dashed border-zinc-900">
+            Zero_Directives_Found
+          </div>
         ) : (
           <AnimatePresence mode="popLayout">
-          {filtered.map((g, i) => (
-            <motion.div
+            {filtered.map((g) => (
+              <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.8, transition: { duration: 0.3 } }}
@@ -316,72 +265,86 @@ export default function DirectiveLog() {
                 key={g.id}
                 onClick={() => setSelectedGoal(g)}
                 className="group bg-[#0a0a0a] border border-zinc-800 p-8 hover:border-emerald-500 transition-all shadow-xl relative overflow-hidden cursor-pointer"
-            >
-              {/* NUKE BUTTON (Visible only when unlocked) */}
-              {isAdmin && (
+              >
+                {isAdmin && (
                   <button
-                      onClick={(e) => { e.stopPropagation(); nukeGoal(g.id); }}
-                      className="absolute top-4 right-4 text-zinc-800 hover:text-red-500 transition-none z-20"
-                      disabled={loadingAction}
+                    onClick={(e) => { e.stopPropagation(); nukeGoal(g.id); }}
+                    className="absolute top-4 right-4 text-zinc-800 hover:text-red-500 transition-none z-20"
+                    disabled={loadingAction}
                   >
-                      <Trash2 size={18} />
+                    <Trash2 size={18} />
                   </button>
-              )}
-              {/* DECORATIVE CORNER */}
-              <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-100 transition-opacity">
-                <Hash size={12} className="text-emerald-500" />
-              </div>
+                )}
+                <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-100 transition-opacity">
+                  <Hash size={12} className="text-emerald-500" />
+                </div>
 
-              <div className="flex flex-wrap items-start gap-2 mb-8">
-                <div className="inline-flex flex-none items-center gap-2 px-2 py-0.5 bg-zinc-900 border border-zinc-800 rounded text-zinc-500 text-[10px] font-black uppercase tracking-widest group-hover:border-emerald-500/30 group-hover:text-emerald-500 transition-colors w-fit max-w-full">
+                <div className="flex flex-wrap items-start gap-2 mb-8">
+                  <div className="inline-flex flex-none items-center gap-2 px-2 py-0.5 bg-zinc-900 border border-zinc-800 rounded text-zinc-500 text-[10px] font-black uppercase tracking-widest group-hover:border-emerald-500/30 group-hover:text-emerald-500 transition-colors w-fit max-w-full">
                     <Tag size={10} />
                     <span className="whitespace-normal break-words">{g.project}</span>
-                </div>
-                <div className="flex items-center gap-2 text-zinc-700 text-[10px] font-bold whitespace-nowrap ml-auto">
+                  </div>
+                  <div className="flex items-center gap-2 text-zinc-700 text-[10px] font-bold whitespace-nowrap ml-auto">
                     <Clock size={12} /> {g.date}
+                  </div>
                 </div>
-              </div>
 
-              <div className="mb-8">
-                <h3 className="text-xl md:text-2xl font-bold uppercase tracking-tight text-zinc-100 group-hover:text-white transition-colors leading-tight break-words">
+                <div className="mb-8">
+                  <h3 className="text-xl md:text-2xl font-bold uppercase tracking-tight text-zinc-100 group-hover:text-white transition-colors leading-tight break-words">
                     {g.task}
-                </h3>
-              </div>
-
-              {/* Subgoals progress indicator */}
-              {g.subgoals && g.subgoals.length > 0 && (
-                <div className="mb-6">
-                  <div className="flex items-center justify-between text-[10px] font-bold uppercase mb-2">
-                    <span className="flex items-center gap-1.5 text-zinc-600">
-                      <ListChecks size={12} />
-                      Sub-tasks
-                    </span>
-                    <span className={g.subgoals.filter((s: SubGoal) => s.completed).length === g.subgoals.length ? 'text-emerald-400' : 'text-zinc-600'}>
-                      {g.subgoals.filter((s: SubGoal) => s.completed).length}/{g.subgoals.length}
-                    </span>
-                  </div>
-                  <div className="h-1 bg-zinc-900 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-emerald-500 transition-all duration-300"
-                      style={{ width: `${(g.subgoals.filter((s: SubGoal) => s.completed).length / g.subgoals.length) * 100}%` }}
-                    />
-                  </div>
+                  </h3>
                 </div>
-              )}
 
-              <div className="flex justify-between items-center border-t border-zinc-900 pt-6">
-                <div className={`flex items-center gap-2 px-3 py-1 rounded text-[10px] font-black uppercase tracking-wider border ${
+                {/* Deadline countdown if set */}
+                {g.deadline && (
+                  <div className="mb-6">
+                    {(() => {
+                      const countdown = formatCountdown(g.deadline);
+                      return (
+                        <div className={`flex items-center gap-2 text-xs font-bold ${
+                          countdown.overdue ? "text-red-400" : countdown.urgent ? "text-yellow-400" : "text-zinc-500"
+                        }`}>
+                          <Timer size={14} />
+                          <span>{countdown.text}</span>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
+
+                {g.subgoals && g.subgoals.length > 0 && (
+                  <div className="mb-6">
+                    <div className="flex items-center justify-between text-[10px] font-bold uppercase mb-2">
+                      <span className="flex items-center gap-1.5 text-zinc-600">
+                        <ListChecks size={12} />
+                        Sub-tasks
+                      </span>
+                      <span className={g.subgoals.filter((s: SubGoal) => s.completed).length === g.subgoals.length ? 'text-emerald-400' : 'text-zinc-600'}>
+                        {g.subgoals.filter((s: SubGoal) => s.completed).length}/{g.subgoals.length}
+                      </span>
+                    </div>
+                    <div className="h-1 bg-zinc-900 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-emerald-500 transition-all duration-300"
+                        style={{ width: `${(g.subgoals.filter((s: SubGoal) => s.completed).length / g.subgoals.length) * 100}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex justify-between items-center border-t border-zinc-900 pt-6">
+                  <div className={`flex items-center gap-2 px-3 py-1 rounded text-[10px] font-black uppercase tracking-wider border ${
                     g.priority === 'High'
-                    ? 'bg-red-500/10 text-red-500 border-red-500/20'
-                    : 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
-                }`}>
+                      ? 'bg-red-500/10 text-red-500 border-red-500/20'
+                      : 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
+                  }`}>
                     <Activity size={10} />
                     Lvl_{g.priority}
+                  </div>
+                  <span className="text-[10px] text-zinc-800 font-mono">REF_{g.id}</span>
                 </div>
-                <span className="text-[10px] text-zinc-800 font-mono">REF_{g.id}</span>
-              </div>
-            </motion.div>
-          ))}
+              </motion.div>
+            ))}
           </AnimatePresence>
         )}
       </div>

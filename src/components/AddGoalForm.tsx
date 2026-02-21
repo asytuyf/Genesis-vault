@@ -16,6 +16,7 @@ interface Goal {
   project: string;
   priority: string;
   date: string;
+  deadline?: string; // ISO datetime for countdown (optional)
   subgoals?: SubGoal[];
 }
 
@@ -31,7 +32,8 @@ interface AddGoalFormProps {
 export const AddGoalForm = ({ password, setGoals, currentGoals, setLoadingAction, loadingAction, onClose }: AddGoalFormProps) => {
   const [task, setTask] = useState("");
   const [project, setProject] = useState("");
-  const [priority, setPriority] = useState("Low"); // Default priority for new goals
+  const [priority, setPriority] = useState("Low");
+  const [deadline, setDeadline] = useState(""); // Optional deadline datetime
 
   const handleAddGoal = async () => {
     if (!task.trim()) {
@@ -50,6 +52,7 @@ export const AddGoalForm = ({ password, setGoals, currentGoals, setLoadingAction
       project: project.trim() || "GLOBAL",
       priority: priority,
       date: dateStr,
+      ...(deadline && { deadline }), // Only include if set
     };
 
     // currentGoals is displayed reversed (newest first), so reverse back for storage (oldest first)
@@ -67,6 +70,7 @@ export const AddGoalForm = ({ password, setGoals, currentGoals, setLoadingAction
       setTask("");
       setProject("");
       setPriority("Low");
+      setDeadline("");
       onClose();
     }
     setLoadingAction(false);
@@ -114,6 +118,17 @@ export const AddGoalForm = ({ password, setGoals, currentGoals, setLoadingAction
                 <option value="Medium" className="bg-zinc-800 text-zinc-300">Medium Priority</option>
                 <option value="High" className="bg-zinc-800 text-zinc-300">High Priority</option>
             </select>
+            <div>
+                <label className="block text-[10px] font-black uppercase tracking-wider text-zinc-600 mb-2">
+                  Deadline (optional)
+                </label>
+                <input
+                    type="datetime-local"
+                    className="w-full bg-black border border-zinc-800 px-4 py-2.5 text-base outline-none focus:border-emerald-400 text-zinc-300"
+                    value={deadline}
+                    onChange={(e) => setDeadline(e.target.value)}
+                />
+            </div>
             <button
                 onClick={handleAddGoal}
                 className="flex items-center justify-center gap-2 bg-emerald-700/30 text-emerald-400 px-4 py-2.5 text-base font-bold uppercase border border-emerald-500/30 hover:bg-emerald-700/50 transition-colors"
