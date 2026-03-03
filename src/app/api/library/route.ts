@@ -6,30 +6,30 @@ const redis = new Redis({
   token: process.env.UPSTASH_REDIS_REST_TOKEN!,
 });
 
-const GOALS_KEY = 'goals';
+const LIBRARY_KEY = 'library';
 
 export async function GET() {
   try {
-    const goals = await redis.get(GOALS_KEY);
-    return NextResponse.json(goals || []);
+    const tutorials = await redis.get(LIBRARY_KEY);
+    return NextResponse.json(tutorials || []);
   } catch (err) {
-    console.error("Failed to fetch goals:", err);
+    console.error("Failed to fetch library:", err);
     return NextResponse.json([], { status: 500 });
   }
 }
 
 export async function POST(req: Request) {
   try {
-    const { password, updatedGoals } = await req.json();
+    const { password, updatedTutorials } = await req.json();
 
     if (password !== "genesis2026") {
       return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
     }
 
-    await redis.set(GOALS_KEY, updatedGoals);
+    await redis.set(LIBRARY_KEY, updatedTutorials);
     return NextResponse.json({ success: true });
   } catch (err) {
-    console.error("Failed to save goals:", err);
+    console.error("Failed to save library:", err);
     return NextResponse.json({ error: "FAILED" }, { status: 500 });
   }
 }

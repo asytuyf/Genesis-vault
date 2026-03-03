@@ -149,7 +149,7 @@ export default function FocusPage() {
   const fetchGoals = async () => {
     setLoadingGoals(true);
     try {
-      const res = await fetch(`https://raw.githubusercontent.com/Asytuyf/nixos-config/main/public/goals.json?t=${Date.now()}`);
+      const res = await fetch("/api/goals");
       const data = await res.json();
       if (Array.isArray(data)) {
         setGoals(data);
@@ -335,35 +335,43 @@ export default function FocusPage() {
     return { videoId: vid, playlistId: pid };
   };
 
-  // Load saved data
+  // Load settings from API
   useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        const res = await fetch("/api/settings");
+        if (res.ok) {
+          const data = await res.json();
+          if (data.focusWorkDuration) {
+            setWorkDuration(data.focusWorkDuration);
+            setTimeLeft(data.focusWorkDuration * 60);
+          }
+          if (data.focusBreakDuration) setBreakDuration(data.focusBreakDuration);
+          if (data.focusYoutubeUrl) {
+            setYoutubeUrl(data.focusYoutubeUrl);
+            const { videoId: vid, playlistId: pid } = extractYoutubeIds(data.focusYoutubeUrl);
+            setVideoId(vid);
+            setPlaylistId(pid);
+          }
+          if (data.focusQuickLinks) setLinks(data.focusQuickLinks);
+        }
+      } catch (e) {
+        console.error("Failed to load settings:", e);
+      }
+    };
+    loadSettings();
+
+    // Load daily session stats from localStorage (device-specific, resets daily)
     if (typeof window !== "undefined") {
       const savedSessions = localStorage.getItem("focus_sessions_today");
       const savedMinutes = localStorage.getItem("focus_minutes_today");
       const savedDate = localStorage.getItem("focus_sessions_date");
-      const savedWork = localStorage.getItem("focus_work_duration");
-      const savedBreak = localStorage.getItem("focus_break_duration");
-      const savedYoutube = localStorage.getItem("focus_youtube_url");
-      const savedLinks = localStorage.getItem("focus_quick_links");
 
       const today = new Date().toDateString();
       if (savedDate === today) {
         if (savedSessions) setSessions(parseInt(savedSessions));
         if (savedMinutes) setTotalMinutes(parseInt(savedMinutes));
       }
-
-      if (savedWork) {
-        setWorkDuration(parseInt(savedWork));
-        setTimeLeft(parseInt(savedWork) * 60);
-      }
-      if (savedBreak) setBreakDuration(parseInt(savedBreak));
-      if (savedYoutube) {
-        setYoutubeUrl(savedYoutube);
-        const { videoId: vid, playlistId: pid } = extractYoutubeIds(savedYoutube);
-        setVideoId(vid);
-        setPlaylistId(pid);
-      }
-      if (savedLinks) setLinks(JSON.parse(savedLinks));
     }
   }, []);
 
@@ -419,27 +427,41 @@ export default function FocusPage() {
     setTimeLeft(mode === "work" ? workDuration * 60 : breakDuration * 60);
   };
 
+  // Helper to save settings to API
+  const saveToAPI = async (settings: Record<string, unknown>) => {
+    if (isAdmin && password) {
+      try {
+        await fetch("/api/settings", {
+          method: "POST",
+          body: JSON.stringify({ password, settings }),
+        });
+      } catch (e) {
+        console.error("Failed to save settings:", e);
+      }
+    }
+  };
+
   const handleYoutubeSubmit = () => {
     const { videoId: vid, playlistId: pid } = extractYoutubeIds(youtubeUrl);
     setVideoId(vid);
     setPlaylistId(pid);
     if (vid || pid) {
-      localStorage.setItem("focus_youtube_url", youtubeUrl);
+      saveToAPI({ focusYoutubeUrl: youtubeUrl });
     }
     setShowYoutubeInput(false);
   };
 
   const loadPresetPlaylist = (id: string) => {
+    const url = `https://youtube.com/playlist?list=${id}`;
     setPlaylistId(id);
     setVideoId("");
-    setYoutubeUrl(`https://youtube.com/playlist?list=${id}`);
-    localStorage.setItem("focus_youtube_url", `https://youtube.com/playlist?list=${id}`);
+    setYoutubeUrl(url);
+    saveToAPI({ focusYoutubeUrl: url });
     setShowYoutubeInput(false);
   };
 
   const saveSettings = () => {
-    localStorage.setItem("focus_work_duration", String(workDuration));
-    localStorage.setItem("focus_break_duration", String(breakDuration));
+    saveToAPI({ focusWorkDuration: workDuration, focusBreakDuration: breakDuration });
     if (!isRunning) {
       setTimeLeft(mode === "work" ? workDuration * 60 : breakDuration * 60);
     }
@@ -453,7 +475,7 @@ export default function FocusPage() {
       url: newLinkUrl.startsWith("http") ? newLinkUrl : `https://${newLinkUrl}`
     }];
     setLinks(newLinks);
-    localStorage.setItem("focus_quick_links", JSON.stringify(newLinks));
+    saveToAPI({ focusQuickLinks: newLinks });
     setNewLinkName("");
     setNewLinkUrl("");
     setShowAddLink(false);
@@ -462,7 +484,7 @@ export default function FocusPage() {
   const removeLink = (index: number) => {
     const newLinks = links.filter((_, i) => i !== index);
     setLinks(newLinks);
-    localStorage.setItem("focus_quick_links", JSON.stringify(newLinks));
+    saveToAPI({ focusQuickLinks: newLinks });
   };
 
   // Session task functions
@@ -811,7 +833,7 @@ export default function FocusPage() {
                 </button>
                 {(videoId || playlistId) && (
                   <button
-                    onClick={() => { setVideoId(""); setPlaylistId(""); setYoutubeUrl(""); localStorage.removeItem("focus_youtube_url"); setShowYoutubeInput(false); }}
+                    onClick={() => { setVideoId(""); setPlaylistId(""); setYoutubeUrl(""); saveToAPI({ focusYoutubeUrl: "" }); setShowYoutubeInput(false); }}
                     className="px-6 py-3 border border-red-500/30 text-red-400 text-xs font-black uppercase tracking-wider hover:bg-red-500/10 transition-colors"
                   >
                     Clear

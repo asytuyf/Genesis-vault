@@ -143,18 +143,35 @@ export default function LibraryPage() {
   const [isEditing, setIsEditing] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [adminMode, setAdminMode] = useState(false);
+  const [password, setPassword] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  // Listen for admin mode changes
+  // Listen for admin mode and password changes
   useEffect(() => {
     const checkAdmin = () => {
       const stored = localStorage.getItem("goals_admin_mode");
+      const storedPassword = localStorage.getItem("goals_admin_key") || "";
       setAdminMode(stored === "1");
+      setPassword(storedPassword);
     };
     checkAdmin();
-    window.addEventListener("goals-admin-mode", checkAdmin);
+
+    const keyHandler = (event: Event) => {
+      const detail = (event as CustomEvent<string>).detail;
+      if (typeof detail === "string") setPassword(detail);
+    };
+    const modeHandler = (event: Event) => {
+      const detail = (event as CustomEvent<boolean>).detail;
+      setAdminMode(Boolean(detail));
+    };
+
+    window.addEventListener("goals-admin-mode", modeHandler);
+    window.addEventListener("goals-admin-key", keyHandler);
     window.addEventListener("storage", checkAdmin);
     return () => {
-      window.removeEventListener("goals-admin-mode", checkAdmin);
+      window.removeEventListener("goals-admin-mode", modeHandler);
+      window.removeEventListener("goals-admin-key", keyHandler);
       window.removeEventListener("storage", checkAdmin);
     };
   }, []);
@@ -254,24 +271,42 @@ export default function LibraryPage() {
     e.target.value = ""; // Reset input
   };
 
-  // Load tutorials from localStorage
+  // Load tutorials from API
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("library_tutorials");
-      if (saved) {
-        try {
-          setTutorials(JSON.parse(saved));
-        } catch {
-          setTutorials([]);
+    const fetchTutorials = async () => {
+      setLoading(true);
+      try {
+        const res = await fetch("/api/library");
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data)) {
+            setTutorials(data);
+          }
         }
+      } catch (e) {
+        console.error("Failed to fetch tutorials:", e);
       }
-    }
+      setLoading(false);
+    };
+    fetchTutorials();
   }, []);
 
-  // Save tutorials to localStorage
-  const saveTutorials = (newTutorials: Tutorial[]) => {
+  // Save tutorials to API
+  const saveTutorials = async (newTutorials: Tutorial[]) => {
     setTutorials(newTutorials);
-    localStorage.setItem("library_tutorials", JSON.stringify(newTutorials));
+
+    if (adminMode && password) {
+      setSaving(true);
+      try {
+        await fetch("/api/library", {
+          method: "POST",
+          body: JSON.stringify({ password, updatedTutorials: newTutorials }),
+        });
+      } catch (e) {
+        console.error("Failed to save tutorials:", e);
+      }
+      setSaving(false);
+    }
   };
 
   const filtered = tutorials.filter(t =>

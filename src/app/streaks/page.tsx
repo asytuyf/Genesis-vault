@@ -62,32 +62,66 @@ export default function TrackerPage() {
   const [loadingGithub, setLoadingGithub] = useState(false);
   const [showGithubInput, setShowGithubInput] = useState(false);
   const [adminMode, setAdminMode] = useState(false);
+  const [password, setPassword] = useState("");
+  const [loadingHabits, setLoadingHabits] = useState(true);
+  const [savingHabits, setSavingHabits] = useState(false);
 
-  // Listen for admin mode changes
+  // Listen for admin mode and password changes
   useEffect(() => {
     const checkAdmin = () => {
       const stored = localStorage.getItem("goals_admin_mode");
+      const storedPassword = localStorage.getItem("goals_admin_key") || "";
       setAdminMode(stored === "1");
+      setPassword(storedPassword);
     };
     checkAdmin();
-    window.addEventListener("goals-admin-mode", checkAdmin);
+
+    const keyHandler = (event: Event) => {
+      const detail = (event as CustomEvent<string>).detail;
+      if (typeof detail === "string") setPassword(detail);
+    };
+    const modeHandler = (event: Event) => {
+      const detail = (event as CustomEvent<boolean>).detail;
+      setAdminMode(Boolean(detail));
+    };
+
+    window.addEventListener("goals-admin-mode", modeHandler);
+    window.addEventListener("goals-admin-key", keyHandler);
     window.addEventListener("storage", checkAdmin);
     return () => {
-      window.removeEventListener("goals-admin-mode", checkAdmin);
+      window.removeEventListener("goals-admin-mode", modeHandler);
+      window.removeEventListener("goals-admin-key", keyHandler);
       window.removeEventListener("storage", checkAdmin);
     };
   }, []);
 
-  // Load saved data
+  // Load habits from API (Upstash Redis)
+  useEffect(() => {
+    const fetchHabits = async () => {
+      setLoadingHabits(true);
+      try {
+        const res = await fetch("/api/habits");
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data)) {
+            setHabits(data);
+          }
+        }
+      } catch (e) {
+        console.error("Failed to fetch habits:", e);
+      }
+      setLoadingHabits(false);
+    };
+    fetchHabits();
+  }, []);
+
+  // Load GitHub activity data
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const savedHabits = localStorage.getItem("streaks_habits");
       const savedGithub = localStorage.getItem("streaks_github_username");
       const savedGithubData = localStorage.getItem("streaks_github_data");
       const savedGithubEvents = localStorage.getItem("streaks_github_events");
 
-      if (savedHabits) setHabits(JSON.parse(savedHabits));
-      // Always use "asytuyf" as the default username
       const username = savedGithub || "asytuyf";
       setGithubUsername(username);
       if (savedGithubData) {
@@ -130,9 +164,22 @@ export default function TrackerPage() {
     setLoadingGithub(false);
   };
 
-  const saveHabits = (newHabits: Habit[]) => {
+  const saveHabits = async (newHabits: Habit[]) => {
     setHabits(newHabits);
-    localStorage.setItem("streaks_habits", JSON.stringify(newHabits));
+
+    // Save to database if admin
+    if (adminMode && password) {
+      setSavingHabits(true);
+      try {
+        await fetch("/api/habits", {
+          method: "POST",
+          body: JSON.stringify({ password, updatedHabits: newHabits }),
+        });
+      } catch (e) {
+        console.error("Failed to save habits:", e);
+      }
+      setSavingHabits(false);
+    }
   };
 
   const fetchGithubData = async (username: string) => {
@@ -163,7 +210,7 @@ export default function TrackerPage() {
     setLoadingGithub(false);
   };
 
-  const addHabit = () => {
+  const addHabit = async () => {
     if (!newHabitName.trim()) return;
     const newHabit: Habit = {
       id: Date.now().toString(),
@@ -171,7 +218,7 @@ export default function TrackerPage() {
       color: newHabitColor,
       history: [],
     };
-    saveHabits([...habits, newHabit]);
+    await saveHabits([...habits, newHabit]);
     setNewHabitName("");
     setNewHabitColor("orange");
     setShowAddHabit(false);
@@ -185,11 +232,11 @@ export default function TrackerPage() {
     return type.replace(/Event$/, "").replace(/([A-Z])/g, " $1").trim();
   };
 
-  const removeHabit = (id: string) => {
-    saveHabits(habits.filter((h) => h.id !== id));
+  const removeHabit = async (id: string) => {
+    await saveHabits(habits.filter((h) => h.id !== id));
   };
 
-  const toggleHabitForDate = (habitId: string, date: string) => {
+  const toggleHabitForDate = async (habitId: string, date: string) => {
     const updated = habits.map((h) => {
       if (h.id !== habitId) return h;
       const hasDate = h.history.includes(date);
@@ -198,7 +245,7 @@ export default function TrackerPage() {
         history: hasDate ? h.history.filter((d) => d !== date) : [...h.history, date],
       };
     });
-    saveHabits(updated);
+    await saveHabits(updated);
   };
 
   const getStreak = (habit: Habit) => {
@@ -278,14 +325,26 @@ export default function TrackerPage() {
                 <span className="text-[10px] text-zinc-600">@{githubUsername}</span>
               )}
             </div>
-            {adminMode && (
+            <div className="flex items-center gap-2">
+              {/* Always visible refresh button */}
               <button
-                onClick={() => setShowGithubInput(!showGithubInput)}
-                className="p-2 text-zinc-600 hover:text-orange-400 transition-colors"
+                onClick={() => fetchGithubData(githubUsername)}
+                disabled={loadingGithub}
+                className={`flex items-center gap-2 px-3 py-1.5 border border-zinc-800 text-zinc-500 text-[10px] font-bold uppercase hover:border-orange-500/30 hover:text-orange-400 transition-colors ${loadingGithub ? "opacity-50" : ""}`}
               >
-                {githubUsername ? <RefreshCw size={14} /> : <Plus size={14} />}
+                <RefreshCw size={12} className={loadingGithub ? "animate-spin" : ""} />
+                {loadingGithub ? "..." : "Refresh"}
               </button>
-            )}
+              {adminMode && (
+                <button
+                  onClick={() => setShowGithubInput(!showGithubInput)}
+                  className="p-2 text-zinc-600 hover:text-orange-400 transition-colors"
+                  title="Change username"
+                >
+                  <Plus size={14} />
+                </button>
+              )}
+            </div>
           </div>
 
           {/* GitHub Username Input */}
@@ -454,16 +513,40 @@ export default function TrackerPage() {
             <div className="flex items-center gap-3">
               <Target size={20} className="text-orange-400" />
               <span className="text-xs font-black uppercase tracking-[0.2em] text-zinc-400">Habits</span>
+              {savingHabits && (
+                <span className="text-[10px] text-orange-400 animate-pulse">Syncing...</span>
+              )}
             </div>
-            {adminMode && (
+            <div className="flex items-center gap-2">
+              {/* Refresh habits */}
               <button
-                onClick={() => setShowAddHabit(!showAddHabit)}
-                className="flex items-center gap-2 px-4 py-2 border border-orange-500/30 text-orange-400 text-xs font-black uppercase tracking-wider hover:bg-orange-500/10 transition-colors"
+                onClick={async () => {
+                  setLoadingHabits(true);
+                  try {
+                    const res = await fetch("/api/habits");
+                    if (res.ok) {
+                      const data = await res.json();
+                      if (Array.isArray(data)) setHabits(data);
+                    }
+                  } catch {}
+                  setLoadingHabits(false);
+                }}
+                disabled={loadingHabits}
+                className={`flex items-center gap-2 px-3 py-1.5 border border-zinc-800 text-zinc-500 text-[10px] font-bold uppercase hover:border-orange-500/30 hover:text-orange-400 transition-colors ${loadingHabits ? "opacity-50" : ""}`}
               >
-                <Plus size={14} />
-                Add
+                <RefreshCw size={12} className={loadingHabits ? "animate-spin" : ""} />
+                {loadingHabits ? "..." : "Refresh"}
               </button>
-            )}
+              {adminMode && (
+                <button
+                  onClick={() => setShowAddHabit(!showAddHabit)}
+                  className="flex items-center gap-2 px-4 py-2 border border-orange-500/30 text-orange-400 text-xs font-black uppercase tracking-wider hover:bg-orange-500/10 transition-colors"
+                >
+                  <Plus size={14} />
+                  Add
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Add Habit Form */}

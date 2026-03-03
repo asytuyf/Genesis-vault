@@ -65,10 +65,8 @@ export default function DirectiveLog() {
   }, []);
 
   useEffect(() => {
-    // Fetch from GitHub raw to get the live data (same source we save to)
-    const githubRawUrl = `https://raw.githubusercontent.com/Asytuyf/nixos-config/main/public/goals.json?t=${Date.now()}`;
-
-    fetch(githubRawUrl)
+    // Fetch from API (Upstash Redis)
+    fetch("/api/goals")
       .then(res => res.json())
       .then(data => {
         if (Array.isArray(data)) {
