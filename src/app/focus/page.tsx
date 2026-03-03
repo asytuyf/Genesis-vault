@@ -852,7 +852,7 @@ export default function FocusPage() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 backdrop-blur-sm p-6"
+            className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 backdrop-blur-sm p-2 sm:p-6"
             onClick={() => { setShowUpcoming(false); setShowAddFlight(false); }}
           >
             <motion.div
@@ -860,7 +860,7 @@ export default function FocusPage() {
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.9, y: 20 }}
               onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-4xl max-h-[90vh] overflow-hidden border-2 border-yellow-500/30 bg-[#0a0a0a] relative"
+              className="w-full max-w-4xl max-h-[95vh] sm:max-h-[90vh] overflow-hidden border-2 border-yellow-500/30 bg-[#0a0a0a] relative"
               style={{ boxShadow: "0 0 60px rgba(234, 179, 8, 0.15)" }}
             >
               {/* SQUIGGLY LINES BACKGROUND */}
@@ -878,20 +878,20 @@ export default function FocusPage() {
               </svg>
 
               {/* AIRPORT HEADER */}
-              <div className="relative z-20 bg-gradient-to-r from-yellow-500/20 via-yellow-500/10 to-yellow-500/20 border-b-2 border-yellow-500/30 p-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
+              <div className="relative z-20 bg-gradient-to-r from-yellow-500/20 via-yellow-500/10 to-yellow-500/20 border-b-2 border-yellow-500/30 p-3 md:p-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 md:gap-4">
                     <div className="text-yellow-400">
-                      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="md:w-8 md:h-8">
                         <path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/>
                       </svg>
                     </div>
                     <div>
-                      <div className="text-[10px] font-bold text-yellow-500/70 tracking-[0.3em] uppercase">Mission Control</div>
-                      <div className="text-xl font-black text-yellow-400 tracking-wider">DEPARTURES</div>
+                      <div className="text-[8px] md:text-[10px] font-bold text-yellow-500/70 tracking-[0.3em] uppercase">Mission Control</div>
+                      <div className="text-lg md:text-xl font-black text-yellow-400 tracking-wider">DEPARTURES</div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-4">
+                  <div className="flex items-center justify-between sm:justify-end gap-3 md:gap-4">
                     {isAdmin && (
                       <button
                         onClick={() => setShowAddFlight(!showAddFlight)}
@@ -907,7 +907,7 @@ export default function FocusPage() {
                     )}
                     <div className="text-right">
                       <div className="text-[10px] text-zinc-600 uppercase">Local Time</div>
-                      <div className="text-lg font-mono font-bold text-yellow-400">
+                      <div className="text-base md:text-lg font-mono font-bold text-yellow-400">
                         {new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })}
                       </div>
                     </div>
@@ -924,8 +924,8 @@ export default function FocusPage() {
                     exit={{ height: 0, opacity: 0 }}
                     className="overflow-hidden border-b-2 border-yellow-500/20 bg-black/60 relative z-10"
                   >
-                    <div className="p-4 space-y-3">
-                      <div className="grid grid-cols-2 gap-3">
+                    <div className="p-3 md:p-4 space-y-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
                           <label className="block text-[9px] font-black text-zinc-600 uppercase tracking-[0.15em] mb-1.5">Task</label>
                           <input
@@ -950,7 +950,7 @@ export default function FocusPage() {
                       {/* Quick time presets */}
                       <div>
                         <label className="block text-[9px] font-black text-zinc-600 uppercase tracking-[0.15em] mb-1.5">Quick Set</label>
-                        <div className="flex flex-wrap gap-1">
+                        <div className="grid grid-cols-4 sm:flex gap-1">
                           {[
                             { label: "30m", mins: 30 },
                             { label: "1h", mins: 60 },
@@ -969,30 +969,30 @@ export default function FocusPage() {
                                 const iso = date.toISOString().slice(0, 16);
                                 setNewDeadline(iso);
                               }}
-                              className="px-2 py-1 bg-zinc-900/50 border border-zinc-800 text-zinc-500 text-[10px] font-bold uppercase hover:border-yellow-500/30 hover:text-yellow-400 transition-colors"
+                              className="px-2 py-1.5 bg-zinc-900/50 border border-zinc-800 text-zinc-500 text-[10px] font-bold uppercase hover:border-yellow-500/30 hover:text-yellow-400 transition-colors"
                             >
                               +{preset.label}
                             </button>
                           ))}
                         </div>
                       </div>
-                      <div className="grid grid-cols-4 gap-3">
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
                         <div>
                           <label className="block text-[9px] font-black text-zinc-600 uppercase tracking-[0.15em] mb-1.5">Date</label>
                           <input
                             type="date"
                             value={newDeadline.split("T")[0] || ""}
                             onChange={(e) => setNewDeadline(e.target.value + "T" + (newDeadline.split("T")[1] || "12:00"))}
-                            className="w-full bg-black border border-zinc-800 px-3 py-2 text-sm font-mono text-yellow-400 outline-none focus:border-yellow-500/50 appearance-none"
+                            className="w-full bg-black border border-zinc-800 px-2 md:px-3 py-2 text-xs md:text-sm font-mono text-yellow-400 outline-none focus:border-yellow-500/50 appearance-none"
                           />
                         </div>
                         <div>
-                          <label className="block text-[9px] font-black text-zinc-600 uppercase tracking-[0.15em] mb-1.5">Time (24h)</label>
+                          <label className="block text-[9px] font-black text-zinc-600 uppercase tracking-[0.15em] mb-1.5">Time</label>
                           <input
                             type="time"
                             value={newDeadline.split("T")[1] || ""}
                             onChange={(e) => setNewDeadline((newDeadline.split("T")[0] || new Date().toISOString().split("T")[0]) + "T" + e.target.value)}
-                            className="w-full bg-black border border-zinc-800 px-3 py-2 text-sm font-mono text-yellow-400 outline-none focus:border-yellow-500/50"
+                            className="w-full bg-black border border-zinc-800 px-2 md:px-3 py-2 text-xs md:text-sm font-mono text-yellow-400 outline-none focus:border-yellow-500/50"
                           />
                         </div>
                         <div>
@@ -1000,7 +1000,7 @@ export default function FocusPage() {
                           <select
                             value={newPriority}
                             onChange={(e) => setNewPriority(e.target.value)}
-                            className="w-full bg-black border border-zinc-800 px-3 py-2 text-sm font-mono text-yellow-400 outline-none focus:border-yellow-500/50 appearance-none cursor-pointer"
+                            className="w-full bg-black border border-zinc-800 px-2 md:px-3 py-2 text-xs md:text-sm font-mono text-yellow-400 outline-none focus:border-yellow-500/50 appearance-none cursor-pointer"
                             style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23eab308' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`, backgroundRepeat: "no-repeat", backgroundPosition: "right 8px center" }}
                           >
                             <option value="Low">Low</option>
@@ -1012,7 +1012,7 @@ export default function FocusPage() {
                           <button
                             onClick={addNewFlight}
                             disabled={savingFlight || !newTask.trim() || !newDeadline}
-                            className="w-full bg-yellow-500 text-black px-4 py-2 text-sm font-black uppercase tracking-wider hover:bg-yellow-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="w-full bg-yellow-500 text-black px-3 md:px-4 py-2 text-xs md:text-sm font-black uppercase tracking-wider hover:bg-yellow-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             {savingFlight ? "..." : "Add"}
                           </button>
@@ -1024,9 +1024,9 @@ export default function FocusPage() {
               </AnimatePresence>
 
               {/* DEPARTURES LIST */}
-              <div className="overflow-y-auto max-h-[70vh] relative z-10">
-                {/* COLUMN HEADERS */}
-                <div className={`grid gap-4 px-6 py-3 bg-zinc-900/50 border-b border-zinc-800 text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 ${isAdmin ? "grid-cols-[40px_100px_1fr_120px_140px_50px]" : "grid-cols-[40px_100px_1fr_120px_140px]"}`}>
+              <div className="overflow-y-auto max-h-[60vh] sm:max-h-[70vh] relative z-10">
+                {/* COLUMN HEADERS - Hidden on mobile */}
+                <div className={`hidden sm:grid gap-4 px-4 md:px-6 py-3 bg-zinc-900/50 border-b border-zinc-800 text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 ${isAdmin ? "grid-cols-[40px_80px_1fr_100px_120px_40px]" : "grid-cols-[40px_80px_1fr_100px_120px]"}`}>
                   <div></div>
                   <div>Flight</div>
                   <div>Destination</div>
@@ -1078,77 +1078,122 @@ export default function FocusPage() {
                           initial={{ opacity: 0, x: -20 }}
                           animate={{ opacity: 1, x: 0 }}
                           transition={{ delay: index * 0.05 }}
-                          className={`grid gap-4 px-6 py-4 hover:bg-zinc-900/50 transition-colors group ${
+                          className={`p-3 sm:p-0 hover:bg-zinc-900/50 transition-colors group ${
                             goal.completed ? "bg-sky-500/5" : countdown.overdue ? "bg-red-500/5" : ""
-                          } ${isAdmin ? "grid-cols-[40px_100px_1fr_120px_140px_50px]" : "grid-cols-[40px_100px_1fr_120px_140px]"}`}
+                          }`}
                         >
-                          {/* TICK BUTTON */}
-                          <div className="flex items-center justify-center">
-                            <button
-                              onClick={() => isAdmin && toggleFlightCompletion(goal.id)}
-                              className={`p-1 rounded transition-colors ${
-                                goal.completed
-                                  ? "text-sky-400"
-                                  : isAdmin
-                                    ? "text-zinc-700 hover:text-emerald-400"
-                                    : "text-zinc-800"
-                              }`}
-                              disabled={!isAdmin}
-                              title={goal.completed ? "Mark as not departed" : "Mark as departed"}
-                            >
-                              {goal.completed ? <CheckCircle2 size={22} /> : <Circle size={22} />}
-                            </button>
-                          </div>
+                          {/* MOBILE CARD LAYOUT */}
+                          <div className="sm:hidden">
+                            <div className="flex items-start gap-3">
+                              {/* TICK BUTTON */}
+                              <button
+                                onClick={() => isAdmin && toggleFlightCompletion(goal.id)}
+                                className={`p-1 rounded transition-colors shrink-0 ${
+                                  goal.completed
+                                    ? "text-sky-400"
+                                    : isAdmin
+                                      ? "text-zinc-700 hover:text-emerald-400"
+                                      : "text-zinc-800"
+                                }`}
+                                disabled={!isAdmin}
+                              >
+                                {goal.completed ? <CheckCircle2 size={20} /> : <Circle size={20} />}
+                              </button>
 
-                          {/* FLIGHT CODE */}
-                          <div className={`flex flex-col justify-center ${goal.completed ? "opacity-60" : ""}`}>
-                            <div className="font-mono font-bold text-yellow-400 text-base">{flightCode}</div>
-                            <div className={`text-[10px] uppercase ${
-                              goal.priority === "High" ? "text-red-400" : goal.priority === "Medium" ? "text-yellow-400" : "text-zinc-500"
-                            }`}>
-                              {goal.priority}
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="font-mono font-bold text-yellow-400 text-sm">{flightCode}</span>
+                                  <span className={`text-[9px] uppercase px-1.5 py-0.5 rounded ${statusBg} ${statusColor} font-bold`}>{status}</span>
+                                </div>
+                                <div className={`font-bold text-sm truncate mb-1 ${goal.completed ? "text-zinc-400 line-through opacity-60" : "text-white"}`}>{goal.task}</div>
+                                <div className="flex items-center gap-3 text-[10px] text-zinc-500">
+                                  <span className="flex items-center gap-1"><Tag size={10} />{goal.project}</span>
+                                  <span>{departureTime} · {departureDate}</span>
+                                  <span className={countdown.urgent ? "text-yellow-400" : ""}>{countdown.overdue ? "" : "T-"}{countdown.text}</span>
+                                </div>
+                              </div>
+
+                              {isAdmin && (
+                                <button
+                                  onClick={() => deleteFlight(goal.id)}
+                                  className="p-1.5 text-zinc-700 hover:text-red-400 transition-colors shrink-0"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              )}
                             </div>
                           </div>
 
-                          {/* DESTINATION (TASK NAME) */}
-                          <div className={`flex flex-col justify-center min-w-0 ${goal.completed ? "opacity-60" : ""}`}>
-                            <div className={`font-bold text-base truncate ${goal.completed ? "text-zinc-400 line-through" : "text-white"}`}>{goal.task}</div>
-                            <div className="text-xs text-zinc-600 truncate flex items-center gap-1">
-                              <Tag size={12} />
-                              {goal.project}
-                            </div>
-                          </div>
-
-                          {/* DEPARTURE TIME */}
-                          <div className={`flex flex-col justify-center ${goal.completed ? "opacity-60" : ""}`}>
-                            <div className="font-mono font-bold text-zinc-300 text-base">{departureTime}</div>
-                            <div className="text-xs text-zinc-600">{departureDate}</div>
-                          </div>
-
-                          {/* STATUS */}
-                          <div className="flex flex-col items-end justify-center">
-                            <div className={`inline-block px-3 py-1.5 ${statusBg} rounded`}>
-                              <div className={`font-black text-sm tracking-wider ${statusColor}`}>{status}</div>
-                            </div>
-                            <div className={`text-xs mt-1 font-mono ${
-                              goal.completed ? "text-sky-400/60" : countdown.overdue ? "text-red-400" : countdown.urgent ? "text-yellow-400" : "text-zinc-500"
-                            }`}>
-                              {countdown.overdue ? "" : "T-"}{countdown.text}
-                            </div>
-                          </div>
-
-                          {/* DELETE BUTTON */}
-                          {isAdmin && (
+                          {/* DESKTOP GRID LAYOUT */}
+                          <div className={`hidden sm:grid gap-2 md:gap-4 px-4 md:px-6 py-4 ${isAdmin ? "grid-cols-[40px_80px_1fr_100px_120px_40px]" : "grid-cols-[40px_80px_1fr_100px_120px]"}`}>
+                            {/* TICK BUTTON */}
                             <div className="flex items-center justify-center">
                               <button
-                                onClick={() => deleteFlight(goal.id)}
-                                className="p-2 text-zinc-700 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors opacity-0 group-hover:opacity-100"
-                                title="Cancel flight"
+                                onClick={() => isAdmin && toggleFlightCompletion(goal.id)}
+                                className={`p-1 rounded transition-colors ${
+                                  goal.completed
+                                    ? "text-sky-400"
+                                    : isAdmin
+                                      ? "text-zinc-700 hover:text-emerald-400"
+                                      : "text-zinc-800"
+                                }`}
+                                disabled={!isAdmin}
+                                title={goal.completed ? "Mark as not departed" : "Mark as departed"}
                               >
-                                <Trash2 size={18} />
+                                {goal.completed ? <CheckCircle2 size={20} /> : <Circle size={20} />}
                               </button>
                             </div>
-                          )}
+
+                            {/* FLIGHT CODE */}
+                            <div className={`flex flex-col justify-center ${goal.completed ? "opacity-60" : ""}`}>
+                              <div className="font-mono font-bold text-yellow-400 text-sm md:text-base">{flightCode}</div>
+                              <div className={`text-[9px] md:text-[10px] uppercase ${
+                                goal.priority === "High" ? "text-red-400" : goal.priority === "Medium" ? "text-yellow-400" : "text-zinc-500"
+                              }`}>
+                                {goal.priority}
+                              </div>
+                            </div>
+
+                            {/* DESTINATION (TASK NAME) */}
+                            <div className={`flex flex-col justify-center min-w-0 ${goal.completed ? "opacity-60" : ""}`}>
+                              <div className={`font-bold text-sm md:text-base truncate ${goal.completed ? "text-zinc-400 line-through" : "text-white"}`}>{goal.task}</div>
+                              <div className="text-[10px] md:text-xs text-zinc-600 truncate flex items-center gap-1">
+                                <Tag size={10} />
+                                {goal.project}
+                              </div>
+                            </div>
+
+                            {/* DEPARTURE TIME */}
+                            <div className={`flex flex-col justify-center ${goal.completed ? "opacity-60" : ""}`}>
+                              <div className="font-mono font-bold text-zinc-300 text-sm md:text-base">{departureTime}</div>
+                              <div className="text-[10px] md:text-xs text-zinc-600">{departureDate}</div>
+                            </div>
+
+                            {/* STATUS */}
+                            <div className="flex flex-col items-end justify-center">
+                              <div className={`inline-block px-2 md:px-3 py-1 md:py-1.5 ${statusBg} rounded`}>
+                                <div className={`font-black text-[10px] md:text-sm tracking-wider ${statusColor}`}>{status}</div>
+                              </div>
+                              <div className={`text-[10px] md:text-xs mt-1 font-mono ${
+                                goal.completed ? "text-sky-400/60" : countdown.overdue ? "text-red-400" : countdown.urgent ? "text-yellow-400" : "text-zinc-500"
+                              }`}>
+                                {countdown.overdue ? "" : "T-"}{countdown.text}
+                              </div>
+                            </div>
+
+                            {/* DELETE BUTTON */}
+                            {isAdmin && (
+                              <div className="flex items-center justify-center">
+                                <button
+                                  onClick={() => deleteFlight(goal.id)}
+                                  className="p-1.5 md:p-2 text-zinc-700 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors opacity-0 group-hover:opacity-100"
+                                  title="Cancel flight"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              </div>
+                            )}
+                          </div>
                         </motion.div>
                       );
                     })}
@@ -1157,21 +1202,21 @@ export default function FocusPage() {
               </div>
 
               {/* FOOTER */}
-              <div className="relative z-10 border-t-2 border-yellow-500/30 bg-gradient-to-r from-yellow-500/10 via-transparent to-yellow-500/10 px-6 py-4 flex items-center justify-between">
-                <div className="flex items-center gap-5 text-[10px] uppercase tracking-wider">
-                  <div className="flex items-center gap-2">
+              <div className="relative z-10 border-t-2 border-yellow-500/30 bg-gradient-to-r from-yellow-500/10 via-transparent to-yellow-500/10 px-3 md:px-6 py-3 md:py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div className="grid grid-cols-2 sm:flex items-center gap-3 sm:gap-5 text-[9px] sm:text-[10px] uppercase tracking-wider">
+                  <div className="flex items-center gap-1.5 sm:gap-2">
                     <div className="w-2 h-2 rounded-full bg-emerald-400"></div>
                     <span className="text-zinc-500">On Time</span>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5 sm:gap-2">
                     <div className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse"></div>
                     <span className="text-zinc-500">Boarding</span>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5 sm:gap-2">
                     <div className="w-2 h-2 rounded-full bg-red-400"></div>
                     <span className="text-zinc-500">Delayed</span>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5 sm:gap-2">
                     <div className="w-2 h-2 rounded-full bg-sky-400"></div>
                     <span className="text-zinc-500">Departed</span>
                   </div>

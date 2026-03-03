@@ -183,7 +183,7 @@ export default function DirectiveLog() {
   };
 
   return (
-    <main className="relative min-h-screen bg-[#0d0d0d] text-[#f4f4f5] font-mono overflow-hidden p-12 md:p-24">
+    <main className="relative min-h-screen bg-[#0d0d0d] text-[#f4f4f5] font-mono overflow-hidden px-4 py-12 pt-14 md:p-24">
       <div className="tv-static fixed inset-0 opacity-[0.03] pointer-events-none" />
 
       {/* HAZARD BARS */}
@@ -198,8 +198,8 @@ export default function DirectiveLog() {
         </motion.div>
       </div>
 
-      <header className="relative z-10 mb-20 py-10">
-        <div className="flex flex-col mb-10 select-none">
+      <header className="relative z-10 mb-10 md:mb-20 py-6 md:py-10">
+        <div className="flex flex-col mb-6 md:mb-10 select-none">
           <h1 className="text-5xl md:text-8xl font-black tracking-tighter text-white leading-[0.85] md:leading-[0.8]">
             TASK
           </h1>
@@ -208,14 +208,11 @@ export default function DirectiveLog() {
           </h2>
         </div>
 
-        <div className="text-zinc-600 mb-10 text-xs md:text-sm font-black uppercase tracking-wider">
-          <div className="flex items-center gap-2 mb-2 hidden md:flex">
-            <Terminal size={14} />
-            <span>Click the top-left menu to open file explorer</span>
-          </div>
-          <div className="flex items-center gap-2 md:hidden">
-            <Terminal size={14} />
-            <span>Tap the top-left menu to open file explorer</span>
+        <div className="text-zinc-600 mb-6 md:mb-10 text-[10px] md:text-sm font-black uppercase tracking-wider">
+          <div className="flex items-center gap-2">
+            <Terminal size={12} className="shrink-0" />
+            <span className="hidden md:inline">Click the top-left menu to open file explorer</span>
+            <span className="md:hidden">Tap menu for file explorer</span>
           </div>
         </div>
 
@@ -229,19 +226,19 @@ export default function DirectiveLog() {
           />
         </div>
 
-        <div className="flex flex-wrap items-center gap-4 mt-6">
+        <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-3 sm:gap-4 mt-6">
           {/* Sort selector */}
-          <div className="flex items-center">
+          <div className="grid grid-cols-4 sm:flex sm:items-center w-full sm:w-auto">
             {[
-              { value: "newest", label: "Newest" },
-              { value: "deadline", label: "Deadline" },
+              { value: "newest", label: "New" },
+              { value: "deadline", label: "Due" },
               { value: "priority", label: "Priority" },
-              { value: "oldest", label: "Oldest" },
+              { value: "oldest", label: "Old" },
             ].map((option, index) => (
               <button
                 key={option.value}
                 onClick={() => setSortBy(option.value as typeof sortBy)}
-                className={`flex items-center gap-2 px-4 py-2.5 text-base font-bold uppercase border transition-colors ${
+                className={`flex items-center justify-center gap-1 px-2 sm:px-4 py-2 text-[10px] sm:text-sm font-bold uppercase border transition-colors ${
                   index === 0 ? "" : "border-l-0"
                 } ${
                   sortBy === option.value
@@ -249,8 +246,9 @@ export default function DirectiveLog() {
                     : "bg-zinc-900/30 text-zinc-600 border-zinc-800 hover:bg-zinc-800/50 hover:text-zinc-400"
                 }`}
               >
-                {index === 0 && <ArrowUpDown size={18} />}
-                {option.label}
+                {index === 0 && <ArrowUpDown size={12} className="hidden sm:block" />}
+                <span className="sm:hidden">{option.label}</span>
+                <span className="hidden sm:inline">{option.value === "newest" ? "Newest" : option.value === "deadline" ? "Deadline" : option.value === "priority" ? "Priority" : "Oldest"}</span>
               </button>
             ))}
           </div>
@@ -258,9 +256,9 @@ export default function DirectiveLog() {
           {isAdmin && (
             <button
               onClick={() => setIsAddGoalModalOpen(true)}
-              className="flex items-center gap-2 bg-emerald-700/30 text-emerald-400 px-5 py-2.5 text-base font-bold uppercase border border-emerald-500/30 hover:bg-emerald-700/50 transition-colors"
+              className="flex items-center justify-center gap-2 bg-emerald-700/30 text-emerald-400 px-4 sm:px-5 py-2.5 text-sm sm:text-base font-bold uppercase border border-emerald-500/30 hover:bg-emerald-700/50 transition-colors w-full sm:w-auto"
             >
-              <Plus size={20} /> ADD NEW GOAL
+              <Plus size={18} /> ADD NEW GOAL
             </button>
           )}
         </div>
