@@ -34,7 +34,7 @@ export const FileExplorer = ({ mobileOpen, setMobileOpen, desktopOpen }: FileExp
     const savedMode = window.localStorage.getItem("goals_admin_mode") === "1";
     const savedBrightness = window.localStorage.getItem("global_bg_brightness");
     setAdminKey(savedKey);
-    if (savedKey === "genesis2026") {
+    if (savedKey) {
       setAdminMode(savedMode);
     } else {
       setAdminMode(false);
@@ -104,7 +104,7 @@ export const FileExplorer = ({ mobileOpen, setMobileOpen, desktopOpen }: FileExp
     if (typeof window === "undefined") return;
     window.localStorage.setItem("goals_admin_key", value);
     window.dispatchEvent(new CustomEvent("goals-admin-key", { detail: value }));
-    if (value !== "genesis2026" && adminMode) {
+    if (!value && adminMode) {
       setAdminModeAndBroadcast(false);
     }
   };
@@ -525,7 +525,7 @@ export const FileExplorer = ({ mobileOpen, setMobileOpen, desktopOpen }: FileExp
                   <button
                     type="button"
                     onClick={() =>
-                      setAdminModeAndBroadcast(adminKey === "genesis2026" ? !adminMode : false)
+                      setAdminModeAndBroadcast(adminKey ? !adminMode : false)
                     }
                     className={`grid h-9 w-9 place-items-center border transition-colors ${
                       adminMode

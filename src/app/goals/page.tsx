@@ -82,13 +82,13 @@ export default function DirectiveLog() {
     const savedKey = window.localStorage.getItem("goals_admin_key") || "";
     const savedMode = window.localStorage.getItem("goals_admin_mode") === "1";
     setPassword(savedKey);
-    setIsAdmin(savedKey === "genesis2026" && savedMode);
+    setIsAdmin(!!savedKey && savedMode);
 
     const keyHandler = (event: Event) => {
       const detail = (event as CustomEvent<string>).detail;
       if (typeof detail === "string") {
         setPassword(detail);
-        if (detail !== "genesis2026") {
+        if (!detail) {
           setIsAdmin(false);
         }
       }
@@ -109,7 +109,7 @@ export default function DirectiveLog() {
   }, []);
 
   useEffect(() => {
-    if (password !== "genesis2026" && isAdmin) {
+    if (!password && isAdmin) {
       setIsAdmin(false);
     }
   }, [password, isAdmin]);

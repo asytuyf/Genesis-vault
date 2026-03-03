@@ -22,7 +22,7 @@ export async function POST(req: Request) {
   try {
     const { password, updatedTutorials } = await req.json();
 
-    if (password !== "genesis2026") {
+    if (password !== process.env.ADMIN_PASSWORD) {
       return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
     }
 

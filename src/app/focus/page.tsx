@@ -179,13 +179,13 @@ export default function FocusPage() {
     const savedKey = window.localStorage.getItem("goals_admin_key") || "";
     const savedMode = window.localStorage.getItem("goals_admin_mode") === "1";
     setPassword(savedKey);
-    setIsAdmin(savedKey === "genesis2026" && savedMode);
+    setIsAdmin(!!savedKey && savedMode);
 
     const keyHandler = (event: Event) => {
       const detail = (event as CustomEvent<string>).detail;
       if (typeof detail === "string") {
         setPassword(detail);
-        if (detail !== "genesis2026") setIsAdmin(false);
+        if (!detail) setIsAdmin(false);
       }
     };
     const modeHandler = (event: Event) => {
