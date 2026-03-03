@@ -530,7 +530,7 @@ export default function TrackerPage() {
 
         {/* HABITS */}
         <section className="mb-12">
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
             <div className="flex items-center gap-3">
               <Target size={20} className="text-orange-400" />
               <span className="text-xs font-black uppercase tracking-[0.2em] text-zinc-400">Habits</span>
@@ -577,7 +577,7 @@ export default function TrackerPage() {
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: "auto" }}
                 exit={{ opacity: 0, height: 0 }}
-                className="mb-6 p-6 border border-zinc-800 bg-black/60 backdrop-blur-sm overflow-hidden"
+                className="mb-6 p-4 md:p-6 border border-zinc-800 bg-black/60 backdrop-blur-sm overflow-hidden"
               >
                 <input
                   type="text"
@@ -585,18 +585,18 @@ export default function TrackerPage() {
                   value={newHabitName}
                   onChange={(e) => setNewHabitName(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && addHabit()}
-                  className="w-full bg-transparent border-b-2 border-zinc-800 px-0 py-3 text-lg text-white outline-none focus:border-orange-500 mb-6 placeholder:text-zinc-700"
+                  className="w-full bg-transparent border-b-2 border-zinc-800 px-0 py-3 text-base md:text-lg text-white outline-none focus:border-orange-500 mb-4 md:mb-6 placeholder:text-zinc-700"
                 />
 
                 {/* Color Picker */}
-                <div className="mb-6">
+                <div className="mb-4 md:mb-6">
                   <div className="text-[10px] font-black uppercase tracking-wider text-zinc-600 mb-3">Color</div>
                   <div className="flex gap-2 flex-wrap">
                     {HABIT_COLORS.map((color) => (
                       <button
                         key={color.value}
                         onClick={() => setNewHabitColor(color.value)}
-                        className={`w-8 h-8 rounded-full ${color.bg} transition-all ${
+                        className={`w-7 h-7 md:w-8 md:h-8 rounded-full ${color.bg} transition-all ${
                           newHabitColor === color.value
                             ? "ring-2 ring-white ring-offset-2 ring-offset-black scale-110"
                             : "opacity-50 hover:opacity-100"
@@ -607,14 +607,14 @@ export default function TrackerPage() {
                 </div>
 
                 {/* Frequency Picker */}
-                <div className="mb-6">
+                <div className="mb-4 md:mb-6">
                   <div className="text-[10px] font-black uppercase tracking-wider text-zinc-600 mb-3">Frequency</div>
-                  <div className="flex gap-2 flex-wrap">
+                  <div className="grid grid-cols-2 sm:flex gap-2">
                     {FREQUENCIES.map((freq) => (
                       <button
                         key={freq.value}
                         onClick={() => setNewHabitFrequency(freq.value)}
-                        className={`px-4 py-2 border text-xs font-bold uppercase transition-all ${
+                        className={`px-3 md:px-4 py-2 border text-[10px] md:text-xs font-bold uppercase transition-all ${
                           newHabitFrequency === freq.value
                             ? `${getHabitColor(newHabitColor, "border")} ${getHabitColor(newHabitColor, "text")} bg-opacity-20`
                             : "border-zinc-800 text-zinc-500 hover:border-zinc-700"
@@ -626,7 +626,7 @@ export default function TrackerPage() {
                   </div>
                 </div>
 
-                <div className="flex gap-3">
+                <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
                   <button
                     onClick={addHabit}
                     className={`flex-1 py-3 bg-opacity-10 border border-opacity-30 text-xs font-black uppercase tracking-wider hover:bg-opacity-20 transition-colors ${getHabitColor(newHabitColor, "text")} ${getHabitColor(newHabitColor, "border")}`}
@@ -657,56 +657,55 @@ export default function TrackerPage() {
                   layout
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className={`p-6 border transition-all ${
+                  className={`p-4 md:p-6 border transition-all ${
                     completedToday ? "border-zinc-700 bg-zinc-900/50" : "border-zinc-800 bg-black/40"
                   }`}
                 >
-                  <div className="flex items-center justify-between mb-6">
-                    <div className="flex items-center gap-4">
-                      <div className={`w-3 h-3 rounded-full ${completedToday ? getHabitColor(color, "bg") : "bg-zinc-700"}`} />
-                      <span className="text-lg font-bold text-white">{habit.name}</span>
+                  {/* Mobile: stack vertically, Desktop: horizontal */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 md:mb-6">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-3 h-3 shrink-0 rounded-full ${completedToday ? getHabitColor(color, "bg") : "bg-zinc-700"}`} />
+                      <span className="text-base md:text-lg font-bold text-white truncate">{habit.name}</span>
                     </div>
-                    <div className="flex items-center gap-4">
-                      <div className="flex items-center gap-4">
-                        <div className="flex items-center gap-2">
-                          <Flame size={16} className={getHabitColor(color, "text")} />
-                          <span className={`text-lg font-black ${getHabitColor(color, "text")}`}>{streak}</span>
-                          <span className="text-xs text-zinc-500 uppercase">streak</span>
-                        </div>
-                        <span className="text-[10px] text-zinc-600 uppercase px-2 py-1 border border-zinc-800">
-                          {FREQUENCIES.find(f => f.value === (habit.frequency || 1))?.label || "Daily"}
-                        </span>
+                    <div className="flex items-center justify-between sm:justify-end gap-3">
+                      <div className="flex items-center gap-2">
+                        <Flame size={14} className={getHabitColor(color, "text")} />
+                        <span className={`text-base md:text-lg font-black ${getHabitColor(color, "text")}`}>{streak}</span>
+                        <span className="text-[10px] text-zinc-500 uppercase hidden sm:inline">streak</span>
                       </div>
+                      <span className="text-[9px] md:text-[10px] text-zinc-600 uppercase px-2 py-1 border border-zinc-800">
+                        {FREQUENCIES.find(f => f.value === (habit.frequency || 1))?.label || "Daily"}
+                      </span>
                       {adminMode && (
                         <button
                           onClick={() => removeHabit(habit.id)}
-                          className="p-2 text-zinc-700 hover:text-red-400 transition-colors"
+                          className="p-1.5 text-zinc-700 hover:text-red-400 transition-colors"
                         >
-                          <X size={16} />
+                          <X size={14} />
                         </button>
                       )}
                     </div>
                   </div>
 
-                  {/* Week checkboxes */}
-                  <div className="grid grid-cols-7 gap-2">
+                  {/* Week checkboxes - smaller on mobile */}
+                  <div className="grid grid-cols-7 gap-1 md:gap-2">
                     {weekDays.map((day) => {
                       const isCompleted = habit.history.includes(day.date);
                       return (
                         <button
                           key={day.date}
                           onClick={() => toggleHabitForDate(habit.id, day.date)}
-                          className={`p-3 border text-center transition-all ${
+                          className={`p-2 md:p-3 border text-center transition-all ${
                             isCompleted
                               ? `${getHabitColor(color, "border")} ${getHabitColor(color, "bg")} text-black`
                               : "border-zinc-800 text-zinc-600 hover:border-zinc-700"
                           }`}
                         >
-                          <div className={`text-[9px] font-bold uppercase mb-1 ${isCompleted ? "text-black" : ""}`}>{day.dayName}</div>
+                          <div className={`text-[8px] md:text-[9px] font-bold uppercase mb-0.5 md:mb-1 ${isCompleted ? "text-black" : ""}`}>{day.dayName}</div>
                           {isCompleted ? (
-                            <Check size={18} className="mx-auto" />
+                            <Check size={14} className="mx-auto md:w-[18px] md:h-[18px]" />
                           ) : (
-                            <div className="w-[18px] h-[18px] mx-auto" />
+                            <div className="w-[14px] h-[14px] md:w-[18px] md:h-[18px] mx-auto" />
                           )}
                         </button>
                       );
