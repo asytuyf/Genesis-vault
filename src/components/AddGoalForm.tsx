@@ -17,6 +17,7 @@ interface Goal {
   priority: string;
   date: string;
   deadline?: string; // ISO datetime for countdown (optional)
+  description?: string;
   subgoals?: SubGoal[];
 }
 
@@ -34,6 +35,7 @@ export const AddGoalForm = ({ password, setGoals, currentGoals, setLoadingAction
   const [project, setProject] = useState("");
   const [priority, setPriority] = useState("Low");
   const [deadline, setDeadline] = useState(""); // Optional deadline datetime
+  const [description, setDescription] = useState("");
 
   const handleAddGoal = async () => {
     if (!task.trim()) {
@@ -53,6 +55,7 @@ export const AddGoalForm = ({ password, setGoals, currentGoals, setLoadingAction
       priority: priority,
       date: dateStr,
       ...(deadline && { deadline }), // Only include if set
+      ...(description.trim() && { description: description.trim() }), // Only include if set
     };
 
     // currentGoals is displayed reversed (newest first), so reverse back for storage (oldest first)
@@ -71,6 +74,7 @@ export const AddGoalForm = ({ password, setGoals, currentGoals, setLoadingAction
       setProject("");
       setPriority("Low");
       setDeadline("");
+      setDescription("");
       onClose();
     }
     setLoadingAction(false);
@@ -96,10 +100,16 @@ export const AddGoalForm = ({ password, setGoals, currentGoals, setLoadingAction
         <div className="flex flex-col gap-4">
             <input
                 type="text"
-                placeholder="Task Description..."
+                placeholder="Task Title..."
                 className="bg-black border border-zinc-800 px-4 py-2.5 text-base outline-none focus:border-emerald-400 text-zinc-300 placeholder:text-zinc-600"
                 value={task}
                 onChange={(e) => setTask(e.target.value)}
+            />
+            <textarea
+                placeholder="Description (optional)..."
+                className="bg-black border border-zinc-800 px-4 py-2.5 text-base outline-none focus:border-emerald-400 text-zinc-300 placeholder:text-zinc-600 resize-none h-20"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
             />
             <input
                 type="text"
@@ -122,12 +132,23 @@ export const AddGoalForm = ({ password, setGoals, currentGoals, setLoadingAction
                 <label className="block text-[10px] font-black uppercase tracking-wider text-zinc-600 mb-2">
                   Deadline (optional)
                 </label>
-                <input
-                    type="datetime-local"
-                    className="w-full bg-black border border-zinc-800 px-4 py-2.5 text-base outline-none focus:border-emerald-400 text-zinc-300"
-                    value={deadline}
-                    onChange={(e) => setDeadline(e.target.value)}
-                />
+                <div className="flex gap-2">
+                    <input
+                        type="datetime-local"
+                        className="flex-1 bg-black border border-zinc-800 px-4 py-2.5 text-base outline-none focus:border-emerald-400 text-zinc-300"
+                        value={deadline}
+                        onChange={(e) => setDeadline(e.target.value)}
+                    />
+                    {deadline && (
+                        <button
+                            type="button"
+                            onClick={() => setDeadline("")}
+                            className="px-3 py-2.5 bg-zinc-900 border border-zinc-800 text-zinc-500 hover:text-red-400 hover:border-red-500/30 text-xs font-bold uppercase transition-colors"
+                        >
+                            Clear
+                        </button>
+                    )}
+                </div>
             </div>
             <button
                 onClick={handleAddGoal}

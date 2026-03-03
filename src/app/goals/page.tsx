@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, Tag, Clock, Activity, Hash, Box, Trash2, Plus, Terminal, ListChecks, Timer } from "lucide-react";
+import { Search, Tag, Clock, Activity, Hash, Box, Trash2, Plus, Terminal, ListChecks, Timer, ArrowUpDown } from "lucide-react";
 import { AddGoalForm } from "@/components/AddGoalForm";
 import { GoalDetailModal } from "@/components/GoalDetailModal";
 
@@ -18,6 +18,7 @@ interface Goal {
   priority: string;
   date: string;
   deadline?: string;
+  description?: string;
   subgoals?: SubGoal[];
 }
 
@@ -55,6 +56,7 @@ export default function DirectiveLog() {
   const [isAddGoalModalOpen, setIsAddGoalModalOpen] = useState(false);
   const [selectedGoal, setSelectedGoal] = useState<Goal | null>(null);
   const [, forceUpdate] = useState(0); // For countdown refresh
+  const [sortBy, setSortBy] = useState<"newest" | "deadline" | "priority" | "oldest">("newest");
 
   // Refresh countdowns every minute
   useEffect(() => {
@@ -123,6 +125,29 @@ export default function DirectiveLog() {
     g.task?.toLowerCase().includes(search.toLowerCase()) ||
     g.project?.toLowerCase().includes(search.toLowerCase())
   );
+
+  // Sort the filtered goals
+  const sortedGoals = [...filtered].sort((a, b) => {
+    switch (sortBy) {
+      case "deadline":
+        // Deadlined tasks first, then by deadline urgency
+        if (a.deadline && !b.deadline) return -1;
+        if (!a.deadline && b.deadline) return 1;
+        if (a.deadline && b.deadline) {
+          return new Date(a.deadline).getTime() - new Date(b.deadline).getTime();
+        }
+        return 0;
+      case "priority":
+        const priorityOrder = { High: 0, Medium: 1, Low: 2 };
+        return (priorityOrder[a.priority as keyof typeof priorityOrder] || 2) -
+               (priorityOrder[b.priority as keyof typeof priorityOrder] || 2);
+      case "oldest":
+        return new Date(a.date).getTime() - new Date(b.date).getTime();
+      case "newest":
+      default:
+        return new Date(b.date).getTime() - new Date(a.date).getTime();
+    }
+  });
 
   const nukeGoal = async (idToDelete: string) => {
     setLoadingAction(true);
@@ -207,6 +232,31 @@ export default function DirectiveLog() {
         </div>
 
         <div className="flex flex-wrap items-center gap-4 mt-6">
+          {/* Sort selector */}
+          <div className="flex items-center">
+            {[
+              { value: "newest", label: "Newest" },
+              { value: "deadline", label: "Deadline" },
+              { value: "priority", label: "Priority" },
+              { value: "oldest", label: "Oldest" },
+            ].map((option, index) => (
+              <button
+                key={option.value}
+                onClick={() => setSortBy(option.value as typeof sortBy)}
+                className={`flex items-center gap-2 px-4 py-2.5 text-base font-bold uppercase border transition-colors ${
+                  index === 0 ? "" : "border-l-0"
+                } ${
+                  sortBy === option.value
+                    ? "bg-emerald-700/30 text-emerald-400 border-emerald-500/30"
+                    : "bg-zinc-900/30 text-zinc-600 border-zinc-800 hover:bg-zinc-800/50 hover:text-zinc-400"
+                }`}
+              >
+                {index === 0 && <ArrowUpDown size={18} />}
+                {option.label}
+              </button>
+            ))}
+          </div>
+
           {isAdmin && (
             <button
               onClick={() => setIsAddGoalModalOpen(true)}
@@ -250,13 +300,13 @@ export default function DirectiveLog() {
           <div className="col-span-full py-20 text-zinc-800 uppercase font-black text-2xl animate-pulse text-center">
             Accessing Manifest...
           </div>
-        ) : filtered.length === 0 ? (
+        ) : sortedGoals.length === 0 ? (
           <div className="col-span-full py-20 text-zinc-800 uppercase font-black text-xl text-center border border-dashed border-zinc-900">
             Zero_Directives_Found
           </div>
         ) : (
           <AnimatePresence mode="popLayout">
-            {filtered.map((g) => (
+            {sortedGoals.map((g) => (
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -289,11 +339,17 @@ export default function DirectiveLog() {
                   </div>
                 </div>
 
-                <div className="mb-8">
+                <div className="mb-4">
                   <h3 className="text-xl md:text-2xl font-bold uppercase tracking-tight text-zinc-100 group-hover:text-white transition-colors leading-tight break-words">
                     {g.task}
                   </h3>
                 </div>
+
+                {g.description && (
+                  <p className="text-sm text-zinc-600 mb-6 line-clamp-2 leading-relaxed">
+                    {g.description}
+                  </p>
+                )}
 
                 {/* Deadline countdown if set */}
                 {g.deadline && (

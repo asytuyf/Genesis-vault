@@ -16,6 +16,7 @@ interface Goal {
   priority: string;
   date: string;
   deadline?: string;
+  description?: string;
   completed?: boolean;
 }
 

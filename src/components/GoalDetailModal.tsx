@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { X, Plus, Tag, Clock, Activity, Timer, AlertTriangle } from "lucide-react";
+import { X, Plus, Tag, Clock, Activity, Timer, AlertTriangle, Pencil, Check } from "lucide-react";
 
 interface SubGoal {
   id: string;
@@ -16,6 +16,7 @@ interface Goal {
   priority: string;
   date: string;
   deadline?: string;
+  description?: string;
   subgoals?: SubGoal[];
 }
 
@@ -56,6 +57,13 @@ export const GoalDetailModal = ({ goal, isAdmin, password, onClose, onUpdate }: 
   const [saving, setSaving] = useState(false);
   const [deadline, setDeadline] = useState(goal.deadline || "");
   const [showDeadlineInput, setShowDeadlineInput] = useState(false);
+  const [title, setTitle] = useState(goal.task);
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [description, setDescription] = useState(goal.description || "");
+  const [editingDescription, setEditingDescription] = useState(false);
+  const [project, setProject] = useState(goal.project);
+  const [editingProject, setEditingProject] = useState(false);
+  const [priority, setPriority] = useState(goal.priority);
 
   const toggleSubgoal = (id: string) => {
     if (!isAdmin) return;
@@ -82,14 +90,22 @@ export const GoalDetailModal = ({ goal, isAdmin, password, onClose, onUpdate }: 
 
   const saveChanges = async () => {
     setSaving(true);
-    const updatedGoal = {
+    const updatedGoal: Goal = {
       ...goal,
+      task: title,
+      project,
+      priority,
       subgoals,
-      ...(deadline ? { deadline } : {}),
-      ...(!deadline && goal.deadline ? { deadline: undefined } : {}),
+      description: description.trim() || undefined,
     };
-    // Clean up undefined deadline
-    if (!deadline) delete updatedGoal.deadline;
+    if (deadline) {
+      updatedGoal.deadline = deadline;
+    } else {
+      delete updatedGoal.deadline;
+    }
+    if (!updatedGoal.description) {
+      delete updatedGoal.description;
+    }
     await onUpdate(updatedGoal);
     setSaving(false);
     onClose();
@@ -121,51 +137,198 @@ export const GoalDetailModal = ({ goal, isAdmin, password, onClose, onUpdate }: 
             <X size={20} />
           </button>
 
-          <div className="flex flex-wrap items-center gap-2 mb-4">
-            <div className="flex items-center gap-2 px-2 py-0.5 bg-zinc-900 border border-zinc-800 rounded text-zinc-500 text-[10px] font-black uppercase">
-              <Tag size={10} />
-              {goal.project}
+          {/* Title - editable */}
+          {editingTitle && isAdmin ? (
+            <div className="flex items-center gap-2 mb-4">
+              <input
+                type="text"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && setEditingTitle(false)}
+                className="flex-1 bg-black border border-zinc-800 px-3 py-2.5 text-lg font-bold uppercase tracking-tight text-white outline-none focus:border-emerald-500/50 font-mono"
+                autoFocus
+              />
+              <button
+                onClick={() => setEditingTitle(false)}
+                className="px-3 py-2.5 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20 transition-colors"
+              >
+                <Check size={16} />
+              </button>
             </div>
-            <div className="flex items-center gap-2 text-zinc-700 text-[10px] font-bold">
-              <Clock size={12} /> {goal.date}
+          ) : (
+            <h2
+              onClick={() => isAdmin && setEditingTitle(true)}
+              className={`text-xl font-bold uppercase tracking-tight text-white leading-tight group flex items-center gap-2 mb-4 ${isAdmin ? 'cursor-pointer hover:text-emerald-100' : ''}`}
+            >
+              {title}
+              {isAdmin && <Pencil size={14} className="opacity-0 group-hover:opacity-100 text-emerald-400 transition-opacity" />}
+            </h2>
+          )}
+
+          {/* Meta row: Project, Date, Priority */}
+          <div className="flex flex-wrap items-center gap-3 mb-4">
+            {/* Project - editable */}
+            {editingProject && isAdmin ? (
+              <div className="flex items-center">
+                <div className="flex items-center gap-2 px-2 py-1 bg-black border border-zinc-800 border-r-0">
+                  <Tag size={10} className="text-zinc-600" />
+                </div>
+                <input
+                  type="text"
+                  value={project}
+                  onChange={(e) => setProject(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && setEditingProject(false)}
+                  className="bg-black border border-zinc-800 border-r-0 px-2 py-1 text-[10px] font-black uppercase text-emerald-400 outline-none focus:border-emerald-500/50 w-28 font-mono"
+                  autoFocus
+                />
+                <button
+                  onClick={() => setEditingProject(false)}
+                  className="px-2 py-1 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20 transition-colors"
+                >
+                  <Check size={10} />
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => isAdmin && setEditingProject(true)}
+                className={`flex items-center gap-2 px-2.5 py-1 bg-zinc-900/50 border border-zinc-800 text-zinc-500 text-[10px] font-black uppercase group transition-colors ${isAdmin ? 'hover:border-emerald-500/30 hover:text-emerald-400 cursor-pointer' : ''}`}
+              >
+                <Tag size={10} />
+                {project}
+                {isAdmin && <Pencil size={8} className="opacity-0 group-hover:opacity-100 text-emerald-400 transition-opacity" />}
+              </button>
+            )}
+
+            <div className="flex items-center gap-2 px-2.5 py-1 bg-zinc-900/50 border border-zinc-800 text-zinc-600 text-[10px] font-bold">
+              <Clock size={10} /> {goal.date}
             </div>
-            <div className={`flex items-center gap-2 px-2 py-0.5 rounded text-[10px] font-black uppercase border ${
-              goal.priority === 'High'
-                ? 'bg-red-500/10 text-red-500 border-red-500/20'
-                : 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
+
+            {/* Priority - styled buttons */}
+            <div className={`flex items-center gap-2 px-2.5 py-1 border text-[10px] font-black uppercase ${
+              priority === 'High'
+                ? 'bg-red-500/10 text-red-400 border-red-500/30'
+                : priority === 'Medium'
+                  ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/30'
+                  : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
             }`}>
               <Activity size={10} />
-              {goal.priority}
+              {priority}
             </div>
           </div>
 
-          <h2 className="text-xl font-bold uppercase tracking-tight text-white leading-tight">
-            {goal.task}
-          </h2>
+          {/* Priority selector - admin only */}
+          {isAdmin && (
+            <div className="mb-4">
+              <div className="text-[9px] font-black uppercase tracking-wider text-zinc-700 mb-2">Priority Level</div>
+              <div className="flex gap-1">
+                {['Low', 'Medium', 'High'].map((p) => (
+                  <button
+                    key={p}
+                    onClick={() => setPriority(p)}
+                    className={`flex-1 py-2 text-[10px] font-black uppercase tracking-wider border transition-all ${
+                      priority === p
+                        ? p === 'High'
+                          ? 'bg-red-500/20 text-red-400 border-red-500/50'
+                          : p === 'Medium'
+                            ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/50'
+                            : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/50'
+                        : 'bg-zinc-900/30 text-zinc-600 border-zinc-800 hover:border-zinc-700 hover:text-zinc-500'
+                    }`}
+                  >
+                    {p}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
-          {/* Deadline display/edit */}
-          {(deadline || showDeadlineInput) && (
-            <div className="mt-4">
-              {deadline && !showDeadlineInput && (
-                <div
-                  className={`flex items-center justify-between p-3 border rounded ${
-                    (() => {
-                      const cd = formatCountdown(deadline);
-                      return cd.overdue
-                        ? "bg-red-500/10 border-red-500/30"
-                        : cd.urgent
-                          ? "bg-yellow-500/10 border-yellow-500/30"
-                          : "bg-zinc-900 border-zinc-800";
-                    })()
-                  }`}
+          {/* Description */}
+          <div className="mb-4">
+            <div className="text-[9px] font-black uppercase tracking-wider text-zinc-700 mb-2">Description</div>
+            {editingDescription && isAdmin ? (
+              <div className="space-y-2">
+                <textarea
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Add a description..."
+                  className="w-full bg-black border border-zinc-800 px-3 py-2.5 text-sm text-zinc-300 outline-none focus:border-emerald-500/50 resize-none h-24 font-mono placeholder:text-zinc-700"
+                  autoFocus
+                />
+                <button
+                  onClick={() => setEditingDescription(false)}
+                  className="px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[10px] font-bold uppercase hover:bg-emerald-500/20 transition-colors"
                 >
-                  <div className="flex items-center gap-2">
-                    {formatCountdown(deadline).overdue ? (
-                      <AlertTriangle size={16} className="text-red-400" />
-                    ) : (
-                      <Timer size={16} className={formatCountdown(deadline).urgent ? "text-yellow-400" : "text-emerald-400"} />
-                    )}
-                    <span className={`text-sm font-bold ${
+                  Done
+                </button>
+              </div>
+            ) : description ? (
+              <p
+                onClick={() => isAdmin && setEditingDescription(true)}
+                className={`text-sm text-zinc-500 leading-relaxed p-3 bg-zinc-900/30 border border-zinc-800 group ${isAdmin ? 'cursor-pointer hover:border-zinc-700 hover:text-zinc-400 transition-colors' : ''}`}
+              >
+                {description}
+                {isAdmin && <Pencil size={10} className="inline ml-2 opacity-0 group-hover:opacity-100 text-emerald-400 transition-opacity" />}
+              </p>
+            ) : isAdmin ? (
+              <button
+                onClick={() => setEditingDescription(true)}
+                className="w-full p-3 border border-dashed border-zinc-800 text-zinc-700 hover:border-emerald-500/30 hover:text-emerald-400 text-[10px] font-bold uppercase transition-colors"
+              >
+                + Add description
+              </button>
+            ) : (
+              <div className="p-3 border border-zinc-800 text-zinc-700 text-sm italic">No description</div>
+            )}
+          </div>
+
+          {/* Deadline section */}
+          <div className="mb-4">
+            <div className="text-[9px] font-black uppercase tracking-wider text-zinc-700 mb-2">Deadline</div>
+            {showDeadlineInput && isAdmin ? (
+              <div className="space-y-2">
+                <input
+                  type="datetime-local"
+                  value={deadline}
+                  onChange={(e) => setDeadline(e.target.value)}
+                  className="w-full bg-black border border-zinc-800 px-3 py-2.5 text-sm outline-none focus:border-emerald-500/50 text-zinc-300 font-mono"
+                />
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setShowDeadlineInput(false)}
+                    className="flex-1 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[10px] font-bold uppercase hover:bg-emerald-500/20 transition-colors"
+                  >
+                    Done
+                  </button>
+                  <button
+                    onClick={() => { setDeadline(""); setShowDeadlineInput(false); }}
+                    className="px-3 py-1.5 bg-red-500/10 border border-red-500/30 text-red-400 text-[10px] font-bold uppercase hover:bg-red-500/20 transition-colors"
+                  >
+                    Clear
+                  </button>
+                </div>
+              </div>
+            ) : deadline ? (
+              <div
+                onClick={() => isAdmin && setShowDeadlineInput(true)}
+                className={`flex items-center justify-between p-3 border group transition-colors ${
+                  (() => {
+                    const cd = formatCountdown(deadline);
+                    return cd.overdue
+                      ? "bg-red-500/10 border-red-500/30"
+                      : cd.urgent
+                        ? "bg-yellow-500/10 border-yellow-500/30"
+                        : "bg-zinc-900/30 border-zinc-800";
+                  })()
+                } ${isAdmin ? 'cursor-pointer hover:border-zinc-700' : ''}`}
+              >
+                <div className="flex items-center gap-3">
+                  {formatCountdown(deadline).overdue ? (
+                    <AlertTriangle size={16} className="text-red-400" />
+                  ) : (
+                    <Timer size={16} className={formatCountdown(deadline).urgent ? "text-yellow-400" : "text-emerald-400"} />
+                  )}
+                  <div>
+                    <span className={`text-sm font-bold font-mono ${
                       formatCountdown(deadline).overdue
                         ? "text-red-400"
                         : formatCountdown(deadline).urgent
@@ -174,55 +337,25 @@ export const GoalDetailModal = ({ goal, isAdmin, password, onClose, onUpdate }: 
                     }`}>
                       {formatCountdown(deadline).text}
                     </span>
-                    <span className="text-[10px] text-zinc-600 uppercase">
+                    <span className="text-[10px] text-zinc-600 uppercase ml-2">
                       {formatCountdown(deadline).overdue ? "overdue" : "remaining"}
                     </span>
                   </div>
-                  {isAdmin && (
-                    <button
-                      onClick={() => setShowDeadlineInput(true)}
-                      className="text-[10px] text-zinc-600 hover:text-emerald-400 uppercase font-bold"
-                    >
-                      Edit
-                    </button>
-                  )}
                 </div>
-              )}
-              {showDeadlineInput && isAdmin && (
-                <div className="flex gap-2">
-                  <input
-                    type="datetime-local"
-                    value={deadline}
-                    onChange={(e) => setDeadline(e.target.value)}
-                    className="flex-1 bg-black border border-zinc-800 px-3 py-2 text-sm outline-none focus:border-emerald-500/50 text-zinc-300"
-                  />
-                  <button
-                    onClick={() => setShowDeadlineInput(false)}
-                    className="px-3 py-2 bg-zinc-900 border border-zinc-800 text-zinc-600 hover:text-emerald-400 text-xs font-bold uppercase"
-                  >
-                    Done
-                  </button>
-                  <button
-                    onClick={() => { setDeadline(""); setShowDeadlineInput(false); }}
-                    className="px-3 py-2 bg-zinc-900 border border-zinc-800 text-zinc-600 hover:text-red-400 text-xs font-bold uppercase"
-                  >
-                    Clear
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Add deadline button if none set */}
-          {!deadline && !showDeadlineInput && isAdmin && (
-            <button
-              onClick={() => setShowDeadlineInput(true)}
-              className="mt-3 flex items-center gap-2 text-[10px] text-zinc-600 hover:text-emerald-400 uppercase font-bold transition-colors"
-            >
-              <Timer size={12} />
-              Add deadline
-            </button>
-          )}
+                {isAdmin && <Pencil size={12} className="text-zinc-700 opacity-0 group-hover:opacity-100 transition-opacity" />}
+              </div>
+            ) : isAdmin ? (
+              <button
+                onClick={() => setShowDeadlineInput(true)}
+                className="w-full p-3 border border-dashed border-zinc-800 text-zinc-700 hover:border-emerald-500/30 hover:text-emerald-400 text-[10px] font-bold uppercase transition-colors flex items-center justify-center gap-2"
+              >
+                <Timer size={12} />
+                Add deadline
+              </button>
+            ) : (
+              <div className="p-3 border border-zinc-800 text-zinc-700 text-sm italic">No deadline set</div>
+            )}
+          </div>
 
           {/* Progress bar */}
           {subgoals.length > 0 && (
