@@ -10,7 +10,15 @@ interface Habit {
   name: string;
   color: string;
   history: string[];
+  frequency: number; // every X days (1 = daily, 2 = every other day, 7 = weekly)
 }
+
+const FREQUENCIES = [
+  { value: 1, label: "Daily" },
+  { value: 2, label: "Every 2 days" },
+  { value: 3, label: "Every 3 days" },
+  { value: 7, label: "Weekly" },
+];
 
 interface LLMModel {
   rank: number;
@@ -55,6 +63,7 @@ export default function TrackerPage() {
   const [showAddHabit, setShowAddHabit] = useState(false);
   const [newHabitName, setNewHabitName] = useState("");
   const [newHabitColor, setNewHabitColor] = useState("orange");
+  const [newHabitFrequency, setNewHabitFrequency] = useState(1);
   const [githubUsername, setGithubUsername] = useState("asytuyf");
   const [githubData, setGithubData] = useState<Record<string, number>>({});
   const [githubEvents, setGithubEvents] = useState<any[]>([]);
@@ -115,25 +124,14 @@ export default function TrackerPage() {
     fetchHabits();
   }, []);
 
-  // Load GitHub activity data
+  // Load GitHub activity data - always refresh on page load
   useEffect(() => {
     if (typeof window !== "undefined") {
       const savedGithub = localStorage.getItem("streaks_github_username");
-      const savedGithubData = localStorage.getItem("streaks_github_data");
-      const savedGithubEvents = localStorage.getItem("streaks_github_events");
-
       const username = savedGithub || "asytuyf";
       setGithubUsername(username);
-      if (savedGithubData) {
-        setGithubData(JSON.parse(savedGithubData));
-      }
-      if (savedGithubEvents) {
-        setGithubEvents(JSON.parse(savedGithubEvents));
-      }
-      // Auto-fetch if no cached data
-      if (!savedGithubData) {
-        fetchGithubDataInitial(username);
-      }
+      // Always fetch fresh data on page load
+      fetchGithubDataInitial(username);
     }
   }, []);
 
@@ -217,10 +215,12 @@ export default function TrackerPage() {
       name: newHabitName,
       color: newHabitColor,
       history: [],
+      frequency: newHabitFrequency,
     };
     await saveHabits([...habits, newHabit]);
     setNewHabitName("");
     setNewHabitColor("orange");
+    setNewHabitFrequency(1);
     setShowAddHabit(false);
   };
 
@@ -249,15 +249,36 @@ export default function TrackerPage() {
   };
 
   const getStreak = (habit: Habit) => {
-    const today = new Date();
-    let streak = 0;
-    let currentDate = new Date(today);
+    const frequency = habit.frequency || 1;
+    const sortedHistory = [...habit.history].sort().reverse(); // newest first
 
-    while (true) {
-      const dateStr = currentDate.toISOString().split("T")[0];
-      if (habit.history.includes(dateStr)) {
+    if (sortedHistory.length === 0) return 0;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayStr = today.toISOString().split("T")[0];
+
+    // Check if the most recent completion is within the allowed window
+    const lastCompletionDate = new Date(sortedHistory[0]);
+    lastCompletionDate.setHours(0, 0, 0, 0);
+    const daysSinceLastCompletion = Math.floor((today.getTime() - lastCompletionDate.getTime()) / (1000 * 60 * 60 * 24));
+
+    // If it's been too long since last completion, streak is broken
+    if (daysSinceLastCompletion > frequency) return 0;
+
+    // Count streak - for frequency-based habits, count each completion as 1
+    let streak = 1;
+    for (let i = 1; i < sortedHistory.length; i++) {
+      const currentDate = new Date(sortedHistory[i - 1]);
+      const prevDate = new Date(sortedHistory[i]);
+      currentDate.setHours(0, 0, 0, 0);
+      prevDate.setHours(0, 0, 0, 0);
+
+      const daysBetween = Math.floor((currentDate.getTime() - prevDate.getTime()) / (1000 * 60 * 60 * 24));
+
+      // Allow gap up to frequency days
+      if (daysBetween <= frequency) {
         streak++;
-        currentDate.setDate(currentDate.getDate() - 1);
       } else {
         break;
       }
@@ -585,6 +606,26 @@ export default function TrackerPage() {
                   </div>
                 </div>
 
+                {/* Frequency Picker */}
+                <div className="mb-6">
+                  <div className="text-[10px] font-black uppercase tracking-wider text-zinc-600 mb-3">Frequency</div>
+                  <div className="flex gap-2 flex-wrap">
+                    {FREQUENCIES.map((freq) => (
+                      <button
+                        key={freq.value}
+                        onClick={() => setNewHabitFrequency(freq.value)}
+                        className={`px-4 py-2 border text-xs font-bold uppercase transition-all ${
+                          newHabitFrequency === freq.value
+                            ? `${getHabitColor(newHabitColor, "border")} ${getHabitColor(newHabitColor, "text")} bg-opacity-20`
+                            : "border-zinc-800 text-zinc-500 hover:border-zinc-700"
+                        }`}
+                      >
+                        {freq.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 <div className="flex gap-3">
                   <button
                     onClick={addHabit}
@@ -626,10 +667,15 @@ export default function TrackerPage() {
                       <span className="text-lg font-bold text-white">{habit.name}</span>
                     </div>
                     <div className="flex items-center gap-4">
-                      <div className="flex items-center gap-2">
-                        <Flame size={16} className={getHabitColor(color, "text")} />
-                        <span className={`text-lg font-black ${getHabitColor(color, "text")}`}>{streak}</span>
-                        <span className="text-xs text-zinc-500 uppercase">day streak</span>
+                      <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-2">
+                          <Flame size={16} className={getHabitColor(color, "text")} />
+                          <span className={`text-lg font-black ${getHabitColor(color, "text")}`}>{streak}</span>
+                          <span className="text-xs text-zinc-500 uppercase">streak</span>
+                        </div>
+                        <span className="text-[10px] text-zinc-600 uppercase px-2 py-1 border border-zinc-800">
+                          {FREQUENCIES.find(f => f.value === (habit.frequency || 1))?.label || "Daily"}
+                        </span>
                       </div>
                       {adminMode && (
                         <button
@@ -673,14 +719,9 @@ export default function TrackerPage() {
             {habits.length === 0 && !showAddHabit && (
               <div className="text-center py-16 border border-zinc-800 bg-black/20">
                 <Flame size={48} className="mx-auto mb-4 text-zinc-800" />
-                <p className="text-zinc-600 text-sm font-bold uppercase tracking-wider mb-4">No habits yet</p>
+                <p className="text-zinc-600 text-sm font-bold uppercase tracking-wider">No habits yet</p>
                 {adminMode && (
-                  <button
-                    onClick={() => setShowAddHabit(true)}
-                    className="px-6 py-3 border border-orange-500/30 text-orange-400 text-xs font-black uppercase tracking-wider hover:bg-orange-500/10 transition-colors"
-                  >
-                    Create Your First Habit
-                  </button>
+                  <p className="text-zinc-700 text-xs mt-2">Click &quot;Add&quot; above to create one</p>
                 )}
               </div>
             )}
