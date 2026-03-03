@@ -285,13 +285,43 @@ export const GoalDetailModal = ({ goal, isAdmin, password, onClose, onUpdate }: 
           <div className="mb-4">
             <div className="text-[9px] font-black uppercase tracking-wider text-zinc-700 mb-2">Deadline</div>
             {showDeadlineInput && isAdmin ? (
-              <div className="space-y-2">
+              <div className="space-y-3">
+                {/* Quick presets */}
+                <div className="flex flex-wrap gap-1">
+                  {[
+                    { label: "1h", hours: 1 },
+                    { label: "3h", hours: 3 },
+                    { label: "6h", hours: 6 },
+                    { label: "12h", hours: 12 },
+                    { label: "24h", hours: 24 },
+                    { label: "2d", hours: 48 },
+                    { label: "1w", hours: 168 },
+                  ].map((preset) => (
+                    <button
+                      key={preset.label}
+                      onClick={() => {
+                        const date = new Date();
+                        date.setHours(date.getHours() + preset.hours);
+                        const iso = date.toISOString().slice(0, 16);
+                        setDeadline(iso);
+                      }}
+                      className="px-2.5 py-1 bg-zinc-900/50 border border-zinc-800 text-zinc-500 text-[10px] font-bold uppercase hover:border-emerald-500/30 hover:text-emerald-400 transition-colors"
+                    >
+                      +{preset.label}
+                    </button>
+                  ))}
+                </div>
                 <input
                   type="datetime-local"
                   value={deadline}
                   onChange={(e) => setDeadline(e.target.value)}
                   className="w-full bg-black border border-zinc-800 px-3 py-2.5 text-sm outline-none focus:border-emerald-500/50 text-zinc-300 font-mono"
                 />
+                {deadline && (
+                  <div className="text-[10px] text-zinc-600 font-mono">
+                    {new Date(deadline).toLocaleDateString([], { weekday: "short", day: "numeric", month: "short", year: "numeric" })} at {new Date(deadline).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })}
+                  </div>
+                )}
                 <div className="flex gap-2">
                   <button
                     onClick={() => setShowDeadlineInput(false)}
@@ -310,7 +340,7 @@ export const GoalDetailModal = ({ goal, isAdmin, password, onClose, onUpdate }: 
             ) : deadline ? (
               <div
                 onClick={() => isAdmin && setShowDeadlineInput(true)}
-                className={`flex items-center justify-between p-3 border group transition-colors ${
+                className={`p-3 border group transition-colors ${
                   (() => {
                     const cd = formatCountdown(deadline);
                     return cd.overdue
@@ -321,13 +351,13 @@ export const GoalDetailModal = ({ goal, isAdmin, password, onClose, onUpdate }: 
                   })()
                 } ${isAdmin ? 'cursor-pointer hover:border-zinc-700' : ''}`}
               >
-                <div className="flex items-center gap-3">
-                  {formatCountdown(deadline).overdue ? (
-                    <AlertTriangle size={16} className="text-red-400" />
-                  ) : (
-                    <Timer size={16} className={formatCountdown(deadline).urgent ? "text-yellow-400" : "text-emerald-400"} />
-                  )}
-                  <div>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    {formatCountdown(deadline).overdue ? (
+                      <AlertTriangle size={16} className="text-red-400" />
+                    ) : (
+                      <Timer size={16} className={formatCountdown(deadline).urgent ? "text-yellow-400" : "text-emerald-400"} />
+                    )}
                     <span className={`text-sm font-bold font-mono ${
                       formatCountdown(deadline).overdue
                         ? "text-red-400"
@@ -337,12 +367,15 @@ export const GoalDetailModal = ({ goal, isAdmin, password, onClose, onUpdate }: 
                     }`}>
                       {formatCountdown(deadline).text}
                     </span>
-                    <span className="text-[10px] text-zinc-600 uppercase ml-2">
+                    <span className="text-[10px] text-zinc-600 uppercase">
                       {formatCountdown(deadline).overdue ? "overdue" : "remaining"}
                     </span>
                   </div>
+                  {isAdmin && <Pencil size={12} className="text-zinc-700 opacity-0 group-hover:opacity-100 transition-opacity" />}
                 </div>
-                {isAdmin && <Pencil size={12} className="text-zinc-700 opacity-0 group-hover:opacity-100 transition-opacity" />}
+                <div className="text-[10px] text-zinc-500 font-mono">
+                  {new Date(deadline).toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" })} at {new Date(deadline).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })}
+                </div>
               </div>
             ) : isAdmin ? (
               <button

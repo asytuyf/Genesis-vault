@@ -132,10 +132,36 @@ export const AddGoalForm = ({ password, setGoals, currentGoals, setLoadingAction
                 <label className="block text-[10px] font-black uppercase tracking-wider text-zinc-600 mb-2">
                   Deadline (optional)
                 </label>
+                {/* Quick presets */}
+                <div className="flex flex-wrap gap-1 mb-2">
+                  {[
+                    { label: "1h", hours: 1 },
+                    { label: "3h", hours: 3 },
+                    { label: "6h", hours: 6 },
+                    { label: "12h", hours: 12 },
+                    { label: "24h", hours: 24 },
+                    { label: "2d", hours: 48 },
+                    { label: "1w", hours: 168 },
+                  ].map((preset) => (
+                    <button
+                      key={preset.label}
+                      type="button"
+                      onClick={() => {
+                        const date = new Date();
+                        date.setHours(date.getHours() + preset.hours);
+                        const iso = date.toISOString().slice(0, 16);
+                        setDeadline(iso);
+                      }}
+                      className="px-2.5 py-1.5 bg-zinc-900/50 border border-zinc-800 text-zinc-500 text-xs font-bold uppercase hover:border-emerald-500/30 hover:text-emerald-400 transition-colors"
+                    >
+                      +{preset.label}
+                    </button>
+                  ))}
+                </div>
                 <div className="flex gap-2">
                     <input
                         type="datetime-local"
-                        className="flex-1 bg-black border border-zinc-800 px-4 py-2.5 text-base outline-none focus:border-emerald-400 text-zinc-300"
+                        className="flex-1 bg-black border border-zinc-800 px-4 py-2.5 text-base outline-none focus:border-emerald-400 text-zinc-300 font-mono"
                         value={deadline}
                         onChange={(e) => setDeadline(e.target.value)}
                     />
@@ -143,12 +169,17 @@ export const AddGoalForm = ({ password, setGoals, currentGoals, setLoadingAction
                         <button
                             type="button"
                             onClick={() => setDeadline("")}
-                            className="px-3 py-2.5 bg-zinc-900 border border-zinc-800 text-zinc-500 hover:text-red-400 hover:border-red-500/30 text-xs font-bold uppercase transition-colors"
+                            className="px-3 py-2.5 bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20 text-xs font-bold uppercase transition-colors"
                         >
                             Clear
                         </button>
                     )}
                 </div>
+                {deadline && (
+                  <div className="text-[10px] text-zinc-500 font-mono mt-2">
+                    {new Date(deadline).toLocaleDateString([], { weekday: "short", day: "numeric", month: "short", year: "numeric" })} at {new Date(deadline).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })}
+                  </div>
+                )}
             </div>
             <button
                 onClick={handleAddGoal}

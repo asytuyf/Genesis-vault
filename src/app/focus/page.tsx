@@ -925,6 +925,35 @@ export default function FocusPage() {
                           />
                         </div>
                       </div>
+                      {/* Quick time presets */}
+                      <div>
+                        <label className="block text-[9px] font-black text-zinc-600 uppercase tracking-[0.15em] mb-1.5">Quick Set</label>
+                        <div className="flex flex-wrap gap-1">
+                          {[
+                            { label: "30m", mins: 30 },
+                            { label: "1h", mins: 60 },
+                            { label: "2h", mins: 120 },
+                            { label: "3h", mins: 180 },
+                            { label: "6h", mins: 360 },
+                            { label: "12h", mins: 720 },
+                            { label: "24h", mins: 1440 },
+                          ].map((preset) => (
+                            <button
+                              key={preset.label}
+                              type="button"
+                              onClick={() => {
+                                const date = new Date();
+                                date.setMinutes(date.getMinutes() + preset.mins);
+                                const iso = date.toISOString().slice(0, 16);
+                                setNewDeadline(iso);
+                              }}
+                              className="px-2 py-1 bg-zinc-900/50 border border-zinc-800 text-zinc-500 text-[10px] font-bold uppercase hover:border-yellow-500/30 hover:text-yellow-400 transition-colors"
+                            >
+                              +{preset.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
                       <div className="grid grid-cols-4 gap-3">
                         <div>
                           <label className="block text-[9px] font-black text-zinc-600 uppercase tracking-[0.15em] mb-1.5">Date</label>
@@ -938,19 +967,10 @@ export default function FocusPage() {
                         <div>
                           <label className="block text-[9px] font-black text-zinc-600 uppercase tracking-[0.15em] mb-1.5">Time (24h)</label>
                           <input
-                            type="text"
-                            placeholder="14:30"
-                            pattern="[0-2][0-9]:[0-5][0-9]"
-                            maxLength={5}
+                            type="time"
                             value={newDeadline.split("T")[1] || ""}
-                            onChange={(e) => {
-                              let val = e.target.value.replace(/[^\d:]/g, "");
-                              if (val.length === 2 && !val.includes(":")) val += ":";
-                              if (val.length <= 5) {
-                                setNewDeadline((newDeadline.split("T")[0] || new Date().toISOString().split("T")[0]) + "T" + val);
-                              }
-                            }}
-                            className="w-full bg-black border border-zinc-800 px-3 py-2 text-sm font-mono text-yellow-400 outline-none focus:border-yellow-500/50 placeholder:text-zinc-700"
+                            onChange={(e) => setNewDeadline((newDeadline.split("T")[0] || new Date().toISOString().split("T")[0]) + "T" + e.target.value)}
+                            className="w-full bg-black border border-zinc-800 px-3 py-2 text-sm font-mono text-yellow-400 outline-none focus:border-yellow-500/50"
                           />
                         </div>
                         <div>
