@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { motion, useDragControls, useMotionValue, animate } from "framer-motion";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Terminal, Folder, File, ChevronRight, ChevronDown, Hash, X, Lock, Unlock, Zap, Flame, Sun } from "lucide-react";
+import { Terminal, Folder, File, ChevronRight, ChevronDown, Hash, X, Lock, Unlock, Zap, Flame, Sun, Database } from "lucide-react";
 
 interface FileExplorerProps {
   mobileOpen?: boolean;
@@ -18,6 +18,8 @@ export const FileExplorer = ({ mobileOpen, setMobileOpen, desktopOpen }: FileExp
   const [adminKey, setAdminKey] = useState("");
   const [adminMode, setAdminMode] = useState(false);
   const [bgBrightness, setBgBrightness] = useState(0);
+  const [migrating, setMigrating] = useState(false);
+  const [migrateResult, setMigrateResult] = useState<string | null>(null);
   const dragControls = useDragControls();
   const panelX = useMotionValue(-350);
   const panelY = useMotionValue(0);
@@ -541,6 +543,59 @@ export const FileExplorer = ({ mobileOpen, setMobileOpen, desktopOpen }: FileExp
                 <div className="mt-2 text-[9px] text-zinc-600 font-bold uppercase tracking-widest">
                   local cache / secure ops
                 </div>
+
+                {/* Migration button - only show when admin */}
+                {adminMode && (
+                  <div className="mt-4 pt-4 border-t border-zinc-800">
+                    <button
+                      onClick={async () => {
+                        if (migrating) return;
+                        setMigrating(true);
+                        setMigrateResult(null);
+                        try {
+                          // Hardcoded goals data for one-time migration
+                          const goalsToMigrate = [
+                            {"id":"1770602846","project":"Website","task":"Make a section of the website where i can see like real time like info about my pc's that are turned on which leads to a much complicated project (AI into the site)","priority":"Med","status":"PENDING","date":"2026-02-09"},
+                            {"id":"1770632955","project":"Life","task":"GEt gemini trial for 1 year using uni email and link it to my personel gmail maybe","priority":"Med","status":"PENDING","date":"2026-02-09","subgoals":[{"id":"1771030451348","text":"omg","completed":false},{"id":"1771030454822","text":"wowowwo","completed":false}]},
+                            {"id":"1771033703370","task":"three.js website","project":"Project Ideas","priority":"Low","date":"2026-02-14"},
+                            {"id":"1771452644572","task":"Makes bsp proposal and find tutor (ASAP)","project":"Uni","priority":"High","date":"2026-02-18","subgoals":[{"id":"1771452676085","text":"Write a proposal for BSP 6","completed":true},{"id":"1771650634430","text":"send mails to tutors (urgent)","completed":false}],"deadline":"2026-03-15T02:44","description":"programing languages teacher"},
+                            {"id":"1771509106398","task":"Improve Stickers","project":"Website","priority":"Low","date":"2026-02-19"},
+                            {"id":"1771955700837","task":"Finish childhood's end tv show","project":"Fun","priority":"Medium","date":"2026-02-24"},
+                            {"id":"1772467247748","task":"Ask for masters application if needed from bachelor","project":"Uni","priority":"High","date":"2026-03-02"},
+                            {"id":"1772468438300","task":"TCS ask question about midterm","project":"Uni","priority":"Medium","date":"2026-03-02","subgoals":[],"description":"MSA 2.380","deadline":"2026-03-10T13:00"}
+                          ];
+                          const res = await fetch("/api/migrate", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ password: adminKey, goals: goalsToMigrate }),
+                          });
+                          const data = await res.json();
+                          if (data.success) {
+                            setMigrateResult(`Done! ${data.results?.goals || ""}`);
+                          } else {
+                            setMigrateResult(`Error: ${data.error}`);
+                          }
+                        } catch (e) {
+                          setMigrateResult("Failed to migrate");
+                        }
+                        setMigrating(false);
+                      }}
+                      disabled={migrating}
+                      className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-yellow-500/10 border border-yellow-500/30 text-yellow-400 text-[10px] font-bold uppercase hover:bg-yellow-500/20 transition-colors disabled:opacity-50"
+                    >
+                      <Database size={12} />
+                      {migrating ? "Migrating..." : "Migrate Old Data"}
+                    </button>
+                    {migrateResult && (
+                      <div className={`mt-2 text-[9px] font-bold uppercase ${migrateResult.startsWith("Done") ? "text-emerald-400" : "text-red-400"}`}>
+                        {migrateResult}
+                      </div>
+                    )}
+                    <div className="mt-2 text-[8px] text-zinc-700">
+                      One-time only. Moves your 8 goals to the cloud.
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
