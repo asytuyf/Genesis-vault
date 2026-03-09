@@ -148,37 +148,38 @@ export default function DirectiveLog() {
   });
 
   const nukeGoal = async (idToDelete: string) => {
-    // Optimistic update - UI updates instantly
-    const remainingGoals = goals.filter(g => g.id !== idToDelete);
-    setGoals(remainingGoals);
+    setLoadingAction(true);
 
-    // Save to backend in background
-    const goalsForGitHub = [...remainingGoals].reverse();
-    try {
-      await fetch('/api/goals', {
-        method: 'POST',
-        body: JSON.stringify({ password, updatedGoals: goalsForGitHub })
-      });
-    } catch (err) {
-      console.error("Failed to delete goal:", err);
+    // Keep original order for GitHub (don't reverse - goals are stored oldest-first)
+    const remainingGoals = goals.filter(g => g.id !== idToDelete);
+    const goalsForGitHub = [...remainingGoals].reverse(); // Reverse back to original storage order
+
+    const res = await fetch('/api/goals', {
+      method: 'POST',
+      body: JSON.stringify({ password, updatedGoals: goalsForGitHub })
+    });
+
+    if (res.ok) {
+      setGoals(remainingGoals);
     }
+    setLoadingAction(false);
   };
 
   const updateGoal = async (updatedGoal: Goal) => {
-    // Optimistic update - UI updates instantly
-    const updatedGoals = goals.map(g => g.id === updatedGoal.id ? updatedGoal : g);
-    setGoals(updatedGoals);
+    setLoadingAction(true);
 
-    // Save to backend in background (don't block UI)
+    const updatedGoals = goals.map(g => g.id === updatedGoal.id ? updatedGoal : g);
     const goalsForGitHub = [...updatedGoals].reverse();
-    try {
-      await fetch('/api/goals', {
-        method: 'POST',
-        body: JSON.stringify({ password, updatedGoals: goalsForGitHub })
-      });
-    } catch (err) {
-      console.error("Failed to save goal:", err);
+
+    const res = await fetch('/api/goals', {
+      method: 'POST',
+      body: JSON.stringify({ password, updatedGoals: goalsForGitHub })
+    });
+
+    if (res.ok) {
+      setGoals(updatedGoals);
     }
+    setLoadingAction(false);
   };
 
   return (

@@ -1,7 +1,7 @@
 "use client";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState } from "react";
 import { motion } from "framer-motion";
-import { X, Plus, Tag, Clock, Activity, Timer, AlertTriangle, Pencil, Check, Loader2 } from "lucide-react";
+import { X, Plus, Tag, Clock, Activity, Timer, AlertTriangle, Pencil, Check } from "lucide-react";
 
 interface SubGoal {
   id: string;
@@ -55,7 +55,6 @@ export const GoalDetailModal = ({ goal, isAdmin, password, onClose, onUpdate }: 
   const [subgoals, setSubgoals] = useState<SubGoal[]>(goal.subgoals || []);
   const [newSubgoal, setNewSubgoal] = useState("");
   const [saving, setSaving] = useState(false);
-  const [saveStatus, setSaveStatus] = useState<"saved" | "pending" | "saving">("saved");
   const [deadline, setDeadline] = useState(goal.deadline || "");
   const [showDeadlineInput, setShowDeadlineInput] = useState(false);
   const [title, setTitle] = useState(goal.task);
@@ -65,66 +64,6 @@ export const GoalDetailModal = ({ goal, isAdmin, password, onClose, onUpdate }: 
   const [project, setProject] = useState(goal.project);
   const [editingProject, setEditingProject] = useState(false);
   const [priority, setPriority] = useState(goal.priority);
-
-  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const isFirstRender = useRef(true);
-
-  // Build current goal state
-  const buildUpdatedGoal = useCallback((): Goal => {
-    const updatedGoal: Goal = {
-      ...goal,
-      task: title,
-      project,
-      priority,
-      subgoals,
-      description: description.trim() || undefined,
-    };
-    if (deadline) {
-      updatedGoal.deadline = deadline;
-    } else {
-      delete updatedGoal.deadline;
-    }
-    if (!updatedGoal.description) {
-      delete updatedGoal.description;
-    }
-    return updatedGoal;
-  }, [goal, title, project, priority, subgoals, description, deadline]);
-
-  // Auto-save with debounce
-  useEffect(() => {
-    // Skip first render (initial load)
-    if (isFirstRender.current) {
-      isFirstRender.current = false;
-      return;
-    }
-
-    if (!isAdmin) return;
-
-    // Clear existing timeout
-    if (saveTimeoutRef.current) {
-      clearTimeout(saveTimeoutRef.current);
-    }
-
-    setSaveStatus("pending");
-
-    // Schedule save after 1.5 seconds of no changes
-    saveTimeoutRef.current = setTimeout(async () => {
-      setSaveStatus("saving");
-      try {
-        await onUpdate(buildUpdatedGoal());
-        setSaveStatus("saved");
-      } catch (err) {
-        console.error("Auto-save failed:", err);
-        setSaveStatus("pending"); // Allow retry
-      }
-    }, 1500);
-
-    return () => {
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-      }
-    };
-  }, [title, project, priority, subgoals, description, deadline, isAdmin, buildUpdatedGoal, onUpdate]);
 
   const toggleSubgoal = (id: string) => {
     if (!isAdmin) return;
@@ -522,7 +461,7 @@ export const GoalDetailModal = ({ goal, isAdmin, password, onClose, onUpdate }: 
           )}
         </div>
 
-        {/* Add subgoal + Save Status (Admin only) */}
+        {/* Add subgoal + Save (Admin only) */}
         {isAdmin && (
           <div className="p-6 border-t border-zinc-800 space-y-3">
             <div className="flex gap-2">
@@ -541,19 +480,13 @@ export const GoalDetailModal = ({ goal, isAdmin, password, onClose, onUpdate }: 
                 [+]
               </button>
             </div>
-            {/* Auto-save status indicator */}
-            <div className={`flex items-center justify-center gap-2 py-2 text-[10px] font-bold uppercase tracking-wider transition-colors ${
-              saveStatus === "saved"
-                ? "text-emerald-500"
-                : saveStatus === "saving"
-                  ? "text-blue-400"
-                  : "text-yellow-400"
-            }`}>
-              {saveStatus === "saving" && <Loader2 size={12} className="animate-spin" />}
-              {saveStatus === "saved" && <span className="w-2 h-2 rounded-full bg-emerald-500" />}
-              {saveStatus === "pending" && <span className="w-2 h-2 rounded-full bg-yellow-400" />}
-              {saveStatus === "saved" ? "All changes saved" : saveStatus === "saving" ? "Saving..." : "Pending save..."}
-            </div>
+            <button
+              onClick={saveChanges}
+              disabled={saving}
+              className="w-full flex items-center justify-center gap-2 bg-zinc-900 text-emerald-500 px-4 py-2.5 text-sm font-bold uppercase border border-zinc-800 hover:border-emerald-500/30 hover:bg-zinc-900/80 transition-colors font-mono tracking-wider"
+            >
+              {saving ? "SYNCING..." : "SYNC_CHANGES"}
+            </button>
           </div>
         )}
       </motion.div>
