@@ -42,7 +42,6 @@ export const AddGoalForm = ({ password, setGoals, currentGoals, setLoadingAction
       alert("Goal task cannot be empty.");
       return;
     }
-    setLoadingAction(true);
 
     // Use ISO date format (YYYY-MM-DD) to match PC addgoal function
     const today = new Date();
@@ -58,26 +57,27 @@ export const AddGoalForm = ({ password, setGoals, currentGoals, setLoadingAction
       ...(description.trim() && { description: description.trim() }), // Only include if set
     };
 
-    // currentGoals is displayed reversed (newest first), so reverse back for storage (oldest first)
-    // then add new goal at the end
+    // Optimistic update - UI updates instantly
+    setGoals([newGoal, ...currentGoals]); // Add to front of display (newest first)
+    setTask("");
+    setProject("");
+    setPriority("Low");
+    setDeadline("");
+    setDescription("");
+    onClose();
+
+    // Save to backend in background
     const goalsForStorage = [...currentGoals].reverse();
     goalsForStorage.push(newGoal);
 
-    const res = await fetch('/api/goals', {
-      method: 'POST',
-      body: JSON.stringify({ password, updatedGoals: goalsForStorage })
-    });
-
-    if (res.ok) {
-      setGoals([newGoal, ...currentGoals]); // Add to front of display (newest first)
-      setTask("");
-      setProject("");
-      setPriority("Low");
-      setDeadline("");
-      setDescription("");
-      onClose();
+    try {
+      await fetch('/api/goals', {
+        method: 'POST',
+        body: JSON.stringify({ password, updatedGoals: goalsForStorage })
+      });
+    } catch (err) {
+      console.error("Failed to add goal:", err);
     }
-    setLoadingAction(false);
   };
 
   return (

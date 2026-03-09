@@ -148,38 +148,37 @@ export default function DirectiveLog() {
   });
 
   const nukeGoal = async (idToDelete: string) => {
-    setLoadingAction(true);
-
-    // Keep original order for GitHub (don't reverse - goals are stored oldest-first)
+    // Optimistic update - UI updates instantly
     const remainingGoals = goals.filter(g => g.id !== idToDelete);
-    const goalsForGitHub = [...remainingGoals].reverse(); // Reverse back to original storage order
+    setGoals(remainingGoals);
 
-    const res = await fetch('/api/goals', {
-      method: 'POST',
-      body: JSON.stringify({ password, updatedGoals: goalsForGitHub })
-    });
-
-    if (res.ok) {
-      setGoals(remainingGoals);
+    // Save to backend in background
+    const goalsForGitHub = [...remainingGoals].reverse();
+    try {
+      await fetch('/api/goals', {
+        method: 'POST',
+        body: JSON.stringify({ password, updatedGoals: goalsForGitHub })
+      });
+    } catch (err) {
+      console.error("Failed to delete goal:", err);
     }
-    setLoadingAction(false);
   };
 
   const updateGoal = async (updatedGoal: Goal) => {
-    setLoadingAction(true);
-
+    // Optimistic update - UI updates instantly
     const updatedGoals = goals.map(g => g.id === updatedGoal.id ? updatedGoal : g);
+    setGoals(updatedGoals);
+
+    // Save to backend in background (don't block UI)
     const goalsForGitHub = [...updatedGoals].reverse();
-
-    const res = await fetch('/api/goals', {
-      method: 'POST',
-      body: JSON.stringify({ password, updatedGoals: goalsForGitHub })
-    });
-
-    if (res.ok) {
-      setGoals(updatedGoals);
+    try {
+      await fetch('/api/goals', {
+        method: 'POST',
+        body: JSON.stringify({ password, updatedGoals: goalsForGitHub })
+      });
+    } catch (err) {
+      console.error("Failed to save goal:", err);
     }
-    setLoadingAction(false);
   };
 
   return (
