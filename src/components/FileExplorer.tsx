@@ -20,6 +20,7 @@ export const FileExplorer = ({ mobileOpen, setMobileOpen, desktopOpen }: FileExp
   const [bgBrightness, setBgBrightness] = useState(0);
   const [migrating, setMigrating] = useState(false);
   const [migrateResult, setMigrateResult] = useState<string | null>(null);
+  const [verifying, setVerifying] = useState(false);
   const dragControls = useDragControls();
   const panelX = useMotionValue(-350);
   const panelY = useMotionValue(0);
@@ -526,18 +527,45 @@ export const FileExplorer = ({ mobileOpen, setMobileOpen, desktopOpen }: FileExp
                   />
                   <button
                     type="button"
-                    onClick={() =>
-                      setAdminModeAndBroadcast(adminKey ? !adminMode : false)
-                    }
+                    disabled={verifying}
+                    onClick={async () => {
+                      if (adminMode) {
+                        // Just lock - no verification needed
+                        setAdminModeAndBroadcast(false);
+                        return;
+                      }
+                      if (!adminKey) return;
+
+                      // Verify password with server
+                      setVerifying(true);
+                      try {
+                        const res = await fetch("/api/verify", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ password: adminKey }),
+                        });
+                        if (res.ok) {
+                          setAdminModeAndBroadcast(true);
+                        } else {
+                          alert("Invalid password");
+                          setAdminModeAndBroadcast(false);
+                        }
+                      } catch (e) {
+                        alert("Failed to verify password");
+                      }
+                      setVerifying(false);
+                    }}
                     className={`grid h-9 w-9 place-items-center border transition-colors ${
-                      adminMode
-                        ? "border-emerald-400/40 text-emerald-400"
-                        : "border-zinc-800 text-zinc-500 hover:text-zinc-300"
+                      verifying
+                        ? "border-yellow-400/40 text-yellow-400"
+                        : adminMode
+                          ? "border-emerald-400/40 text-emerald-400"
+                          : "border-zinc-800 text-zinc-500 hover:text-zinc-300"
                     }`}
                     title={adminMode ? "Lock admin" : "Unlock admin"}
                     aria-label={adminMode ? "Lock admin" : "Unlock admin"}
                   >
-                    {adminMode ? <Unlock size={16} /> : <Lock size={16} />}
+                    {verifying ? <Zap size={16} className="animate-pulse" /> : adminMode ? <Unlock size={16} /> : <Lock size={16} />}
                   </button>
                 </div>
                 <div className="mt-2 text-[9px] text-zinc-600 font-bold uppercase tracking-widest">
