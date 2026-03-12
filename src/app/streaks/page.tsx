@@ -165,21 +165,6 @@ export default function TrackerPage() {
   const saveHabits = async (newHabits: Habit[]) => {
     // Update UI immediately
     setHabits(newHabits);
-
-    // Save to cloud if admin
-    if (adminMode && password) {
-      setSavingHabits(true);
-      try {
-        await fetch("/api/habits", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ password, updatedHabits: newHabits }),
-        });
-      } catch (e) {
-        console.error("Failed to save habits:", e);
-      }
-      setSavingHabits(false);
-    }
   };
 
   const fetchGithubData = async (username: string) => {
@@ -548,13 +533,38 @@ export default function TrackerPage() {
                 {loadingHabits ? "..." : "Refresh"}
               </button>
               {adminMode && (
-                <button
-                  onClick={() => setShowAddHabit(!showAddHabit)}
-                  className="flex items-center gap-2 px-4 py-2 border border-orange-500/30 text-orange-400 text-xs font-black uppercase tracking-wider hover:bg-orange-500/10 transition-colors"
-                >
-                  <Plus size={14} />
-                  Add
-                </button>
+                <>
+                  <button
+                    onClick={async () => {
+                      setSavingHabits(true);
+                      try {
+                        const res = await fetch("/api/habits", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ password, updatedHabits: habits }),
+                        });
+                        if (!res.ok) {
+                          console.error("Sync failed:", res.status, await res.text());
+                        }
+                      } catch (e) {
+                        console.error("Sync failed:", e);
+                      }
+                      setSavingHabits(false);
+                    }}
+                    disabled={savingHabits}
+                    className="flex items-center gap-2 px-4 py-2 border border-orange-500/30 text-orange-400 text-xs font-black uppercase tracking-wider hover:bg-orange-500/10 transition-colors"
+                  >
+                    <Check size={14} />
+                    {savingHabits ? "Syncing..." : "Sync"}
+                  </button>
+                  <button
+                    onClick={() => setShowAddHabit(!showAddHabit)}
+                    className="flex items-center gap-2 px-4 py-2 border border-orange-500/30 text-orange-400 text-xs font-black uppercase tracking-wider hover:bg-orange-500/10 transition-colors"
+                  >
+                    <Plus size={14} />
+                    Add
+                  </button>
+                </>
               )}
             </div>
           </div>
