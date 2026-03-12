@@ -167,21 +167,31 @@ export default function DirectiveLog() {
   };
 
   const updateGoal = async (updatedGoal: Goal) => {
-    setLoadingAction(true);
-
     const updatedGoals = goals.map(g => g.id === updatedGoal.id ? updatedGoal : g);
-    const goalsForGitHub = [...updatedGoals].reverse();
 
-    const res = await fetch('/api/goals', {
-      method: 'POST',
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password, updatedGoals: goalsForGitHub })
-    });
+    // Update UI immediately
+    setGoals(updatedGoals);
 
-    if (res.ok) {
-      setGoals(updatedGoals);
+    // Save to cloud if admin
+    if (isAdmin && password) {
+      setLoadingAction(true);
+      const goalsForGitHub = [...updatedGoals].reverse();
+
+      try {
+        const res = await fetch('/api/goals', {
+          method: 'POST',
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ password, updatedGoals: goalsForGitHub })
+        });
+
+        if (!res.ok) {
+          console.error("Failed to update goal:", res.status, await res.text());
+        }
+      } catch (e) {
+        console.error("Failed to update goal:", e);
+      }
+      setLoadingAction(false);
     }
-    setLoadingAction(false);
   };
 
   return (

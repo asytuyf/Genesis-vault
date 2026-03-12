@@ -256,19 +256,7 @@ export default function TrackerPage() {
 
     if (sortedHistory.length === 0) return 0;
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const todayStr = today.toISOString().split("T")[0];
-
-    // Check if the most recent completion is within the allowed window
-    const lastCompletionDate = new Date(sortedHistory[0]);
-    lastCompletionDate.setHours(0, 0, 0, 0);
-    const daysSinceLastCompletion = Math.floor((today.getTime() - lastCompletionDate.getTime()) / (1000 * 60 * 60 * 24));
-
-    // If it's been too long since last completion, streak is broken
-    if (daysSinceLastCompletion > frequency) return 0;
-
-    // Count streak - for frequency-based habits, count each completion as 1
+    // Simply count consecutive completions where gap <= frequency
     let streak = 1;
     for (let i = 1; i < sortedHistory.length; i++) {
       const currentDate = new Date(sortedHistory[i - 1]);
@@ -278,7 +266,6 @@ export default function TrackerPage() {
 
       const daysBetween = Math.floor((currentDate.getTime() - prevDate.getTime()) / (1000 * 60 * 60 * 24));
 
-      // Allow gap up to frequency days
       if (daysBetween <= frequency) {
         streak++;
       } else {
