@@ -65,6 +65,7 @@ export const AddGoalForm = ({ password, setGoals, currentGoals, setLoadingAction
 
     const res = await fetch('/api/goals', {
       method: 'POST',
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ password, updatedGoals: goalsForStorage })
     });
 

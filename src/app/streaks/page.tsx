@@ -171,6 +171,7 @@ export default function TrackerPage() {
       try {
         await fetch("/api/habits", {
           method: "POST",
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ password, updatedHabits: newHabits }),
         });
       } catch (e) {
@@ -570,6 +571,13 @@ export default function TrackerPage() {
             </div>
           </div>
 
+          {/* View-only notice */}
+          {!adminMode && habits.length > 0 && (
+            <div className="mb-4 px-3 py-2 border border-zinc-800 bg-zinc-900/30 text-[10px] text-zinc-500 uppercase tracking-wider">
+              View only — enable admin mode to edit
+            </div>
+          )}
+
           {/* Add Habit Form */}
           <AnimatePresence>
             {showAddHabit && (
@@ -694,12 +702,13 @@ export default function TrackerPage() {
                       return (
                         <button
                           key={day.date}
-                          onClick={() => toggleHabitForDate(habit.id, day.date)}
+                          onClick={() => adminMode && toggleHabitForDate(habit.id, day.date)}
+                          disabled={!adminMode}
                           className={`p-2 md:p-3 border text-center transition-all ${
                             isCompleted
                               ? `${getHabitColor(color, "border")} ${getHabitColor(color, "bg")} text-black`
-                              : "border-zinc-800 text-zinc-600 hover:border-zinc-700"
-                          }`}
+                              : "border-zinc-800 text-zinc-600"
+                          } ${adminMode ? "cursor-pointer hover:border-zinc-700" : "cursor-default opacity-80"}`}
                         >
                           <div className={`text-[8px] md:text-[9px] font-bold uppercase mb-0.5 md:mb-1 ${isCompleted ? "text-black" : ""}`}>{day.dayName}</div>
                           {isCompleted ? (

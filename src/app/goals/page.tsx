@@ -156,6 +156,7 @@ export default function DirectiveLog() {
 
     const res = await fetch('/api/goals', {
       method: 'POST',
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ password, updatedGoals: goalsForGitHub })
     });
 
@@ -173,6 +174,7 @@ export default function DirectiveLog() {
 
     const res = await fetch('/api/goals', {
       method: 'POST',
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ password, updatedGoals: goalsForGitHub })
     });
 
