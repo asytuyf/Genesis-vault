@@ -163,22 +163,28 @@ export default function TrackerPage() {
   };
 
   const saveHabits = async (newHabits: Habit[]) => {
-    setHabits(newHabits);
-
-    // Save to database if admin
-    if (adminMode && password) {
-      setSavingHabits(true);
-      try {
-        await fetch("/api/habits", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ password, updatedHabits: newHabits }),
-        });
-      } catch (e) {
-        console.error("Failed to save habits:", e);
-      }
-      setSavingHabits(false);
+    // Only save if admin
+    if (!adminMode || !password) {
+      return;
     }
+
+    setSavingHabits(true);
+    try {
+      const res = await fetch("/api/habits", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password, updatedHabits: newHabits }),
+      });
+
+      if (res.ok) {
+        setHabits(newHabits);
+      } else {
+        console.error("Failed to save habits:", await res.text());
+      }
+    } catch (e) {
+      console.error("Failed to save habits:", e);
+    }
+    setSavingHabits(false);
   };
 
   const fetchGithubData = async (username: string) => {
