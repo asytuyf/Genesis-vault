@@ -163,28 +163,23 @@ export default function TrackerPage() {
   };
 
   const saveHabits = async (newHabits: Habit[]) => {
-    // Only save if admin
-    if (!adminMode || !password) {
-      return;
-    }
+    // Update UI immediately
+    setHabits(newHabits);
 
-    setSavingHabits(true);
-    try {
-      const res = await fetch("/api/habits", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password, updatedHabits: newHabits }),
-      });
-
-      if (res.ok) {
-        setHabits(newHabits);
-      } else {
-        console.error("Failed to save habits:", await res.text());
+    // Save to cloud if admin
+    if (adminMode && password) {
+      setSavingHabits(true);
+      try {
+        await fetch("/api/habits", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ password, updatedHabits: newHabits }),
+        });
+      } catch (e) {
+        console.error("Failed to save habits:", e);
       }
-    } catch (e) {
-      console.error("Failed to save habits:", e);
+      setSavingHabits(false);
     }
-    setSavingHabits(false);
   };
 
   const fetchGithubData = async (username: string) => {
@@ -708,13 +703,13 @@ export default function TrackerPage() {
                       return (
                         <button
                           key={day.date}
-                          onClick={() => adminMode && toggleHabitForDate(habit.id, day.date)}
+                          onClick={() => toggleHabitForDate(habit.id, day.date)}
                           disabled={!adminMode}
                           className={`p-2 md:p-3 border text-center transition-all ${
                             isCompleted
                               ? `${getHabitColor(color, "border")} ${getHabitColor(color, "bg")} text-black`
-                              : "border-zinc-800 text-zinc-600"
-                          } ${adminMode ? "cursor-pointer hover:border-zinc-700" : "cursor-default opacity-80"}`}
+                              : "border-zinc-800 text-zinc-600 hover:border-zinc-700"
+                          } ${!adminMode ? "cursor-default opacity-80" : ""}`}
                         >
                           <div className={`text-[8px] md:text-[9px] font-bold uppercase mb-0.5 md:mb-1 ${isCompleted ? "text-black" : ""}`}>{day.dayName}</div>
                           {isCompleted ? (
