@@ -173,6 +173,10 @@ export default function DirectiveLog() {
     setGoals(updatedGoals);
 
     // Save to cloud if admin
+    if (!isAdmin || !password) {
+      console.log("Not saving - isAdmin:", isAdmin, "password:", password ? "set" : "empty");
+      return;
+    }
     if (isAdmin && password) {
       setLoadingAction(true);
       const goalsForGitHub = [...updatedGoals].reverse();
@@ -185,10 +189,13 @@ export default function DirectiveLog() {
         });
 
         if (!res.ok) {
-          console.error("Failed to update goal:", res.status, await res.text());
+          const text = await res.text();
+          console.error("Failed to update goal:", res.status, text);
+          alert(`Failed to save: ${res.status} - ${text}`);
         }
       } catch (e) {
         console.error("Failed to update goal:", e);
+        alert(`Failed to save: ${e}`);
       }
       setLoadingAction(false);
     }

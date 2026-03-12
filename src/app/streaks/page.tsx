@@ -74,6 +74,7 @@ export default function TrackerPage() {
   const [password, setPassword] = useState("");
   const [loadingHabits, setLoadingHabits] = useState(true);
   const [savingHabits, setSavingHabits] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<"" | "success" | "error">("");
 
   // Listen for admin mode and password changes
   useEffect(() => {
@@ -537,25 +538,39 @@ export default function TrackerPage() {
                   <button
                     onClick={async () => {
                       setSavingHabits(true);
+                      setSyncStatus("");
                       try {
                         const res = await fetch("/api/habits", {
                           method: "POST",
                           headers: { "Content-Type": "application/json" },
                           body: JSON.stringify({ password, updatedHabits: habits }),
                         });
-                        if (!res.ok) {
-                          console.error("Sync failed:", res.status, await res.text());
+                        if (res.ok) {
+                          setSyncStatus("success");
+                        } else {
+                          setSyncStatus("error");
+                          const text = await res.text();
+                          console.error("Sync failed:", res.status, text);
+                          alert(`Sync failed: ${res.status} - ${text}`);
                         }
                       } catch (e) {
+                        setSyncStatus("error");
                         console.error("Sync failed:", e);
+                        alert(`Sync failed: ${e}`);
                       }
                       setSavingHabits(false);
                     }}
                     disabled={savingHabits}
-                    className="flex items-center gap-2 px-4 py-2 border border-orange-500/30 text-orange-400 text-xs font-black uppercase tracking-wider hover:bg-orange-500/10 transition-colors"
+                    className={`flex items-center gap-2 px-4 py-2 border text-xs font-black uppercase tracking-wider transition-colors ${
+                      syncStatus === "success"
+                        ? "border-green-500/30 text-green-400"
+                        : syncStatus === "error"
+                          ? "border-red-500/30 text-red-400"
+                          : "border-orange-500/30 text-orange-400 hover:bg-orange-500/10"
+                    }`}
                   >
                     <Check size={14} />
-                    {savingHabits ? "Syncing..." : "Sync"}
+                    {savingHabits ? "Syncing..." : syncStatus === "success" ? "Saved!" : syncStatus === "error" ? "Failed" : "Sync"}
                   </button>
                   <button
                     onClick={() => setShowAddHabit(!showAddHabit)}
