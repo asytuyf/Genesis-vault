@@ -71,7 +71,7 @@ export const FileExplorer = ({ mobileOpen, setMobileOpen, desktopOpen }: FileExp
   const getThemeColor = () => {
     if (pathname === "/archive") return "text-cyan-400";
     if (pathname === "/goals") return "text-emerald-400";
-    if (pathname === "/focus") return "text-purple-400";
+    if (pathname === "/study") return "text-purple-400";
     if (pathname === "/streaks") return "text-orange-400";
     if (pathname === "/library") return "text-red-400";
     return "text-yellow-400";
@@ -80,7 +80,7 @@ export const FileExplorer = ({ mobileOpen, setMobileOpen, desktopOpen }: FileExp
   const getPanelGlow = () => {
     if (pathname === "/archive") return "rgba(34, 211, 238, 0.25)";
     if (pathname === "/goals") return "rgba(16, 185, 129, 0.22)";
-    if (pathname === "/focus") return "rgba(168, 85, 247, 0.22)";
+    if (pathname === "/study") return "rgba(168, 85, 247, 0.22)";
     if (pathname === "/streaks") return "rgba(249, 115, 22, 0.22)";
     if (pathname === "/library") return "rgba(239, 68, 68, 0.22)";
     return "rgba(250, 204, 21, 0.22)";
@@ -132,9 +132,8 @@ export const FileExplorer = ({ mobileOpen, setMobileOpen, desktopOpen }: FileExp
 
         {/* Header */}
         <div
-          className={`h-14 flex-shrink-0 flex items-center justify-between px-4 border-b border-zinc-900 bg-zinc-950 relative z-10 ${
-            isMobileView ? "" : "cursor-grab active:cursor-grabbing"
-          }`}
+          className={`h-14 flex-shrink-0 flex items-center justify-between px-4 border-b border-zinc-900 bg-zinc-950 relative z-10 ${isMobileView ? "" : "cursor-grab active:cursor-grabbing"
+            }`}
           onPointerDown={isMobileView ? undefined : (e) => dragControls.start(e)}
         >
           <div className={`flex items-center gap-2 ${themeColorClass}`}>
@@ -153,9 +152,8 @@ export const FileExplorer = ({ mobileOpen, setMobileOpen, desktopOpen }: FileExp
 
         {/* File Tree */}
         <div
-          className={`flex-1 p-4 overflow-y-auto overscroll-contain relative z-10 ${
-            isMobileView ? "custom-scrollbar-mobile" : "custom-scrollbar"
-          }`}
+          className={`flex-1 p-4 overflow-y-auto overscroll-contain relative z-10 ${isMobileView ? "custom-scrollbar-mobile" : "custom-scrollbar"
+            }`}
         >
           <div className="flex items-center gap-2 mb-4 text-zinc-500 text-xs font-black uppercase tracking-widest border-b border-zinc-900 pb-2">
             <Hash size={16} />
@@ -218,13 +216,12 @@ export const FileExplorer = ({ mobileOpen, setMobileOpen, desktopOpen }: FileExp
                             className="text-yellow-400 transition-colors"
                           />
                           <span
-                            className={`text-sm font-medium transition-colors ${
-                              isMobileView
-                                ? pathname === "/"
-                                  ? "text-yellow-400"
-                                  : "text-zinc-400"
-                                : "text-white"
-                            }`}
+                            className={`text-sm font-medium transition-colors ${isMobileView
+                              ? pathname === "/"
+                                ? "text-yellow-400"
+                                : "text-zinc-400"
+                              : "text-white"
+                              }`}
                           >
                             page.tsx
                           </span>
@@ -266,13 +263,12 @@ export const FileExplorer = ({ mobileOpen, setMobileOpen, desktopOpen }: FileExp
                                   className="text-cyan-400 transition-colors"
                                 />
                                 <span
-                                  className={`text-sm font-medium transition-colors ${
-                                    isMobileView
-                                      ? pathname === "/archive"
-                                        ? "text-cyan-400"
-                                        : "text-zinc-400"
-                                      : "text-white"
-                                  }`}
+                                  className={`text-sm font-medium transition-colors ${isMobileView
+                                    ? pathname === "/archive"
+                                      ? "text-cyan-400"
+                                      : "text-zinc-400"
+                                    : "text-white"
+                                    }`}
                                 >
                                   page.tsx
                                 </span>
@@ -317,13 +313,12 @@ export const FileExplorer = ({ mobileOpen, setMobileOpen, desktopOpen }: FileExp
                                   className="text-emerald-400 transition-colors"
                                 />
                                 <span
-                                  className={`text-sm font-medium transition-colors ${
-                                    isMobileView
-                                      ? pathname === "/goals"
-                                        ? "text-emerald-400"
-                                        : "text-zinc-400"
-                                      : "text-white"
-                                  }`}
+                                  className={`text-sm font-medium transition-colors ${isMobileView
+                                    ? pathname === "/goals"
+                                      ? "text-emerald-400"
+                                      : "text-zinc-400"
+                                    : "text-white"
+                                    }`}
                                 >
                                   page.tsx
                                 </span>
@@ -337,14 +332,14 @@ export const FileExplorer = ({ mobileOpen, setMobileOpen, desktopOpen }: FileExp
                           )}
                         </div>
 
-                        {/* FOCUS FOLDER */}
+                        {/* STUDY FOLDER */}
                         <div>
                           <div
                             className="flex items-center gap-2 text-white cursor-pointer py-1.5 select-none transition-colors"
-                            onClick={() => toggleFolder("focus")}
+                            onClick={() => toggleFolder("study")}
                           >
                             <span className="text-purple-400 transition-colors">
-                              {expandedFolders.includes("focus") ? (
+                              {expandedFolders.includes("study") ? (
                                 <ChevronDown size={20} />
                               ) : (
                                 <ChevronRight size={20} />
@@ -352,14 +347,14 @@ export const FileExplorer = ({ mobileOpen, setMobileOpen, desktopOpen }: FileExp
                             </span>
                             <Folder
                               size={20}
-                              className={expandedFolders.includes("focus") ? "text-purple-400" : "text-zinc-600"}
+                              className={expandedFolders.includes("study") ? "text-purple-400" : "text-zinc-600"}
                             />
-                            <span className="text-sm font-bold tracking-wide">focus</span>
+                            <span className="text-sm font-bold tracking-wide">study</span>
                           </div>
-                          {expandedFolders.includes("focus") && (
+                          {expandedFolders.includes("study") && (
                             <div className="ml-2 pl-2 border-l border-zinc-900 mt-1">
                               <Link
-                                href="/focus"
+                                href="/study"
                                 className="flex items-center gap-2 group/file py-1"
                                 onClick={() => isMobileView && setMobileOpenValue(false)}
                               >
@@ -368,20 +363,19 @@ export const FileExplorer = ({ mobileOpen, setMobileOpen, desktopOpen }: FileExp
                                   className="text-purple-400 transition-colors"
                                 />
                                 <span
-                                  className={`text-sm font-medium transition-colors ${
-                                    isMobileView
-                                      ? pathname === "/focus"
-                                        ? "text-purple-400"
-                                        : "text-zinc-400"
-                                      : "text-white"
-                                  }`}
+                                  className={`text-sm font-medium transition-colors ${isMobileView
+                                    ? pathname === "/study"
+                                      ? "text-purple-400"
+                                      : "text-zinc-400"
+                                    : "text-white"
+                                    }`}
                                 >
                                   page.tsx
                                 </span>
                                 <span
                                   className="ml-auto text-[9px] px-1.5 py-0.5 rounded bg-zinc-900/80 font-bold border transition-all text-purple-400 border-purple-400/30"
                                 >
-                                  FOCUS
+                                  STUDY
                                 </span>
                               </Link>
                             </div>
@@ -419,13 +413,12 @@ export const FileExplorer = ({ mobileOpen, setMobileOpen, desktopOpen }: FileExp
                                   className="text-orange-400 transition-colors"
                                 />
                                 <span
-                                  className={`text-sm font-medium transition-colors ${
-                                    isMobileView
-                                      ? pathname === "/streaks"
-                                        ? "text-orange-400"
-                                        : "text-zinc-400"
-                                      : "text-white"
-                                  }`}
+                                  className={`text-sm font-medium transition-colors ${isMobileView
+                                    ? pathname === "/streaks"
+                                      ? "text-orange-400"
+                                      : "text-zinc-400"
+                                    : "text-white"
+                                    }`}
                                 >
                                   page.tsx
                                 </span>
@@ -470,13 +463,12 @@ export const FileExplorer = ({ mobileOpen, setMobileOpen, desktopOpen }: FileExp
                                   className="text-red-400 transition-colors"
                                 />
                                 <span
-                                  className={`text-sm font-medium transition-colors ${
-                                    isMobileView
-                                      ? pathname === "/library"
-                                        ? "text-red-400"
-                                        : "text-zinc-400"
-                                      : "text-white"
-                                  }`}
+                                  className={`text-sm font-medium transition-colors ${isMobileView
+                                    ? pathname === "/library"
+                                      ? "text-red-400"
+                                      : "text-zinc-400"
+                                    : "text-white"
+                                    }`}
                                 >
                                   page.tsx
                                 </span>
@@ -507,7 +499,7 @@ export const FileExplorer = ({ mobileOpen, setMobileOpen, desktopOpen }: FileExp
           </div>
 
           {/* AUTH_CONSOLE - Show on pages that need admin protection */}
-          {["/goals", "/library", "/streaks", "/focus"].includes(pathname) && (
+          {["/goals", "/library", "/streaks", "/study"].includes(pathname) && (
             <div className="mt-6 border border-zinc-900 bg-black/40">
               <div className="flex items-center gap-2 px-3 py-2 border-b border-zinc-900 text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">
                 <Lock size={14} className={themeColorClass} />
@@ -555,13 +547,12 @@ export const FileExplorer = ({ mobileOpen, setMobileOpen, desktopOpen }: FileExp
                       }
                       setVerifying(false);
                     }}
-                    className={`grid h-9 w-9 place-items-center border transition-colors ${
-                      verifying
-                        ? "border-yellow-400/40 text-yellow-400"
-                        : adminMode
-                          ? "border-emerald-400/40 text-emerald-400"
-                          : "border-zinc-800 text-zinc-500 hover:text-zinc-300"
-                    }`}
+                    className={`grid h-9 w-9 place-items-center border transition-colors ${verifying
+                      ? "border-yellow-400/40 text-yellow-400"
+                      : adminMode
+                        ? "border-emerald-400/40 text-emerald-400"
+                        : "border-zinc-800 text-zinc-500 hover:text-zinc-300"
+                      }`}
                     title={adminMode ? "Lock admin" : "Unlock admin"}
                     aria-label={adminMode ? "Lock admin" : "Unlock admin"}
                   >
@@ -583,14 +574,14 @@ export const FileExplorer = ({ mobileOpen, setMobileOpen, desktopOpen }: FileExp
                         try {
                           // Hardcoded goals data for one-time migration
                           const goalsToMigrate = [
-                            {"id":"1770602846","project":"Website","task":"Make a section of the website where i can see like real time like info about my pc's that are turned on which leads to a much complicated project (AI into the site)","priority":"Med","status":"PENDING","date":"2026-02-09"},
-                            {"id":"1770632955","project":"Life","task":"GEt gemini trial for 1 year using uni email and link it to my personel gmail maybe","priority":"Med","status":"PENDING","date":"2026-02-09","subgoals":[{"id":"1771030451348","text":"omg","completed":false},{"id":"1771030454822","text":"wowowwo","completed":false}]},
-                            {"id":"1771033703370","task":"three.js website","project":"Project Ideas","priority":"Low","date":"2026-02-14"},
-                            {"id":"1771452644572","task":"Makes bsp proposal and find tutor (ASAP)","project":"Uni","priority":"High","date":"2026-02-18","subgoals":[{"id":"1771452676085","text":"Write a proposal for BSP 6","completed":true},{"id":"1771650634430","text":"send mails to tutors (urgent)","completed":false}],"deadline":"2026-03-15T02:44","description":"programing languages teacher"},
-                            {"id":"1771509106398","task":"Improve Stickers","project":"Website","priority":"Low","date":"2026-02-19"},
-                            {"id":"1771955700837","task":"Finish childhood's end tv show","project":"Fun","priority":"Medium","date":"2026-02-24"},
-                            {"id":"1772467247748","task":"Ask for masters application if needed from bachelor","project":"Uni","priority":"High","date":"2026-03-02"},
-                            {"id":"1772468438300","task":"TCS ask question about midterm","project":"Uni","priority":"Medium","date":"2026-03-02","subgoals":[],"description":"MSA 2.380","deadline":"2026-03-10T13:00"}
+                            { "id": "1770602846", "project": "Website", "task": "Make a section of the website where i can see like real time like info about my pc's that are turned on which leads to a much complicated project (AI into the site)", "priority": "Med", "status": "PENDING", "date": "2026-02-09" },
+                            { "id": "1770632955", "project": "Life", "task": "GEt gemini trial for 1 year using uni email and link it to my personel gmail maybe", "priority": "Med", "status": "PENDING", "date": "2026-02-09", "subgoals": [{ "id": "1771030451348", "text": "omg", "completed": false }, { "id": "1771030454822", "text": "wowowwo", "completed": false }] },
+                            { "id": "1771033703370", "task": "three.js website", "project": "Project Ideas", "priority": "Low", "date": "2026-02-14" },
+                            { "id": "1771452644572", "task": "Makes bsp proposal and find tutor (ASAP)", "project": "Uni", "priority": "High", "date": "2026-02-18", "subgoals": [{ "id": "1771452676085", "text": "Write a proposal for BSP 6", "completed": true }, { "id": "1771650634430", "text": "send mails to tutors (urgent)", "completed": false }], "deadline": "2026-03-15T02:44", "description": "programing languages teacher" },
+                            { "id": "1771509106398", "task": "Improve Stickers", "project": "Website", "priority": "Low", "date": "2026-02-19" },
+                            { "id": "1771955700837", "task": "Finish childhood's end tv show", "project": "Fun", "priority": "Medium", "date": "2026-02-24" },
+                            { "id": "1772467247748", "task": "Ask for masters application if needed from bachelor", "project": "Uni", "priority": "High", "date": "2026-03-02" },
+                            { "id": "1772468438300", "task": "TCS ask question about midterm", "project": "Uni", "priority": "Medium", "date": "2026-03-02", "subgoals": [], "description": "MSA 2.380", "deadline": "2026-03-10T13:00" }
                           ];
                           const res = await fetch("/api/migrate", {
                             method: "POST",
@@ -673,9 +664,8 @@ export const FileExplorer = ({ mobileOpen, setMobileOpen, desktopOpen }: FileExp
           animate={{ opacity: desktopOpenValue ? 1 : 0 }}
           transition={{ duration: 0.2 }}
           aria-hidden={!desktopOpenValue}
-          className={`absolute left-0 top-1/2 -translate-y-1/2 min-h-[40vh] max-h-[90vh] w-[280px] bg-[#0a0a0a] border border-zinc-900 shadow-2xl flex flex-col font-mono rounded-xl overflow-hidden transition-colors duration-500 ${
-            desktopOpenValue ? "pointer-events-auto" : "pointer-events-none"
-          }`}
+          className={`absolute left-0 top-1/2 -translate-y-1/2 min-h-[40vh] max-h-[90vh] w-[280px] bg-[#0a0a0a] border border-zinc-900 shadow-2xl flex flex-col font-mono rounded-xl overflow-hidden transition-colors duration-500 ${desktopOpenValue ? "pointer-events-auto" : "pointer-events-none"
+            }`}
         >
           {renderFileTreeContent(false)}
         </motion.div>

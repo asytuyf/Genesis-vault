@@ -9,6 +9,12 @@ import {
   CalendarClock, Timer, AlertTriangle, Activity, Tag, Circle, CheckCircle2
 } from "lucide-react";
 
+interface SubGoal {
+  id: string;
+  text: string;
+  completed: boolean;
+}
+
 interface Goal {
   id: string;
   task: string;
@@ -18,6 +24,7 @@ interface Goal {
   deadline?: string;
   description?: string;
   completed?: boolean;
+  subgoals?: SubGoal[];
 }
 
 const formatCountdown = (deadline: string): { text: string; urgent: boolean; overdue: boolean } => {
@@ -54,7 +61,7 @@ interface SessionTask {
   completed: boolean;
 }
 
-export default function FocusPage() {
+export default function StudyPage() {
   // Timer state
   const [mode, setMode] = useState<"work" | "break">("work");
   const [timeLeft, setTimeLeft] = useState(25 * 60);
@@ -106,7 +113,7 @@ export default function FocusPage() {
 
   // Preset playlists
   const PRESET_PLAYLISTS = [
-    { name: "Focus Vibes", id: "PLBwpZUfqzPLtvrrUbW_zjBF_jT074rRy7" },
+    { name: "Study Vibes", id: "PLBwpZUfqzPLtvrrUbW_zjBF_jT074rRy7" },
   ];
 
   // Quick links state
@@ -230,7 +237,7 @@ export default function FocusPage() {
         setNewPriority("Medium");
         setShowAddFlight(false);
       }
-    } catch {}
+    } catch { }
     setSavingFlight(false);
   };
 
@@ -245,7 +252,7 @@ export default function FocusPage() {
       if (res.ok) {
         setGoals(updatedGoals);
       }
-    } catch {}
+    } catch { }
   };
 
   // Toggle flight completion
@@ -261,7 +268,7 @@ export default function FocusPage() {
       if (res.ok) {
         setGoals(updatedGoals);
       }
-    } catch {}
+    } catch { }
   };
 
   // Get upcoming goals with deadlines
@@ -337,7 +344,20 @@ export default function FocusPage() {
 
   // Load settings from API
   useEffect(() => {
-    const loadSettings = async () => {
+    // Load settings and session tasks
+    const loadData = async () => {
+      // Load session tasks from localStorage
+      if (typeof window !== "undefined") {
+        const savedTasks = localStorage.getItem("study_session_tasks");
+        if (savedTasks) {
+          try {
+            setSessionTasks(JSON.parse(savedTasks));
+          } catch (e) {
+            console.error("Failed to parse saved session tasks", e);
+          }
+        }
+      }
+
       try {
         const res = await fetch("/api/settings");
         if (res.ok) {
@@ -359,13 +379,13 @@ export default function FocusPage() {
         console.error("Failed to load settings:", e);
       }
     };
-    loadSettings();
+    loadData();
 
     // Load daily session stats from localStorage (device-specific, resets daily)
     if (typeof window !== "undefined") {
-      const savedSessions = localStorage.getItem("focus_sessions_today");
-      const savedMinutes = localStorage.getItem("focus_minutes_today");
-      const savedDate = localStorage.getItem("focus_sessions_date");
+      const savedSessions = localStorage.getItem("study_sessions_today");
+      const savedMinutes = localStorage.getItem("study_minutes_today");
+      const savedDate = localStorage.getItem("study_sessions_date");
 
       const today = new Date().toDateString();
       if (savedDate === today) {
@@ -374,6 +394,13 @@ export default function FocusPage() {
       }
     }
   }, []);
+
+  // Persist session tasks whenever they change
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("study_session_tasks", JSON.stringify(sessionTasks));
+    }
+  }, [sessionTasks]);
 
   // Timer logic
   useEffect(() => {
@@ -387,9 +414,9 @@ export default function FocusPage() {
         const newMinutes = totalMinutes + workDuration;
         setSessions(newSessions);
         setTotalMinutes(newMinutes);
-        localStorage.setItem("focus_sessions_today", String(newSessions));
-        localStorage.setItem("focus_minutes_today", String(newMinutes));
-        localStorage.setItem("focus_sessions_date", new Date().toDateString());
+        localStorage.setItem("study_sessions_today", String(newSessions));
+        localStorage.setItem("study_minutes_today", String(newMinutes));
+        localStorage.setItem("study_sessions_date", new Date().toDateString());
         setMode("break");
         setTimeLeft(breakDuration * 60);
         setShowCelebration(true);
@@ -412,12 +439,12 @@ export default function FocusPage() {
       if (timeLeft === 0) {
         document.title = mode === "work" ? "BREAK TIME" : "BACK TO WORK";
       } else {
-        document.title = `${formatTime(timeLeft)} - ${mode === "work" ? "FOCUS" : "BREAK"}`;
+        document.title = `${formatTime(timeLeft)} - ${mode === "work" ? "STUDY" : "BREAK"}`;
       }
     }
     return () => {
       if (typeof window !== "undefined") {
-        document.title = "Focus";
+        document.title = "Study";
       }
     };
   }, [timeLeft, mode]);
@@ -686,27 +713,24 @@ export default function FocusPage() {
       <div className="fixed top-12 right-4 z-[100] flex flex-col gap-2">
         <button
           onClick={() => setShowWidgets(!showWidgets)}
-          className={`p-3 border backdrop-blur-sm transition-all ${
-            showWidgets ? "border-purple-500/50 bg-purple-500/20 text-purple-400" : "border-zinc-800 bg-black/60 text-zinc-500"
-          }`}
+          className={`p-3 border backdrop-blur-sm transition-all ${showWidgets ? "border-purple-500/50 bg-purple-500/20 text-purple-400" : "border-zinc-800 bg-black/60 text-zinc-500"
+            }`}
           title="Toggle widgets"
         >
           <Layers size={18} />
         </button>
         <button
           onClick={() => setShowYoutubeInput(!showYoutubeInput)}
-          className={`p-3 border backdrop-blur-sm transition-all ${
-            (videoId || playlistId) ? "border-purple-500/50 bg-purple-500/20 text-purple-400" : "border-zinc-800 bg-black/60 text-zinc-500"
-          }`}
+          className={`p-3 border backdrop-blur-sm transition-all ${(videoId || playlistId) ? "border-purple-500/50 bg-purple-500/20 text-purple-400" : "border-zinc-800 bg-black/60 text-zinc-500"
+            }`}
           title="Set background video"
         >
           <Youtube size={18} />
         </button>
         <button
           onClick={() => setShowUpcoming(!showUpcoming)}
-          className={`p-3 border backdrop-blur-sm transition-all relative ${
-            showUpcoming ? "border-purple-500/50 bg-purple-500/20 text-purple-400" : "border-zinc-800 bg-black/60 text-zinc-500 hover:text-purple-400 hover:border-purple-500/50"
-          }`}
+          className={`p-3 border backdrop-blur-sm transition-all relative ${showUpcoming ? "border-purple-500/50 bg-purple-500/20 text-purple-400" : "border-zinc-800 bg-black/60 text-zinc-500 hover:text-purple-400 hover:border-purple-500/50"
+            }`}
           title="Upcoming deadlines"
         >
           <CalendarClock size={18} />
@@ -739,9 +763,8 @@ export default function FocusPage() {
                 sendYouTubeCommand("mute");
               }
             }}
-            className={`transition-all ${
-              isMuted ? "text-zinc-500" : "text-purple-400"
-            }`}
+            className={`transition-all ${isMuted ? "text-zinc-500" : "text-purple-400"
+              }`}
             title={isMuted ? "Unmute" : "Mute"}
           >
             {isMuted ? <VolumeX size={18} /> : <Volume2 size={18} />}
@@ -803,11 +826,10 @@ export default function FocusPage() {
                     <button
                       key={preset.id}
                       onClick={() => loadPresetPlaylist(preset.id)}
-                      className={`px-3 py-2 border text-xs font-bold transition-all ${
-                        playlistId === preset.id
-                          ? "border-purple-500 bg-purple-500/20 text-purple-400"
-                          : "border-zinc-800 text-zinc-500 hover:border-zinc-700"
-                      }`}
+                      className={`px-3 py-2 border text-xs font-bold transition-all ${playlistId === preset.id
+                        ? "border-purple-500 bg-purple-500/20 text-purple-400"
+                        : "border-zinc-800 text-zinc-500 hover:border-zinc-700"
+                        }`}
                     >
                       {preset.name}
                     </button>
@@ -883,7 +905,7 @@ export default function FocusPage() {
                   <div className="flex items-center gap-3 md:gap-4">
                     <div className="text-yellow-400">
                       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="md:w-8 md:h-8">
-                        <path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/>
+                        <path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z" />
                       </svg>
                     </div>
                     <div>
@@ -895,11 +917,10 @@ export default function FocusPage() {
                     {isAdmin && (
                       <button
                         onClick={() => setShowAddFlight(!showAddFlight)}
-                        className={`flex items-center gap-2 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider transition-all border ${
-                          showAddFlight
-                            ? "bg-yellow-500 text-black border-yellow-500"
-                            : "bg-yellow-500/10 text-yellow-400 border-yellow-500/30 hover:bg-yellow-500/20"
-                        }`}
+                        className={`flex items-center gap-2 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider transition-all border ${showAddFlight
+                          ? "bg-yellow-500 text-black border-yellow-500"
+                          : "bg-yellow-500/10 text-yellow-400 border-yellow-500/30 hover:bg-yellow-500/20"
+                          }`}
                       >
                         <Plus size={12} />
                         Add
@@ -1078,9 +1099,8 @@ export default function FocusPage() {
                           initial={{ opacity: 0, x: -20 }}
                           animate={{ opacity: 1, x: 0 }}
                           transition={{ delay: index * 0.05 }}
-                          className={`p-3 sm:p-0 hover:bg-zinc-900/50 transition-colors group ${
-                            goal.completed ? "bg-sky-500/5" : countdown.overdue ? "bg-red-500/5" : ""
-                          }`}
+                          className={`p-3 sm:p-0 hover:bg-zinc-900/50 transition-colors group ${goal.completed ? "bg-sky-500/5" : countdown.overdue ? "bg-red-500/5" : ""
+                            }`}
                         >
                           {/* MOBILE CARD LAYOUT */}
                           <div className="sm:hidden">
@@ -1088,13 +1108,12 @@ export default function FocusPage() {
                               {/* TICK BUTTON */}
                               <button
                                 onClick={() => isAdmin && toggleFlightCompletion(goal.id)}
-                                className={`p-1 rounded transition-colors shrink-0 ${
-                                  goal.completed
-                                    ? "text-sky-400"
-                                    : isAdmin
-                                      ? "text-zinc-700 hover:text-emerald-400"
-                                      : "text-zinc-800"
-                                }`}
+                                className={`p-1 rounded transition-colors shrink-0 ${goal.completed
+                                  ? "text-sky-400"
+                                  : isAdmin
+                                    ? "text-zinc-700 hover:text-emerald-400"
+                                    : "text-zinc-800"
+                                  }`}
                                 disabled={!isAdmin}
                               >
                                 {goal.completed ? <CheckCircle2 size={20} /> : <Circle size={20} />}
@@ -1106,6 +1125,20 @@ export default function FocusPage() {
                                   <span className={`text-[9px] uppercase px-1.5 py-0.5 rounded ${statusBg} ${statusColor} font-bold`}>{status}</span>
                                 </div>
                                 <div className={`font-bold text-sm truncate mb-1 ${goal.completed ? "text-zinc-400 line-through opacity-60" : "text-white"}`}>{goal.task}</div>
+                                {goal.subgoals && goal.subgoals.length > 0 && (
+                                  <div className="mb-2 space-y-0.5">
+                                    {goal.subgoals.map(sg => (
+                                      <div key={sg.id} className="flex items-center gap-1.5 text-[9px] font-mono">
+                                        <span className={sg.completed ? "text-emerald-500" : "text-zinc-700"}>
+                                          [{sg.completed ? "■" : " "}]
+                                        </span>
+                                        <span className={sg.completed ? "text-zinc-600 line-through" : "text-zinc-400"}>
+                                          {sg.text}
+                                        </span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
                                 <div className="flex items-center gap-3 text-[10px] text-zinc-500">
                                   <span className="flex items-center gap-1"><Tag size={10} />{goal.project}</span>
                                   <span>{departureTime} · {departureDate}</span>
@@ -1130,13 +1163,12 @@ export default function FocusPage() {
                             <div className="flex items-center justify-center">
                               <button
                                 onClick={() => isAdmin && toggleFlightCompletion(goal.id)}
-                                className={`p-1 rounded transition-colors ${
-                                  goal.completed
-                                    ? "text-sky-400"
-                                    : isAdmin
-                                      ? "text-zinc-700 hover:text-emerald-400"
-                                      : "text-zinc-800"
-                                }`}
+                                className={`p-1 rounded transition-colors ${goal.completed
+                                  ? "text-sky-400"
+                                  : isAdmin
+                                    ? "text-zinc-700 hover:text-emerald-400"
+                                    : "text-zinc-800"
+                                  }`}
                                 disabled={!isAdmin}
                                 title={goal.completed ? "Mark as not departed" : "Mark as departed"}
                               >
@@ -1147,9 +1179,8 @@ export default function FocusPage() {
                             {/* FLIGHT CODE */}
                             <div className={`flex flex-col justify-center ${goal.completed ? "opacity-60" : ""}`}>
                               <div className="font-mono font-bold text-yellow-400 text-sm md:text-base">{flightCode}</div>
-                              <div className={`text-[9px] md:text-[10px] uppercase ${
-                                goal.priority === "High" ? "text-red-400" : goal.priority === "Medium" ? "text-yellow-400" : "text-zinc-500"
-                              }`}>
+                              <div className={`text-[9px] md:text-[10px] uppercase ${goal.priority === "High" ? "text-red-400" : goal.priority === "Medium" ? "text-yellow-400" : "text-zinc-500"
+                                }`}>
                                 {goal.priority}
                               </div>
                             </div>
@@ -1157,10 +1188,24 @@ export default function FocusPage() {
                             {/* DESTINATION (TASK NAME) */}
                             <div className={`flex flex-col justify-center min-w-0 ${goal.completed ? "opacity-60" : ""}`}>
                               <div className={`font-bold text-sm md:text-base truncate ${goal.completed ? "text-zinc-400 line-through" : "text-white"}`}>{goal.task}</div>
-                              <div className="text-[10px] md:text-xs text-zinc-600 truncate flex items-center gap-1">
+                              <div className="text-[10px] md:text-xs text-zinc-600 truncate flex items-center gap-1 mb-1">
                                 <Tag size={10} />
                                 {goal.project}
                               </div>
+                              {goal.subgoals && goal.subgoals.length > 0 && (
+                                <div className="flex flex-wrap gap-x-3 gap-y-1">
+                                  {goal.subgoals.map(sg => (
+                                    <div key={sg.id} className="flex items-center gap-1.5 text-[9px] font-mono">
+                                      <span className={sg.completed ? "text-emerald-500" : "text-zinc-700"}>
+                                        [{sg.completed ? "■" : " "}]
+                                      </span>
+                                      <span className={sg.completed ? "text-zinc-600 line-through" : "text-zinc-400"}>
+                                        {sg.text}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
                             </div>
 
                             {/* DEPARTURE TIME */}
@@ -1174,9 +1219,8 @@ export default function FocusPage() {
                               <div className={`inline-block px-2 md:px-3 py-1 md:py-1.5 ${statusBg} rounded`}>
                                 <div className={`font-black text-[10px] md:text-sm tracking-wider ${statusColor}`}>{status}</div>
                               </div>
-                              <div className={`text-[10px] md:text-xs mt-1 font-mono ${
-                                goal.completed ? "text-sky-400/60" : countdown.overdue ? "text-red-400" : countdown.urgent ? "text-yellow-400" : "text-zinc-500"
-                              }`}>
+                              <div className={`text-[10px] md:text-xs mt-1 font-mono ${goal.completed ? "text-sky-400/60" : countdown.overdue ? "text-red-400" : countdown.urgent ? "text-yellow-400" : "text-zinc-500"
+                                }`}>
                                 {countdown.overdue ? "" : "T-"}{countdown.text}
                               </div>
                             </div>
@@ -1303,11 +1347,10 @@ export default function FocusPage() {
       <div className="relative z-10 min-h-screen flex flex-col items-center justify-center px-6 py-20">
 
         {/* MODE INDICATOR */}
-        <div className={`mb-6 px-4 py-2 border backdrop-blur-sm ${
-          mode === "work" ? "border-purple-500/30 text-purple-400" : "border-emerald-500/30 text-emerald-400"
-        }`}>
+        <div className={`mb-6 px-4 py-2 border backdrop-blur-sm ${mode === "work" ? "border-purple-500/30 text-purple-400" : "border-emerald-500/30 text-emerald-400"
+          }`}>
           <span className="text-[10px] font-black uppercase tracking-[0.3em]">
-            {mode === "work" ? "Focus Mode" : "Break Time"}
+            {mode === "work" ? "Study Mode" : "Break Time"}
           </span>
         </div>
 
@@ -1316,9 +1359,8 @@ export default function FocusPage() {
           <motion.div
             animate={isRunning ? { opacity: [1, 0.7, 1] } : { opacity: 1 }}
             transition={isRunning ? { repeat: Infinity, duration: 2 } : {}}
-            className={`relative text-[80px] md:text-[140px] font-black tracking-tighter leading-none ${
-              mode === "work" ? "text-white" : "text-emerald-400"
-            }`}
+            className={`relative text-[80px] md:text-[140px] font-black tracking-tighter leading-none ${mode === "work" ? "text-white" : "text-emerald-400"
+              }`}
             style={{
               textShadow: `0 0 ${40 + progress * 0.6}px rgba(168, 85, 247, ${0.3 + progress * 0.007})`
             }}
@@ -1333,11 +1375,10 @@ export default function FocusPage() {
             onClick={() => setIsRunning(!isRunning)}
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            className={`flex items-center justify-center w-16 h-16 border-2 backdrop-blur-sm transition-all ${
-              mode === "work"
-                ? "border-purple-500 text-purple-400 hover:bg-purple-500/20"
-                : "border-emerald-500 text-emerald-400 hover:bg-emerald-500/20"
-            }`}
+            className={`flex items-center justify-center w-16 h-16 border-2 backdrop-blur-sm transition-all ${mode === "work"
+              ? "border-purple-500 text-purple-400 hover:bg-purple-500/20"
+              : "border-emerald-500 text-emerald-400 hover:bg-emerald-500/20"
+              }`}
           >
             {isRunning ? <Pause size={28} /> : <Play size={28} className="ml-1" />}
           </motion.button>
@@ -1490,7 +1531,7 @@ export default function FocusPage() {
                         >
                           {task.completed && (
                             <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                              <path d="M2 5L4 7L8 3" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                              <path d="M2 5L4 7L8 3" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                             </svg>
                           )}
                         </button>
