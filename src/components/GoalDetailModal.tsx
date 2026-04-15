@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { X, Plus, Tag, Clock, Activity, Timer, AlertTriangle, Pencil, Check } from "lucide-react";
 
@@ -64,6 +64,14 @@ export const GoalDetailModal = ({ goal, isAdmin, password, onClose, onUpdate }: 
   const [project, setProject] = useState(goal.project);
   const [editingProject, setEditingProject] = useState(false);
   const [priority, setPriority] = useState(goal.priority);
+
+  // Lock scroll on the background body when modal opens
+  useEffect(() => {
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = "unset";
+    };
+  }, []);
 
   const toggleSubgoal = (id: string) => {
     if (!isAdmin) return;
@@ -137,7 +145,7 @@ export const GoalDetailModal = ({ goal, isAdmin, password, onClose, onUpdate }: 
         </button>
 
         {/* Scrollable Main Area */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto overscroll-contain">
           {/* Info Section */}
           <div className="p-6 border-b border-zinc-800">
             {/* Title - editable */}
