@@ -471,6 +471,7 @@ export const GoalDetailModal = ({ goal, isAdmin, password, onClose, onUpdate }: 
             </div>
           )}
         </div>
+        </div>
 
         {/* Add subgoal + Save (Admin only) */}
         {isAdmin && (
