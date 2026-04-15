@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { Search, Tag, Clock, Activity, Hash, Box, Trash2, Plus, Terminal, ListChecks, Timer, ArrowUpDown } from "lucide-react";
+import { motion, AnimatePresence, Reorder } from "framer-motion";
+import { Search, Tag, Clock, Activity, Hash, Box, Trash2, Plus, Terminal, ListChecks, Timer, ArrowUpDown, GripVertical } from "lucide-react";
 import { AddGoalForm } from "@/components/AddGoalForm";
 import { GoalDetailModal } from "@/components/GoalDetailModal";
 
@@ -56,7 +56,7 @@ export default function DirectiveLog() {
   const [isAddGoalModalOpen, setIsAddGoalModalOpen] = useState(false);
   const [selectedGoal, setSelectedGoal] = useState<Goal | null>(null);
   const [, forceUpdate] = useState(0); // For countdown refresh
-  const [sortBy, setSortBy] = useState<"newest" | "deadline" | "priority" | "oldest">("newest");
+  const [sortBy, setSortBy] = useState<"custom" | "newest" | "deadline" | "priority" | "oldest">("custom");
 
   // Refresh countdowns every minute
   useEffect(() => {
@@ -142,10 +142,32 @@ export default function DirectiveLog() {
       case "oldest":
         return new Date(a.date).getTime() - new Date(b.date).getTime();
       case "newest":
-      default:
         return new Date(b.date).getTime() - new Date(a.date).getTime();
+      case "custom":
+      default:
+        return 0;
     }
   });
+
+  const updateGoalOrder = async (reorderedGoals: Goal[]) => {
+    if (search.trim() !== "") return;
+    setGoals(reorderedGoals);
+    if (!isAdmin || !password) return;
+    
+    setLoadingAction(true);
+    const goalsForGitHub = [...reorderedGoals].reverse();
+    try {
+      const res = await fetch('/api/goals', {
+        method: 'POST',
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password, updatedGoals: goalsForGitHub })
+      });
+      if (!res.ok) console.error("Failed to update order");
+    } catch (e) {
+      console.error(e);
+    }
+    setLoadingAction(false);
+  };
 
   const nukeGoal = async (idToDelete: string) => {
     setLoadingAction(true);
@@ -247,8 +269,9 @@ export default function DirectiveLog() {
 
         <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-3 sm:gap-4 mt-6">
           {/* Sort selector */}
-          <div className="grid grid-cols-4 sm:flex sm:items-center w-full sm:w-auto">
+          <div className="grid grid-cols-5 sm:flex sm:items-center w-full sm:w-auto">
             {[
+              { value: "custom", label: "Custom" },
               { value: "newest", label: "New" },
               { value: "deadline", label: "Due" },
               { value: "priority", label: "Priority" },
@@ -267,7 +290,7 @@ export default function DirectiveLog() {
               >
                 {index === 0 && <ArrowUpDown size={12} className="hidden sm:block" />}
                 <span className="sm:hidden">{option.label}</span>
-                <span className="hidden sm:inline">{option.value === "newest" ? "Newest" : option.value === "deadline" ? "Deadline" : option.value === "priority" ? "Priority" : "Oldest"}</span>
+                <span className="hidden sm:inline">{option.value === "custom" ? "Custom" : option.value === "newest" ? "Newest" : option.value === "deadline" ? "Deadline" : option.value === "priority" ? "Priority" : "Oldest"}</span>
               </button>
             ))}
           </div>
@@ -320,27 +343,36 @@ export default function DirectiveLog() {
             Zero_Directives_Found
           </div>
         ) : (
-          <AnimatePresence mode="popLayout">
-            {sortedGoals.map((g) => (
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.8, transition: { duration: 0.3 } }}
-                layout
-                key={g.id}
-                onClick={() => setSelectedGoal(g)}
-                className="group bg-[#0a0a0a] border border-zinc-800 p-8 hover:border-emerald-500 transition-all shadow-xl relative overflow-hidden cursor-pointer"
-              >
-                {isAdmin && (
-                  <button
-                    onClick={(e) => { e.stopPropagation(); nukeGoal(g.id); }}
-                    className="absolute top-4 right-4 text-zinc-800 hover:text-red-500 transition-none z-20"
-                    disabled={loadingAction}
-                  >
-                    <Trash2 size={18} />
-                  </button>
-                )}
-                <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-100 transition-opacity">
+          <Reorder.Group as="div" axis={undefined} values={sortedGoals} onReorder={sortBy === "custom" && isAdmin && search.trim() === "" ? updateGoalOrder : () => {}} className="contents">
+            <AnimatePresence mode="popLayout">
+              {sortedGoals.map((g) => (
+                <Reorder.Item
+                  as="div"
+                  value={g}
+                  dragListener={sortBy === "custom" && isAdmin && search.trim() === ""}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.8, transition: { duration: 0.3 } }}
+                  layout
+                  key={g.id}
+                  onClick={() => setSelectedGoal(g)}
+                  className={`group bg-[#0a0a0a] border border-zinc-800 p-8 hover:border-emerald-500 transition-all shadow-xl relative overflow-hidden ${sortBy === "custom" && isAdmin && search.trim() === "" ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"}`}
+                >
+                  {isAdmin && sortBy === "custom" && search.trim() === "" && (
+                    <div className="absolute top-4 left-4 text-zinc-700/50 group-hover:text-zinc-500 transition-colors z-20 cursor-grab active:cursor-grabbing">
+                      <GripVertical size={18} />
+                    </div>
+                  )}
+                  {isAdmin && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); nukeGoal(g.id); }}
+                      className="absolute top-4 right-4 text-zinc-800 hover:text-red-500 transition-none z-20"
+                      disabled={loadingAction}
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  )}
+                  <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-100 transition-opacity">
                   <Hash size={12} className="text-emerald-500" />
                 </div>
 
@@ -414,9 +446,10 @@ export default function DirectiveLog() {
                   </div>
                   <span className="text-[10px] text-zinc-800 font-mono">REF_{g.id}</span>
                 </div>
-              </motion.div>
+              </Reorder.Item>
             ))}
-          </AnimatePresence>
+            </AnimatePresence>
+          </Reorder.Group>
         )}
       </div>
 
