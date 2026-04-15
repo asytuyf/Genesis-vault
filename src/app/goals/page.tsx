@@ -149,13 +149,17 @@ export default function DirectiveLog() {
     }
   });
 
-  const updateGoalOrder = async (reorderedGoals: Goal[]) => {
+  const updateGoalOrder = (reorderedGoals: Goal[]) => {
     if (search.trim() !== "") return;
     setGoals(reorderedGoals);
-    if (!isAdmin || !password) return;
+  };
+
+  const saveGoalOrder = async () => {
+    if (search.trim() !== "" || !isAdmin || !password) return;
     
     setLoadingAction(true);
-    const goalsForGitHub = [...reorderedGoals].reverse();
+    // Use the latest goals state
+    const goalsForGitHub = [...goals].reverse();
     try {
       const res = await fetch('/api/goals', {
         method: 'POST',
@@ -333,23 +337,33 @@ export default function DirectiveLog() {
       </AnimatePresence>
 
       {/* TASKS GRID */}
-      <div className="relative z-10 grid gap-6 md:grid-cols-2 lg:grid-cols-3 pb-20">
-        {loading ? (
+      {loading ? (
+        <div className="relative z-10 grid gap-6 md:grid-cols-2 lg:grid-cols-3 pb-20">
           <div className="col-span-full py-20 text-zinc-800 uppercase font-black text-2xl animate-pulse text-center">
             Accessing Manifest...
           </div>
-        ) : sortedGoals.length === 0 ? (
+        </div>
+      ) : sortedGoals.length === 0 ? (
+        <div className="relative z-10 grid gap-6 md:grid-cols-2 lg:grid-cols-3 pb-20">
           <div className="col-span-full py-20 text-zinc-800 uppercase font-black text-xl text-center border border-dashed border-zinc-900">
             Zero_Directives_Found
           </div>
-        ) : (
-          <Reorder.Group as="div" axis={undefined} values={sortedGoals} onReorder={sortBy === "custom" && isAdmin && search.trim() === "" ? updateGoalOrder : () => {}} className="contents">
-            <AnimatePresence mode="popLayout">
-              {sortedGoals.map((g) => (
-                <Reorder.Item
-                  as="div"
-                  value={g}
-                  dragListener={sortBy === "custom" && isAdmin && search.trim() === ""}
+        </div>
+      ) : (
+        <Reorder.Group 
+          as="div" 
+          axis={undefined} 
+          values={sortedGoals} 
+          onReorder={sortBy === "custom" && isAdmin && search.trim() === "" ? updateGoalOrder : () => {}} 
+          className="relative z-10 grid gap-6 md:grid-cols-2 lg:grid-cols-3 pb-20"
+        >
+          <AnimatePresence mode="popLayout">
+            {sortedGoals.map((g) => (
+              <Reorder.Item
+                as="div"
+                value={g}
+                dragListener={sortBy === "custom" && isAdmin && search.trim() === ""}
+                onDragEnd={saveGoalOrder}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.8, transition: { duration: 0.3 } }}
@@ -448,10 +462,9 @@ export default function DirectiveLog() {
                 </div>
               </Reorder.Item>
             ))}
-            </AnimatePresence>
-          </Reorder.Group>
-        )}
-      </div>
+          </AnimatePresence>
+        </Reorder.Group>
+      )}
 
       {/* BACKGROUND DECO */}
       <div className="fixed inset-0 z-0 opacity-[0.02] pointer-events-none flex items-center justify-center">
