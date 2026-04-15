@@ -342,8 +342,29 @@ export default function StudyPage() {
     return { videoId: vid, playlistId: pid };
   };
 
-  // Load settings from API
   useEffect(() => {
+    // Load local storage timer state first
+    if (typeof window !== "undefined") {
+      const savedTimeLeft = localStorage.getItem("study_timer_timeLeft");
+      const savedMode = localStorage.getItem("study_timer_mode") as "work" | "break" | null;
+      const savedIsRunning = localStorage.getItem("study_timer_isRunning");
+      const savedLastTick = localStorage.getItem("study_timer_lastTickAt");
+
+      if (savedTimeLeft && savedMode) {
+        let resumeTime = parseInt(savedTimeLeft, 10);
+        const wasRunning = savedIsRunning === "true";
+
+        if (wasRunning && savedLastTick) {
+          const elapsedSeconds = Math.floor((Date.now() - parseInt(savedLastTick, 10)) / 1000);
+          resumeTime = Math.max(0, resumeTime - elapsedSeconds);
+        }
+        
+        setTimeLeft(resumeTime);
+        setMode(savedMode);
+        setIsRunning(wasRunning && resumeTime > 0);
+      }
+    }
+
     // Load settings and session tasks
     const loadData = async () => {
       // Load session tasks from localStorage
@@ -364,7 +385,9 @@ export default function StudyPage() {
           const data = await res.json();
           if (data.focusWorkDuration) {
             setWorkDuration(data.focusWorkDuration);
-            setTimeLeft(data.focusWorkDuration * 60);
+            if (!localStorage.getItem("study_timer_timeLeft")) {
+              setTimeLeft(data.focusWorkDuration * 60);
+            }
           }
           if (data.focusBreakDuration) setBreakDuration(data.focusBreakDuration);
           if (data.focusYoutubeUrl) {
@@ -391,6 +414,12 @@ export default function StudyPage() {
       if (savedDate === today) {
         if (savedSessions) setSessions(parseInt(savedSessions));
         if (savedMinutes) setTotalMinutes(parseInt(savedMinutes));
+      } else {
+        // Clear old persistent timer if it's a new day
+        localStorage.removeItem("study_timer_timeLeft");
+        localStorage.removeItem("study_timer_mode");
+        localStorage.removeItem("study_timer_isRunning");
+        localStorage.removeItem("study_timer_lastTickAt");
       }
     }
   }, []);
@@ -401,6 +430,16 @@ export default function StudyPage() {
       localStorage.setItem("study_session_tasks", JSON.stringify(sessionTasks));
     }
   }, [sessionTasks]);
+
+  // Sync timer state continuously
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("study_timer_timeLeft", String(timeLeft));
+      localStorage.setItem("study_timer_mode", mode);
+      localStorage.setItem("study_timer_isRunning", String(isRunning));
+      localStorage.setItem("study_timer_lastTickAt", String(Date.now()));
+    }
+  }, [timeLeft, mode, isRunning]);
 
   // Timer logic
   useEffect(() => {
