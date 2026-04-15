@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
-import { X, Plus, Tag, Clock, Activity, Timer, AlertTriangle, Pencil, Check } from "lucide-react";
+import { motion, Reorder } from "framer-motion";
+import { X, Plus, Tag, Clock, Activity, Timer, AlertTriangle, Pencil, Check, GripVertical } from "lucide-react";
 
 interface SubGoal {
   id: string;
@@ -64,6 +64,23 @@ export const GoalDetailModal = ({ goal, isAdmin, password, onClose, onUpdate }: 
   const [project, setProject] = useState(goal.project);
   const [editingProject, setEditingProject] = useState(false);
   const [priority, setPriority] = useState(goal.priority);
+  const [editingSubgoalId, setEditingSubgoalId] = useState<string | null>(null);
+  const [editingSubgoalText, setEditingSubgoalText] = useState("");
+
+  const startEditingSubgoal = (id: string, text: string) => {
+    if (!isAdmin) return;
+    setEditingSubgoalId(id);
+    setEditingSubgoalText(text);
+  };
+
+  const saveSubgoalEdit = () => {
+    if (!editingSubgoalId) return;
+    setSubgoals(prev => prev.map(sg => 
+      sg.id === editingSubgoalId ? { ...sg, text: editingSubgoalText.trim() || sg.text } : sg
+    ));
+    setEditingSubgoalId(null);
+    setEditingSubgoalText("");
+  };
 
   // Lock scroll on the background body when modal opens
   useEffect(() => {
@@ -431,11 +448,12 @@ export const GoalDetailModal = ({ goal, isAdmin, password, onClose, onUpdate }: 
               No_Sub-Tasks_Found
             </div>
           ) : (
-            <div className="space-y-1">
+            <Reorder.Group axis="y" values={subgoals} onReorder={isAdmin ? setSubgoals : () => {}} className="space-y-1">
               {subgoals.map((sg) => (
-                <motion.div
+                <Reorder.Item
                   key={sg.id}
-                  layout
+                  value={sg}
+                  dragListener={isAdmin && editingSubgoalId !== sg.id}
                   initial={{ opacity: 0, x: -10 }}
                   animate={{ opacity: 1, x: 0 }}
                   className={`flex items-center gap-3 p-3 border transition-all ${
@@ -444,6 +462,11 @@ export const GoalDetailModal = ({ goal, isAdmin, password, onClose, onUpdate }: 
                       : 'bg-zinc-900/50 border-zinc-800 hover:border-zinc-700'
                   }`}
                 >
+                  {isAdmin && (
+                    <div className="cursor-grab active:cursor-grabbing text-zinc-600 hover:text-zinc-400 transition-colors">
+                      <GripVertical size={14} />
+                    </div>
+                  )}
                   <button
                     onClick={() => toggleSubgoal(sg.id)}
                     disabled={!isAdmin}
@@ -453,22 +476,39 @@ export const GoalDetailModal = ({ goal, isAdmin, password, onClose, onUpdate }: 
                       [{sg.completed ? <span className="text-emerald-400">■</span> : <span className="text-zinc-800">&nbsp;</span>}]
                     </span>
                   </button>
-                  <span className={`flex-1 text-sm font-mono ${
-                    sg.completed ? 'text-zinc-600 line-through' : 'text-zinc-400'
-                  }`}>
-                    {sg.text}
-                  </span>
+                  
+                  {editingSubgoalId === sg.id ? (
+                    <input
+                      type="text"
+                      value={editingSubgoalText}
+                      onChange={(e) => setEditingSubgoalText(e.target.value)}
+                      onBlur={saveSubgoalEdit}
+                      onKeyDown={(e) => e.key === 'Enter' && saveSubgoalEdit()}
+                      autoFocus
+                      className="flex-1 bg-black border border-zinc-700 px-2 py-1 text-sm text-white font-mono outline-none focus:border-emerald-500/50"
+                    />
+                  ) : (
+                    <span 
+                      onClick={() => startEditingSubgoal(sg.id, sg.text)}
+                      className={`flex-1 text-sm font-mono ${isAdmin ? 'cursor-text hover:text-white' : ''} ${
+                        sg.completed ? 'text-zinc-600 line-through' : 'text-zinc-400'
+                      }`}
+                    >
+                      {sg.text}
+                    </span>
+                  )}
+                  
                   {isAdmin && (
                     <button
                       onClick={() => removeSubgoal(sg.id)}
-                      className="text-zinc-800 hover:text-red-500 transition-colors text-xs font-mono"
+                      className="text-zinc-800 hover:text-red-500 transition-colors text-xs font-mono ml-auto"
                     >
                       [DEL]
                     </button>
                   )}
-                </motion.div>
+                </Reorder.Item>
               ))}
-            </div>
+            </Reorder.Group>
           )}
         </div>
         </div>
