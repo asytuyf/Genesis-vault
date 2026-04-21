@@ -483,7 +483,7 @@ export default function StudyPage() {
     }
     return () => {
       if (typeof window !== "undefined") {
-        document.title = "Study";
+        document.title = "STUDY";
       }
     };
   }, [timeLeft, mode]);
