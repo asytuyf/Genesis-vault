@@ -7,9 +7,6 @@ const jbMono = JetBrains_Mono({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "HOME",
-  icons: {
-    icon: "/vercel.png",
-  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
