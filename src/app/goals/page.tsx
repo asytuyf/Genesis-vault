@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
-import { motion, AnimatePresence, Reorder } from "framer-motion";
+import { motion, AnimatePresence, Reorder, useDragControls } from "framer-motion";
 import { Search, Tag, Clock, Activity, Hash, Box, Trash2, Plus, Terminal, ListChecks, Timer, ArrowUpDown, GripVertical } from "lucide-react";
 import { AddGoalForm } from "@/components/AddGoalForm";
 import { GoalDetailModal } from "@/components/GoalDetailModal";
@@ -46,6 +46,120 @@ const formatCountdown = (deadline: string): { text: string; urgent: boolean; ove
   return { text: `${minutes}m`, urgent: true, overdue: false };
 };
 
+const GoalItem = ({ g, isAdmin, sortBy, search, saveGoalOrder, nukeGoal, setSelectedGoal, loadingAction }: any) => {
+  const dragControls = useDragControls();
+
+  return (
+    <Reorder.Item
+      as="div"
+      value={g}
+      dragListener={false}
+      dragControls={dragControls}
+      onDragEnd={saveGoalOrder}
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.8, transition: { duration: 0.3 } }}
+      layout
+      onClick={() => setSelectedGoal(g)}
+      className="group bg-[#0a0a0a] border border-zinc-800 p-8 hover:border-emerald-500 transition-all shadow-xl relative overflow-hidden cursor-pointer"
+    >
+      {isAdmin && sortBy === "custom" && search.trim() === "" && (
+        <div 
+          className="absolute top-2 left-2 text-zinc-700/50 group-hover:text-zinc-500 transition-colors z-20 cursor-grab active:cursor-grabbing p-2"
+          onPointerDown={(e) => {
+            e.preventDefault();
+            dragControls.start(e);
+          }}
+        >
+          <GripVertical size={18} />
+        </div>
+      )}
+      {isAdmin && (
+        <button
+          onClick={(e) => { e.stopPropagation(); nukeGoal(g.id); }}
+          className="absolute top-4 right-4 text-zinc-800 hover:text-red-500 transition-none z-20"
+          disabled={loadingAction}
+        >
+          <Trash2 size={18} />
+        </button>
+      )}
+      <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-100 transition-opacity">
+        <Hash size={12} className="text-emerald-500" />
+      </div>
+
+      <div className="flex flex-wrap items-start gap-2 mb-8 mt-2">
+        <div className="inline-flex flex-none items-center gap-2 px-2 py-0.5 bg-zinc-900 border border-zinc-800 rounded text-zinc-500 text-[10px] font-black uppercase tracking-widest group-hover:border-emerald-500/30 group-hover:text-emerald-500 transition-colors w-fit max-w-full">
+          <Tag size={10} />
+          <span className="whitespace-normal break-words">{g.project}</span>
+        </div>
+        <div className="flex items-center gap-2 text-zinc-700 text-[10px] font-bold whitespace-nowrap ml-auto">
+          <Clock size={12} /> {g.date}
+        </div>
+      </div>
+
+      <div className="mb-4">
+        <h3 className="text-xl md:text-2xl font-bold uppercase tracking-tight text-zinc-100 group-hover:text-white transition-colors leading-tight break-words">
+          {g.task}
+        </h3>
+      </div>
+
+      {g.description && (
+        <p className="text-sm text-zinc-600 mb-6 line-clamp-2 leading-relaxed">
+          {g.description}
+        </p>
+      )}
+
+      {g.deadline && (
+        <div className="mb-6">
+          {(() => {
+            const countdown = formatCountdown(g.deadline);
+            return (
+              <div className={`flex items-center gap-2 text-xs font-bold ${
+                countdown.overdue ? "text-red-400" : countdown.urgent ? "text-yellow-400" : "text-zinc-500"
+              }`}>
+                <Timer size={14} />
+                <span>{countdown.text}</span>
+              </div>
+            );
+          })()}
+        </div>
+      )}
+
+      {g.subgoals && g.subgoals.length > 0 && (
+        <div className="mb-6">
+          <div className="flex items-center justify-between text-[10px] font-bold uppercase mb-2">
+            <span className="flex items-center gap-1.5 text-zinc-600">
+              <ListChecks size={12} />
+              Sub-tasks
+            </span>
+            <span className={g.subgoals.filter((s: SubGoal) => s.completed).length === g.subgoals.length ? 'text-emerald-400' : 'text-zinc-600'}>
+              {g.subgoals.filter((s: SubGoal) => s.completed).length}/{g.subgoals.length}
+            </span>
+          </div>
+          <div className="h-1 bg-zinc-900 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-emerald-500 transition-all duration-300"
+              style={{ width: `${(g.subgoals.filter((s: SubGoal) => s.completed).length / g.subgoals.length) * 100}%` }}
+            />
+          </div>
+        </div>
+      )}
+
+      <div className="flex justify-between items-center border-t border-zinc-900 pt-6">
+        <div className={`flex items-center gap-2 px-3 py-1 rounded text-[10px] font-black uppercase tracking-wider border ${
+          g.priority === 'High'
+            ? 'bg-red-500/10 text-red-500 border-red-500/20'
+            : 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
+        }`}>
+          <Activity size={10} />
+          Lvl_{g.priority}
+        </div>
+        <span className="text-[10px] text-zinc-800 font-mono">REF_{g.id}</span>
+      </div>
+    </Reorder.Item>
+  );
+};
+
 export default function DirectiveLog() {
   const [goals, setGoals] = useState<Goal[]>([]);
   const [search, setSearch] = useState("");
@@ -55,17 +169,15 @@ export default function DirectiveLog() {
   const [loadingAction, setLoadingAction] = useState(false);
   const [isAddGoalModalOpen, setIsAddGoalModalOpen] = useState(false);
   const [selectedGoal, setSelectedGoal] = useState<Goal | null>(null);
-  const [, forceUpdate] = useState(0); // For countdown refresh
+  const [, forceUpdate] = useState(0);
   const [sortBy, setSortBy] = useState<"custom" | "newest" | "deadline" | "priority" | "oldest">("custom");
 
-  // Refresh countdowns every minute
   useEffect(() => {
     const interval = setInterval(() => forceUpdate(n => n + 1), 60000);
     return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
-    // Fetch from API (Upstash Redis)
     fetch("/api/goals")
       .then(res => res.json())
       .then(data => {
@@ -124,11 +236,9 @@ export default function DirectiveLog() {
     g.project?.toLowerCase().includes(search.toLowerCase())
   );
 
-  // Sort the filtered goals
   const sortedGoals = [...filtered].sort((a, b) => {
     switch (sortBy) {
       case "deadline":
-        // Deadlined tasks first, then by deadline urgency
         if (a.deadline && !b.deadline) return -1;
         if (!a.deadline && b.deadline) return 1;
         if (a.deadline && b.deadline) {
@@ -158,7 +268,6 @@ export default function DirectiveLog() {
     if (search.trim() !== "" || !isAdmin || !password) return;
     
     setLoadingAction(true);
-    // Use the latest goals state
     const goalsForGitHub = [...goals].reverse();
     try {
       const res = await fetch('/api/goals', {
@@ -176,9 +285,8 @@ export default function DirectiveLog() {
   const nukeGoal = async (idToDelete: string) => {
     setLoadingAction(true);
 
-    // Keep original order for GitHub (don't reverse - goals are stored oldest-first)
     const remainingGoals = goals.filter(g => g.id !== idToDelete);
-    const goalsForGitHub = [...remainingGoals].reverse(); // Reverse back to original storage order
+    const goalsForGitHub = [...remainingGoals].reverse();
 
     const res = await fetch('/api/goals', {
       method: 'POST',
@@ -194,13 +302,9 @@ export default function DirectiveLog() {
 
   const updateGoal = async (updatedGoal: Goal) => {
     const updatedGoals = goals.map(g => g.id === updatedGoal.id ? updatedGoal : g);
-
-    // Update UI immediately
     setGoals(updatedGoals);
 
-    // Save to cloud if admin
     if (!isAdmin || !password) {
-      console.log("Not saving - isAdmin:", isAdmin, "password:", password ? "set" : "empty");
       return;
     }
     if (isAdmin && password) {
@@ -272,7 +376,6 @@ export default function DirectiveLog() {
         </div>
 
         <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-3 sm:gap-4 mt-6">
-          {/* Sort selector */}
           <div className="grid grid-cols-5 sm:flex sm:items-center w-full sm:w-auto">
             {[
               { value: "custom", label: "Custom" },
@@ -323,7 +426,6 @@ export default function DirectiveLog() {
         )}
       </AnimatePresence>
 
-      {/* Goal Detail Modal */}
       <AnimatePresence>
         {selectedGoal && (
           <GoalDetailModal
@@ -336,7 +438,6 @@ export default function DirectiveLog() {
         )}
       </AnimatePresence>
 
-      {/* TASKS GRID */}
       {loading ? (
         <div className="relative z-10 grid gap-6 md:grid-cols-2 lg:grid-cols-3 pb-20">
           <div className="col-span-full py-20 text-zinc-800 uppercase font-black text-2xl animate-pulse text-center">
@@ -359,114 +460,22 @@ export default function DirectiveLog() {
         >
           <AnimatePresence mode="popLayout">
             {sortedGoals.map((g) => (
-              <Reorder.Item
-                as="div"
-                value={g}
-                dragListener={sortBy === "custom" && isAdmin && search.trim() === ""}
-                onDragEnd={saveGoalOrder}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.8, transition: { duration: 0.3 } }}
-                  layout
-                  key={g.id}
-                  onClick={() => setSelectedGoal(g)}
-                  className={`group bg-[#0a0a0a] border border-zinc-800 p-8 hover:border-emerald-500 transition-all shadow-xl relative overflow-hidden ${sortBy === "custom" && isAdmin && search.trim() === "" ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"}`}
-                >
-                  {isAdmin && sortBy === "custom" && search.trim() === "" && (
-                    <div className="absolute top-4 left-4 text-zinc-700/50 group-hover:text-zinc-500 transition-colors z-20 cursor-grab active:cursor-grabbing">
-                      <GripVertical size={18} />
-                    </div>
-                  )}
-                  {isAdmin && (
-                    <button
-                      onClick={(e) => { e.stopPropagation(); nukeGoal(g.id); }}
-                      className="absolute top-4 right-4 text-zinc-800 hover:text-red-500 transition-none z-20"
-                      disabled={loadingAction}
-                    >
-                      <Trash2 size={18} />
-                    </button>
-                  )}
-                  <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-100 transition-opacity">
-                  <Hash size={12} className="text-emerald-500" />
-                </div>
-
-                <div className="flex flex-wrap items-start gap-2 mb-8">
-                  <div className="inline-flex flex-none items-center gap-2 px-2 py-0.5 bg-zinc-900 border border-zinc-800 rounded text-zinc-500 text-[10px] font-black uppercase tracking-widest group-hover:border-emerald-500/30 group-hover:text-emerald-500 transition-colors w-fit max-w-full">
-                    <Tag size={10} />
-                    <span className="whitespace-normal break-words">{g.project}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-zinc-700 text-[10px] font-bold whitespace-nowrap ml-auto">
-                    <Clock size={12} /> {g.date}
-                  </div>
-                </div>
-
-                <div className="mb-4">
-                  <h3 className="text-xl md:text-2xl font-bold uppercase tracking-tight text-zinc-100 group-hover:text-white transition-colors leading-tight break-words">
-                    {g.task}
-                  </h3>
-                </div>
-
-                {g.description && (
-                  <p className="text-sm text-zinc-600 mb-6 line-clamp-2 leading-relaxed">
-                    {g.description}
-                  </p>
-                )}
-
-                {/* Deadline countdown if set */}
-                {g.deadline && (
-                  <div className="mb-6">
-                    {(() => {
-                      const countdown = formatCountdown(g.deadline);
-                      return (
-                        <div className={`flex items-center gap-2 text-xs font-bold ${
-                          countdown.overdue ? "text-red-400" : countdown.urgent ? "text-yellow-400" : "text-zinc-500"
-                        }`}>
-                          <Timer size={14} />
-                          <span>{countdown.text}</span>
-                        </div>
-                      );
-                    })()}
-                  </div>
-                )}
-
-                {g.subgoals && g.subgoals.length > 0 && (
-                  <div className="mb-6">
-                    <div className="flex items-center justify-between text-[10px] font-bold uppercase mb-2">
-                      <span className="flex items-center gap-1.5 text-zinc-600">
-                        <ListChecks size={12} />
-                        Sub-tasks
-                      </span>
-                      <span className={g.subgoals.filter((s: SubGoal) => s.completed).length === g.subgoals.length ? 'text-emerald-400' : 'text-zinc-600'}>
-                        {g.subgoals.filter((s: SubGoal) => s.completed).length}/{g.subgoals.length}
-                      </span>
-                    </div>
-                    <div className="h-1 bg-zinc-900 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-emerald-500 transition-all duration-300"
-                        style={{ width: `${(g.subgoals.filter((s: SubGoal) => s.completed).length / g.subgoals.length) * 100}%` }}
-                      />
-                    </div>
-                  </div>
-                )}
-
-                <div className="flex justify-between items-center border-t border-zinc-900 pt-6">
-                  <div className={`flex items-center gap-2 px-3 py-1 rounded text-[10px] font-black uppercase tracking-wider border ${
-                    g.priority === 'High'
-                      ? 'bg-red-500/10 text-red-500 border-red-500/20'
-                      : 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
-                  }`}>
-                    <Activity size={10} />
-                    Lvl_{g.priority}
-                  </div>
-                  <span className="text-[10px] text-zinc-800 font-mono">REF_{g.id}</span>
-                </div>
-              </Reorder.Item>
+              <GoalItem
+                key={g.id}
+                g={g}
+                isAdmin={isAdmin}
+                sortBy={sortBy}
+                search={search}
+                saveGoalOrder={saveGoalOrder}
+                nukeGoal={nukeGoal}
+                setSelectedGoal={setSelectedGoal}
+                loadingAction={loadingAction}
+              />
             ))}
           </AnimatePresence>
         </Reorder.Group>
       )}
 
-      {/* BACKGROUND DECO */}
       <div className="fixed inset-0 z-0 opacity-[0.02] pointer-events-none flex items-center justify-center">
         <Box size={600} strokeWidth={0.5} />
       </div>

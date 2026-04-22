@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
-import { motion, Reorder } from "framer-motion";
+import { motion, Reorder, useDragControls } from "framer-motion";
 import { X, Plus, Tag, Clock, Activity, Timer, AlertTriangle, Pencil, Check, GripVertical } from "lucide-react";
 
 interface SubGoal {
@@ -19,6 +19,86 @@ interface Goal {
   description?: string;
   subgoals?: SubGoal[];
 }
+
+const SubgoalItem = ({
+  sg,
+  isAdmin,
+  editingSubgoalId,
+  editingSubgoalText,
+  setEditingSubgoalText,
+  saveSubgoalEdit,
+  startEditingSubgoal,
+  toggleSubgoal,
+  removeSubgoal
+}: any) => {
+  const dragControls = useDragControls();
+
+  return (
+    <Reorder.Item
+      value={sg}
+      dragListener={false}
+      dragControls={dragControls}
+      initial={{ opacity: 0, x: -10 }}
+      animate={{ opacity: 1, x: 0 }}
+      className={`flex items-center gap-3 p-3 border transition-all ${
+        sg.completed
+          ? 'bg-zinc-900/30 border-zinc-800'
+          : 'bg-zinc-900/50 border-zinc-800 hover:border-zinc-700'
+      }`}
+    >
+      {isAdmin && (
+        <div 
+          className="cursor-grab active:cursor-grabbing text-zinc-600 hover:text-zinc-400 transition-colors p-1"
+          onPointerDown={(e) => {
+            e.preventDefault();
+            dragControls.start(e);
+          }}
+        >
+          <GripVertical size={14} />
+        </div>
+      )}
+      <button
+        onClick={() => toggleSubgoal(sg.id)}
+        disabled={!isAdmin}
+        className={`font-mono text-sm transition-colors ${!isAdmin ? 'cursor-default' : 'cursor-pointer'}`}
+      >
+        <span className={sg.completed ? 'text-emerald-500' : 'text-zinc-700 hover:text-zinc-500'}>
+          [{sg.completed ? <span className="text-emerald-400">■</span> : <span className="text-zinc-800">&nbsp;</span>}]
+        </span>
+      </button>
+      
+      {editingSubgoalId === sg.id ? (
+        <input
+          type="text"
+          value={editingSubgoalText}
+          onChange={(e) => setEditingSubgoalText(e.target.value)}
+          onBlur={saveSubgoalEdit}
+          onKeyDown={(e) => e.key === 'Enter' && saveSubgoalEdit()}
+          autoFocus
+          className="flex-1 bg-black border border-zinc-700 px-2 py-1 text-sm text-white font-mono outline-none focus:border-emerald-500/50"
+        />
+      ) : (
+        <span 
+          onClick={() => startEditingSubgoal(sg.id, sg.text)}
+          className={`flex-1 text-sm font-mono ${isAdmin ? 'cursor-text hover:text-white' : ''} ${
+            sg.completed ? 'text-zinc-600 line-through' : 'text-zinc-400'
+          }`}
+        >
+          {sg.text}
+        </span>
+      )}
+      
+      {isAdmin && (
+        <button
+          onClick={() => removeSubgoal(sg.id)}
+          className="text-zinc-800 hover:text-red-500 transition-colors text-xs font-mono ml-auto"
+        >
+          [DEL]
+        </button>
+      )}
+    </Reorder.Item>
+  );
+};
 
 const formatCountdown = (deadline: string): { text: string; urgent: boolean; overdue: boolean } => {
   const now = new Date().getTime();
@@ -450,63 +530,18 @@ export const GoalDetailModal = ({ goal, isAdmin, password, onClose, onUpdate }: 
           ) : (
             <Reorder.Group axis="y" values={subgoals} onReorder={isAdmin ? setSubgoals : () => {}} className="space-y-1">
               {subgoals.map((sg) => (
-                <Reorder.Item
+                <SubgoalItem
                   key={sg.id}
-                  value={sg}
-                  dragListener={isAdmin && editingSubgoalId !== sg.id}
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  className={`flex items-center gap-3 p-3 border transition-all ${
-                    sg.completed
-                      ? 'bg-zinc-900/30 border-zinc-800'
-                      : 'bg-zinc-900/50 border-zinc-800 hover:border-zinc-700'
-                  }`}
-                >
-                  {isAdmin && (
-                    <div className="cursor-grab active:cursor-grabbing text-zinc-600 hover:text-zinc-400 transition-colors">
-                      <GripVertical size={14} />
-                    </div>
-                  )}
-                  <button
-                    onClick={() => toggleSubgoal(sg.id)}
-                    disabled={!isAdmin}
-                    className={`font-mono text-sm transition-colors ${!isAdmin ? 'cursor-default' : 'cursor-pointer'}`}
-                  >
-                    <span className={sg.completed ? 'text-emerald-500' : 'text-zinc-700 hover:text-zinc-500'}>
-                      [{sg.completed ? <span className="text-emerald-400">■</span> : <span className="text-zinc-800">&nbsp;</span>}]
-                    </span>
-                  </button>
-                  
-                  {editingSubgoalId === sg.id ? (
-                    <input
-                      type="text"
-                      value={editingSubgoalText}
-                      onChange={(e) => setEditingSubgoalText(e.target.value)}
-                      onBlur={saveSubgoalEdit}
-                      onKeyDown={(e) => e.key === 'Enter' && saveSubgoalEdit()}
-                      autoFocus
-                      className="flex-1 bg-black border border-zinc-700 px-2 py-1 text-sm text-white font-mono outline-none focus:border-emerald-500/50"
-                    />
-                  ) : (
-                    <span 
-                      onClick={() => startEditingSubgoal(sg.id, sg.text)}
-                      className={`flex-1 text-sm font-mono ${isAdmin ? 'cursor-text hover:text-white' : ''} ${
-                        sg.completed ? 'text-zinc-600 line-through' : 'text-zinc-400'
-                      }`}
-                    >
-                      {sg.text}
-                    </span>
-                  )}
-                  
-                  {isAdmin && (
-                    <button
-                      onClick={() => removeSubgoal(sg.id)}
-                      className="text-zinc-800 hover:text-red-500 transition-colors text-xs font-mono ml-auto"
-                    >
-                      [DEL]
-                    </button>
-                  )}
-                </Reorder.Item>
+                  sg={sg}
+                  isAdmin={isAdmin}
+                  editingSubgoalId={editingSubgoalId}
+                  editingSubgoalText={editingSubgoalText}
+                  setEditingSubgoalText={setEditingSubgoalText}
+                  saveSubgoalEdit={saveSubgoalEdit}
+                  startEditingSubgoal={startEditingSubgoal}
+                  toggleSubgoal={toggleSubgoal}
+                  removeSubgoal={removeSubgoal}
+                />
               ))}
             </Reorder.Group>
           )}

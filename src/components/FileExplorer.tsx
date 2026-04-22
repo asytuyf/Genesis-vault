@@ -650,7 +650,7 @@ export const FileExplorer = ({ mobileOpen, setMobileOpen, desktopOpen }: FileExp
     <>
       {/* Desktop Explorer */}
       <div
-        className="fixed left-0 top-0 bottom-0 z-[500] hidden md:block"
+        className="fixed left-0 top-0 bottom-0 z-[1000] hidden md:block"
       >
         {/* IDE Sidebar - FLOATING MODULE STYLE */}
         <motion.div
@@ -676,7 +676,7 @@ export const FileExplorer = ({ mobileOpen, setMobileOpen, desktopOpen }: FileExp
         initial={{ x: "-100%" }}
         animate={{ x: mobileOpenValue ? "0%" : "-100%" }}
         transition={{ type: "spring", stiffness: 300, damping: 30 }}
-        className="fixed inset-0 bg-black/95 z-[600] md:hidden flex flex-col font-mono"
+        className="fixed inset-0 bg-black/95 z-[1000] md:hidden flex flex-col font-mono"
       >
         {renderFileTreeContent(true)}
       </motion.div>
