@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
-import { motion, AnimatePresence, Reorder, useDragControls } from "framer-motion";
-import { Search, Tag, Clock, Activity, Hash, Box, Trash2, Plus, Terminal, ListChecks, Timer, ArrowUpDown, GripVertical } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Search, Tag, Clock, Activity, Hash, Box, Trash2, Plus, Terminal, ListChecks, Timer, ArrowUpDown } from "lucide-react";
 import { AddGoalForm } from "@/components/AddGoalForm";
 import { GoalDetailModal } from "@/components/GoalDetailModal";
 
@@ -46,16 +46,48 @@ const formatCountdown = (deadline: string): { text: string; urgent: boolean; ove
   return { text: `${minutes}m`, urgent: true, overdue: false };
 };
 
-const GoalItem = ({ g, isAdmin, sortBy, search, saveGoalOrder, nukeGoal, setSelectedGoal, loadingAction }: any) => {
-  const dragControls = useDragControls();
+const OrderInput = ({ index, totalGoals, moveGoalToIndex, loadingAction }: any) => {
+  const [val, setVal] = useState((index + 1).toString());
+
+  useEffect(() => {
+    setVal((index + 1).toString());
+  }, [index]);
+
+  const handleCommit = () => {
+    let parsed = parseInt(val, 10);
+    if (isNaN(parsed)) {
+      setVal((index + 1).toString());
+      return;
+    }
+    if (parsed < 1) parsed = 1;
+    if (parsed > totalGoals) parsed = totalGoals;
+    setVal(parsed.toString());
+    const newIndex = parsed - 1;
+    if (newIndex !== index) {
+      moveGoalToIndex(index, newIndex);
+    }
+  };
 
   return (
-    <Reorder.Item
-      as="div"
-      value={g}
-      dragListener={false}
-      dragControls={dragControls}
-      onDragEnd={saveGoalOrder}
+    <input
+      type="number"
+      value={val}
+      onChange={(e) => setVal(e.target.value)}
+      onBlur={handleCommit}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') e.currentTarget.blur();
+      }}
+      disabled={loadingAction}
+      className="w-8 bg-transparent border-b border-zinc-700/50 text-center text-[10px] text-zinc-500 font-mono focus:text-emerald-400 focus:border-emerald-400 outline-none disabled:opacity-50 m-0 p-0"
+      style={{ WebkitAppearance: 'none', MozAppearance: 'textfield' }}
+      onClick={(e) => e.stopPropagation()}
+    />
+  );
+};
+
+const GoalItem = ({ g, index, totalGoals, isAdmin, sortBy, search, moveGoalToIndex, nukeGoal, setSelectedGoal, loadingAction }: any) => {
+  return (
+    <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.8, transition: { duration: 0.3 } }}
@@ -64,14 +96,9 @@ const GoalItem = ({ g, isAdmin, sortBy, search, saveGoalOrder, nukeGoal, setSele
       className="group bg-[#0a0a0a] border border-zinc-800 p-8 hover:border-emerald-500 transition-all shadow-xl relative overflow-hidden cursor-pointer"
     >
       {isAdmin && sortBy === "custom" && search.trim() === "" && (
-        <div 
-          className="absolute top-2 left-2 text-zinc-700/50 group-hover:text-zinc-500 transition-colors z-20 cursor-grab active:cursor-grabbing p-2"
-          onPointerDown={(e) => {
-            e.preventDefault();
-            dragControls.start(e);
-          }}
-        >
-          <GripVertical size={18} />
+        <div className="absolute top-3 left-4 flex items-center z-20">
+          <span className="text-[10px] text-zinc-700 font-mono mr-1">#</span>
+          <OrderInput index={index} totalGoals={totalGoals} moveGoalToIndex={moveGoalToIndex} loadingAction={loadingAction} />
         </div>
       )}
       {isAdmin && (
@@ -156,7 +183,7 @@ const GoalItem = ({ g, isAdmin, sortBy, search, saveGoalOrder, nukeGoal, setSele
         </div>
         <span className="text-[10px] text-zinc-800 font-mono">REF_{g.id}</span>
       </div>
-    </Reorder.Item>
+    </motion.div>
   );
 };
 
@@ -259,16 +286,18 @@ export default function DirectiveLog() {
     }
   });
 
-  const updateGoalOrder = (reorderedGoals: Goal[]) => {
-    if (search.trim() !== "") return;
-    setGoals(reorderedGoals);
-  };
-
-  const saveGoalOrder = async () => {
+  const moveGoalToIndex = async (fromIndex: number, toIndex: number) => {
     if (search.trim() !== "" || !isAdmin || !password) return;
+    if (fromIndex === toIndex) return;
+    
+    const newGoals = [...goals];
+    const [movedItem] = newGoals.splice(fromIndex, 1);
+    newGoals.splice(toIndex, 0, movedItem);
+    
+    setGoals(newGoals);
     
     setLoadingAction(true);
-    const goalsForGitHub = [...goals].reverse();
+    const goalsForGitHub = [...newGoals].reverse();
     try {
       const res = await fetch('/api/goals', {
         method: 'POST',
@@ -451,29 +480,25 @@ export default function DirectiveLog() {
           </div>
         </div>
       ) : (
-        <Reorder.Group 
-          as="div" 
-          axis={undefined} 
-          values={sortedGoals} 
-          onReorder={sortBy === "custom" && isAdmin && search.trim() === "" ? updateGoalOrder : () => {}} 
-          className="relative z-10 grid gap-6 md:grid-cols-2 lg:grid-cols-3 pb-20"
-        >
+        <div className="relative z-10 grid gap-6 md:grid-cols-2 lg:grid-cols-3 pb-20">
           <AnimatePresence mode="popLayout">
-            {sortedGoals.map((g) => (
+            {sortedGoals.map((g, index) => (
               <GoalItem
                 key={g.id}
                 g={g}
+                index={index}
+                totalGoals={sortedGoals.length}
                 isAdmin={isAdmin}
                 sortBy={sortBy}
                 search={search}
-                saveGoalOrder={saveGoalOrder}
+                moveGoalToIndex={moveGoalToIndex}
                 nukeGoal={nukeGoal}
                 setSelectedGoal={setSelectedGoal}
                 loadingAction={loadingAction}
               />
             ))}
           </AnimatePresence>
-        </Reorder.Group>
+        </div>
       )}
 
       <div className="fixed inset-0 z-0 opacity-[0.02] pointer-events-none flex items-center justify-center">
