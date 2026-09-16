@@ -497,20 +497,17 @@ export default function StudyPage() {
     };
   }, [isRunning, timeLeft, mode, workDuration, breakDuration, sessions, totalMinutes]);
 
-  // Update tab title with timer
+  // Update tab title with timer.
+  // Nothing is restored on cleanup: this effect also unmounts when you navigate
+  // away, and writing "STUDY" there overwrote the title of the page you had
+  // just opened, which is why Track sometimes stayed named Study.
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      if (timeLeft === 0) {
-        document.title = mode === "work" ? "BREAK TIME" : "BACK TO WORK";
-      } else {
-        document.title = `${formatTime(timeLeft)} - ${mode === "work" ? "STUDY" : "BREAK"}`;
-      }
+    if (typeof window === "undefined") return;
+    if (timeLeft === 0) {
+      document.title = mode === "work" ? "BREAK TIME" : "BACK TO WORK";
+    } else {
+      document.title = `${formatTime(timeLeft)} - ${mode === "work" ? "STUDY" : "BREAK"}`;
     }
-    return () => {
-      if (typeof window !== "undefined") {
-        document.title = "STUDY";
-      }
-    };
   }, [timeLeft, mode]);
 
   const resetTimer = () => {

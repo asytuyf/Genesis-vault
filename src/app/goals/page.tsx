@@ -345,10 +345,9 @@ export default function DirectiveLog() {
     };
     paint();
     const i = setInterval(paint, 1000);
-    return () => {
-      clearInterval(i);
-      document.title = BASE_TITLE;
-    };
+    // The title is not restored here: this cleanup also runs when you navigate
+    // away, and it would overwrite the next page's title.
+    return () => clearInterval(i);
   }, [runningTimers]);
 
   // A goal deleted on another device simply stops rendering its window.

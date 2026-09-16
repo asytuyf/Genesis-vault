@@ -1,17 +1,14 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Flame, GitCommit, Plus, X, Check, Target, TrendingUp, Bot, Trophy, RefreshCw, ExternalLink
+  Flame, GitCommit, Plus, X, Check, Target, TrendingUp, Bot, Trophy, RefreshCw, ExternalLink, Pencil
 } from "lucide-react";
-
-interface Habit {
-  id: string;
-  name: string;
-  color: string;
-  history: string[];
-  frequency: number; // every X days (1 = daily, 2 = every other day, 7 = weekly)
-}
+import {
+  type Habit, type HabitOp,
+  applyHabitOps, getStreak, todayLocal, weekDays as buildWeekDays,
+} from "@/lib/habits";
+import { useOpSync, type SyncState } from "@/lib/useOpSync";
 
 const FREQUENCIES = [
   { value: 1, label: "Daily" },
@@ -42,24 +39,32 @@ const getHabitColor = (color: string, type: "bg" | "text" | "border") => {
   return found[type];
 };
 
-// Top coding LLMs - from arena.ai/leaderboard/code (Feb 2026)
-const TOP_CODING_LLMS: LLMModel[] = [
-  { rank: 1, name: "Claude Opus 4.6 Thinking", score: 1567, org: "Anthropic" },
-  { rank: 2, name: "Claude Opus 4.6", score: 1560, org: "Anthropic" },
-  { rank: 3, name: "Claude Opus 4.5 Thinking", score: 1503, org: "Anthropic" },
-  { rank: 4, name: "GPT-5.2 High", score: 1473, org: "OpenAI" },
-  { rank: 5, name: "Claude Opus 4.5", score: 1469, org: "Anthropic" },
-  { rank: 6, name: "GLM-5", score: 1449, org: "Zhipu" },
-  { rank: 7, name: "Gemini 3 Pro", score: 1449, org: "Google" },
-  { rank: 8, name: "Kimi K2.5 Thinking", score: 1447, org: "Moonshot" },
-  { rank: 9, name: "Gemini 3 Flash", score: 1444, org: "Google" },
-  { rank: 10, name: "GLM-4.7", score: 1442, org: "Zhipu" },
-];
-
-const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const SYNC_LABEL: Record<SyncState, { text: string; cls: string }> = {
+  synced: { text: "● SYNCED", cls: "text-emerald-600" },
+  syncing: { text: "◌ SYNCING", cls: "text-orange-400 animate-pulse" },
+  unsaved: { text: "○ QUEUED", cls: "text-zinc-500" },
+  error: { text: "! UNSENT_KEPT_ON_DEVICE", cls: "text-red-400" },
+};
 
 export default function TrackerPage() {
-  const [habits, setHabits] = useState<Habit[]>([]);
+  const [adminMode, setAdminMode] = useState(false);
+  const [password, setPassword] = useState("");
+
+  // Habits save themselves in the background, one change at a time.
+  const {
+    items: habits,
+    loading: loadingHabits,
+    syncState,
+    queueOps,
+    retrySync,
+    refresh: refreshHabits,
+  } = useOpSync<Habit, HabitOp>({
+    endpoint: "/api/habits",
+    apply: applyHabitOps,
+    resultKey: "habits",
+    password,
+  });
+
   const [showAddHabit, setShowAddHabit] = useState(false);
   const [newHabitName, setNewHabitName] = useState("");
   const [newHabitColor, setNewHabitColor] = useState("orange");
@@ -70,11 +75,11 @@ export default function TrackerPage() {
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [loadingGithub, setLoadingGithub] = useState(false);
   const [showGithubInput, setShowGithubInput] = useState(false);
-  const [adminMode, setAdminMode] = useState(false);
-  const [password, setPassword] = useState("");
-  const [loadingHabits, setLoadingHabits] = useState(true);
-  const [savingHabits, setSavingHabits] = useState(false);
-  const [syncStatus, setSyncStatus] = useState<"" | "success" | "error">("");
+  const [githubFetchedAt, setGithubFetchedAt] = useState("");
+  const [board, setBoard] = useState<{ models: LLMModel[]; updatedAt: string }>({ models: [], updatedAt: "" });
+  const [editingBoard, setEditingBoard] = useState(false);
+  const [boardDraft, setBoardDraft] = useState("");
+  const [savingBoard, setSavingBoard] = useState(false);
 
   // Listen for admin mode and password changes
   useEffect(() => {
@@ -105,107 +110,70 @@ export default function TrackerPage() {
     };
   }, []);
 
-  // Load habits from API (Upstash Redis)
-  useEffect(() => {
-    const fetchHabits = async () => {
-      setLoadingHabits(true);
-      try {
-        const res = await fetch("/api/habits");
-        if (res.ok) {
-          const data = await res.json();
-          if (Array.isArray(data)) {
-            setHabits(data);
-          }
+  // Daily contribution counts come from our own route, which reads the same
+  // calendar as a GitHub profile, so private work counts too. The public events
+  // feed is kept only to list what happened on a day you tap.
+  const loadGithub = useCallback(async (username: string, closeInput = false) => {
+    if (!username) return;
+    setLoadingGithub(true);
+    try {
+      const res = await fetch(`/api/github?user=${encodeURIComponent(username)}`, { cache: "no-store" });
+      if (res.ok) {
+        const data = await res.json();
+        if (data && typeof data.days === "object") {
+          setGithubData(data.days as Record<string, number>);
+          setGithubFetchedAt(typeof data.fetchedAt === "string" ? data.fetchedAt : "");
         }
-      } catch (e) {
-        console.error("Failed to fetch habits:", e);
       }
-      setLoadingHabits(false);
-    };
-    fetchHabits();
+      localStorage.setItem("streaks_github_username", username);
+    } catch (e) {
+      console.error("Failed to load contributions:", e);
+    }
+    try {
+      const res = await fetch(`https://api.github.com/users/${encodeURIComponent(username)}/events/public?per_page=100`);
+      const events = await res.json();
+      if (Array.isArray(events)) setGithubEvents(events);
+    } catch {
+      // The detail list is a nice extra, not worth failing the page over.
+    }
+    setLoadingGithub(false);
+    if (closeInput) setShowGithubInput(false);
   }, []);
 
-  // Load GitHub activity data - always refresh on page load
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const savedGithub = localStorage.getItem("streaks_github_username");
-      const username = savedGithub || "asytuyf";
-      setGithubUsername(username);
-      // Always fetch fresh data on page load
-      fetchGithubDataInitial(username);
+    const saved = localStorage.getItem("streaks_github_username") || "asytuyf";
+    setGithubUsername(saved);
+    loadGithub(saved);
+  }, [loadGithub]);
+
+  // The coding board is stored on the server so it can be updated from here.
+  const loadBoard = useCallback(async () => {
+    try {
+      const res = await fetch("/api/leaderboard", { cache: "no-store" });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (Array.isArray(data?.models)) {
+        setBoard({ models: data.models, updatedAt: String(data.updatedAt || "") });
+      }
+    } catch {
+      // Leave the board as it is rather than breaking the page.
     }
   }, []);
 
-  // Initial fetch function (defined separately to avoid useEffect dependency issues)
-  const fetchGithubDataInitial = async (username: string) => {
-    if (!username) return;
-    setLoadingGithub(true);
-    try {
-      const res = await fetch(`https://api.github.com/users/${username}/events/public?per_page=100`);
-      const events = await res.json();
-      const contributions: Record<string, number> = {};
-      if (Array.isArray(events)) {
-        setGithubEvents(events);
-        localStorage.setItem("streaks_github_events", JSON.stringify(events));
-        events.forEach((event: any) => {
-          const date = event.created_at?.split("T")[0];
-          if (date) {
-            contributions[date] = (contributions[date] || 0) + 1;
-          }
-        });
-      }
-      setGithubData(contributions);
-      localStorage.setItem("streaks_github_username", username);
-      localStorage.setItem("streaks_github_data", JSON.stringify(contributions));
-    } catch (e) {
-      console.error("Failed to fetch GitHub data:", e);
-    }
-    setLoadingGithub(false);
-  };
+  useEffect(() => {
+    loadBoard();
+  }, [loadBoard]);
 
-  const saveHabits = async (newHabits: Habit[]) => {
-    // Update UI immediately
-    setHabits(newHabits);
-  };
-
-  const fetchGithubData = async (username: string) => {
-    if (!username) return;
-    setLoadingGithub(true);
-    try {
-      const res = await fetch(`https://api.github.com/users/${username}/events/public?per_page=100`);
-      const events = await res.json();
-
-      const contributions: Record<string, number> = {};
-      if (Array.isArray(events)) {
-        setGithubEvents(events);
-        localStorage.setItem("streaks_github_events", JSON.stringify(events));
-        events.forEach((event: any) => {
-          const date = event.created_at?.split("T")[0];
-          if (date) {
-            contributions[date] = (contributions[date] || 0) + 1;
-          }
-        });
-      }
-      setGithubData(contributions);
-      localStorage.setItem("streaks_github_username", username);
-      localStorage.setItem("streaks_github_data", JSON.stringify(contributions));
-      setShowGithubInput(false);
-    } catch (e) {
-      console.error("Failed to fetch GitHub data:", e);
-    }
-    setLoadingGithub(false);
-  };
-
-  const addHabit = async () => {
+  const addHabit = () => {
     if (!newHabitName.trim()) return;
     const newHabit: Habit = {
       id: Date.now().toString(),
-      name: newHabitName,
+      name: newHabitName.trim(),
       color: newHabitColor,
       history: [],
       frequency: newHabitFrequency,
     };
-    await saveHabits([...habits, newHabit]);
+    queueOps([{ type: "add", habit: newHabit }]);
     setNewHabitName("");
     setNewHabitColor("orange");
     setNewHabitFrequency(1);
@@ -220,65 +188,48 @@ export default function TrackerPage() {
     return type.replace(/Event$/, "").replace(/([A-Z])/g, " $1").trim();
   };
 
-  const removeHabit = async (id: string) => {
-    await saveHabits(habits.filter((h) => h.id !== id));
+  const removeHabit = (id: string) => {
+    queueOps([{ type: "remove", id }]);
   };
 
-  const toggleHabitForDate = async (habitId: string, date: string) => {
-    const updated = habits.map((h) => {
-      if (h.id !== habitId) return h;
-      const hasDate = h.history.includes(date);
-      return {
-        ...h,
-        history: hasDate ? h.history.filter((d) => d !== date) : [...h.history, date],
-      };
-    });
-    await saveHabits(updated);
+  const toggleHabitForDate = (habitId: string, date: string) => {
+    const habit = habits.find((h) => h.id === habitId);
+    if (!habit) return;
+    // State what the day should become rather than flipping it, so a resend
+    // after a dropped connection cannot undo the tick.
+    queueOps([{ type: "set", id: habitId, date, done: !habit.history.includes(date) }]);
   };
 
-  const getStreak = (habit: Habit) => {
-    const frequency = habit.frequency || 1;
-    const sortedHistory = [...habit.history].sort().reverse(); // newest first
-
-    if (sortedHistory.length === 0) return 0;
-
-    // Simply count consecutive completions where gap <= frequency
-    let streak = 1;
-    for (let i = 1; i < sortedHistory.length; i++) {
-      const currentDate = new Date(sortedHistory[i - 1]);
-      const prevDate = new Date(sortedHistory[i]);
-      currentDate.setHours(0, 0, 0, 0);
-      prevDate.setHours(0, 0, 0, 0);
-
-      const daysBetween = Math.floor((currentDate.getTime() - prevDate.getTime()) / (1000 * 60 * 60 * 24));
-
-      if (daysBetween <= frequency) {
-        streak++;
-      } else {
-        break;
-      }
-    }
-    return streak;
-  };
-
-  const getWeekDays = () => {
-    const days = [];
-    const today = new Date();
-    for (let i = 6; i >= 0; i--) {
-      const date = new Date(today);
-      date.setDate(date.getDate() - i);
-      days.push({
-        date: date.toISOString().split("T")[0],
-        dayName: DAYS[date.getDay()],
-        dayNum: date.getDate(),
-        isToday: i === 0,
+  const saveBoard = async () => {
+    setSavingBoard(true);
+    const models = boardDraft
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line, i) => {
+        const [name = "", org = "", score = ""] = line.split("|").map((part) => part.trim());
+        return { rank: i + 1, name, org, score: Number(score) || 0 };
+      })
+      .filter((m) => m.name);
+    try {
+      const res = await fetch("/api/leaderboard", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password, models }),
       });
+      if (res.ok) {
+        const data = await res.json();
+        setBoard({ models: data.models, updatedAt: String(data.updatedAt || "") });
+        setEditingBoard(false);
+      }
+    } catch {
+      // Keep the editor open so the text is not lost.
     }
-    return days;
+    setSavingBoard(false);
   };
 
-  const weekDays = getWeekDays();
-  const today = new Date().toISOString().split("T")[0];
+  const weekDays = buildWeekDays();
+  const today = todayLocal();
   const githubThisWeek = weekDays.reduce((acc, day) => acc + (githubData[day.date] || 0), 0);
 
   return (
@@ -320,11 +271,16 @@ export default function TrackerPage() {
               {githubUsername && (
                 <span className="text-[10px] text-zinc-600">@{githubUsername}</span>
               )}
+              {githubFetchedAt && (
+                <span className="text-[9px] text-zinc-700 uppercase tracking-wider hidden sm:inline">
+                  read {new Date(githubFetchedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })}
+                </span>
+              )}
             </div>
             <div className="flex items-center gap-2">
               {/* Always visible refresh button */}
               <button
-                onClick={() => fetchGithubData(githubUsername)}
+                onClick={() => loadGithub(githubUsername)}
                 disabled={loadingGithub}
                 className={`flex items-center gap-2 px-3 py-1.5 border border-zinc-800 text-zinc-500 text-[10px] font-bold uppercase hover:border-orange-500/30 hover:text-orange-400 transition-colors ${loadingGithub ? "opacity-50" : ""}`}
               >
@@ -358,11 +314,11 @@ export default function TrackerPage() {
                     placeholder="GitHub username"
                     value={githubUsername}
                     onChange={(e) => setGithubUsername(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && fetchGithubData(githubUsername)}
+                    onKeyDown={(e) => e.key === "Enter" && loadGithub(githubUsername, true)}
                     className="flex-1 bg-black border border-zinc-800 px-4 py-2 text-sm text-white outline-none focus:border-orange-500"
                   />
                   <button
-                    onClick={() => fetchGithubData(githubUsername)}
+                    onClick={() => loadGithub(githubUsername, true)}
                     disabled={loadingGithub}
                     className="px-6 py-2 bg-orange-500/10 border border-orange-500/30 text-orange-400 text-xs font-black uppercase hover:bg-orange-500/20 disabled:opacity-50"
                   >
@@ -405,7 +361,7 @@ export default function TrackerPage() {
                       }`}>
                         {githubCount}
                       </div>
-                      <div className="text-[8px] text-zinc-600 uppercase mt-1">commits</div>
+                      <div className="text-[8px] text-zinc-600 uppercase mt-1">contribs</div>
                     </button>
                   );
                 })}
@@ -509,24 +465,21 @@ export default function TrackerPage() {
             <div className="flex items-center gap-3">
               <Target size={20} className="text-orange-400" />
               <span className="text-xs font-black uppercase tracking-[0.2em] text-zinc-400">Habits</span>
-              {savingHabits && (
-                <span className="text-[10px] text-orange-400 animate-pulse">Syncing...</span>
+              {adminMode && (
+                <span className={`text-[10px] font-bold ${SYNC_LABEL[syncState].cls}`}>
+                  {SYNC_LABEL[syncState].text}
+                </span>
+              )}
+              {adminMode && syncState === "error" && (
+                <button onClick={retrySync} className="text-[10px] text-red-400 underline underline-offset-2">
+                  Retry now
+                </button>
               )}
             </div>
             <div className="flex items-center gap-2">
               {/* Refresh habits */}
               <button
-                onClick={async () => {
-                  setLoadingHabits(true);
-                  try {
-                    const res = await fetch("/api/habits");
-                    if (res.ok) {
-                      const data = await res.json();
-                      if (Array.isArray(data)) setHabits(data);
-                    }
-                  } catch {}
-                  setLoadingHabits(false);
-                }}
+                onClick={() => refreshHabits()}
                 disabled={loadingHabits}
                 className={`flex items-center gap-2 px-3 py-1.5 border border-zinc-800 text-zinc-500 text-[10px] font-bold uppercase hover:border-orange-500/30 hover:text-orange-400 transition-colors ${loadingHabits ? "opacity-50" : ""}`}
               >
@@ -534,52 +487,13 @@ export default function TrackerPage() {
                 {loadingHabits ? "..." : "Refresh"}
               </button>
               {adminMode && (
-                <>
-                  <button
-                    onClick={async () => {
-                      setSavingHabits(true);
-                      setSyncStatus("");
-                      try {
-                        const res = await fetch("/api/habits", {
-                          method: "POST",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({ password, updatedHabits: habits }),
-                        });
-                        if (res.ok) {
-                          setSyncStatus("success");
-                        } else {
-                          setSyncStatus("error");
-                          const text = await res.text();
-                          console.error("Sync failed:", res.status, text);
-                          alert(`Sync failed: ${res.status} - ${text}`);
-                        }
-                      } catch (e) {
-                        setSyncStatus("error");
-                        console.error("Sync failed:", e);
-                        alert(`Sync failed: ${e}`);
-                      }
-                      setSavingHabits(false);
-                    }}
-                    disabled={savingHabits}
-                    className={`flex items-center gap-2 px-4 py-2 border text-xs font-black uppercase tracking-wider transition-colors ${
-                      syncStatus === "success"
-                        ? "border-green-500/30 text-green-400"
-                        : syncStatus === "error"
-                          ? "border-red-500/30 text-red-400"
-                          : "border-orange-500/30 text-orange-400 hover:bg-orange-500/10"
-                    }`}
-                  >
-                    <Check size={14} />
-                    {savingHabits ? "Syncing..." : syncStatus === "success" ? "Saved!" : syncStatus === "error" ? "Failed" : "Sync"}
-                  </button>
-                  <button
-                    onClick={() => setShowAddHabit(!showAddHabit)}
-                    className="flex items-center gap-2 px-4 py-2 border border-orange-500/30 text-orange-400 text-xs font-black uppercase tracking-wider hover:bg-orange-500/10 transition-colors"
-                  >
-                    <Plus size={14} />
-                    Add
-                  </button>
-                </>
+                <button
+                  onClick={() => setShowAddHabit(!showAddHabit)}
+                  className="flex items-center gap-2 px-4 py-2 border border-orange-500/30 text-orange-400 text-xs font-black uppercase tracking-wider hover:bg-orange-500/10 transition-colors"
+                >
+                  <Plus size={14} />
+                  Add
+                </button>
               )}
             </div>
           </div>
@@ -764,7 +678,7 @@ export default function TrackerPage() {
             </div>
             <div className="p-6 border border-zinc-900 bg-[#0a0a0a] text-center">
               <div className="text-3xl md:text-4xl font-black text-orange-400">
-                {habits.length > 0 ? Math.max(...habits.map(getStreak)) : 0}
+                {habits.length > 0 ? Math.max(...habits.map((h) => getStreak(h))) : 0}
               </div>
               <div className="text-[10px] font-bold text-zinc-600 uppercase tracking-wider mt-2">Best Streak</div>
             </div>
@@ -785,19 +699,65 @@ export default function TrackerPage() {
                 <div className="flex items-center gap-3">
                   <Bot size={20} className="text-orange-400" />
                   <span className="text-xs font-black uppercase tracking-[0.2em] text-zinc-400">Code Arena</span>
+                  {board.updatedAt && (
+                    <span className="text-[9px] text-zinc-700 uppercase tracking-wider">as of {board.updatedAt}</span>
+                  )}
                 </div>
-                <a
-                  href="https://arena.ai/leaderboard/code"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-[10px] text-zinc-600 hover:text-orange-400 transition-colors"
-                >
-                  Live →
-                </a>
+                <div className="flex items-center gap-3">
+                  {adminMode && (
+                    <button
+                      onClick={() => {
+                        setBoardDraft(board.models.map((m) => `${m.name} | ${m.org} | ${m.score}`).join("\n"));
+                        setEditingBoard(!editingBoard);
+                      }}
+                      title="Edit the board"
+                      className="text-zinc-600 hover:text-orange-400 transition-colors"
+                    >
+                      <Pencil size={12} />
+                    </button>
+                  )}
+                  <a
+                    href="https://arena.ai/leaderboard/code"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[10px] text-zinc-600 hover:text-orange-400 transition-colors"
+                  >
+                    Live →
+                  </a>
+                </div>
               </div>
 
+              {editingBoard && adminMode && (
+                <div className="space-y-2 p-3 border border-zinc-800 bg-black/60">
+                  <div className="text-[9px] font-black uppercase tracking-wider text-zinc-600">
+                    One model per line: name | org | score
+                  </div>
+                  <textarea
+                    value={boardDraft}
+                    onChange={(e) => setBoardDraft(e.target.value)}
+                    rows={10}
+                    className="w-full bg-black border border-zinc-800 px-3 py-2 text-[11px] font-mono text-zinc-300 outline-none focus:border-orange-500/50 resize-y"
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      onClick={saveBoard}
+                      disabled={savingBoard}
+                      className="flex-1 py-2 border border-orange-500/30 text-orange-400 text-[10px] font-black uppercase hover:bg-orange-500/10 transition-colors disabled:opacity-50"
+                    >
+                      {savingBoard ? "Saving..." : "Save board"}
+                    </button>
+                    <button
+                      onClick={() => setEditingBoard(false)}
+                      className="px-4 py-2 border border-zinc-800 text-zinc-500 text-[10px] font-black uppercase hover:border-zinc-700 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+
               <div className="space-y-2">
-                {TOP_CODING_LLMS.map((model) => (
+                {board.models.map((model) => (
                   <div
                     key={model.rank}
                     className={`p-3 border flex items-center gap-3 transition-all ${
