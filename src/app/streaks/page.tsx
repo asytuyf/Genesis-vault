@@ -2,12 +2,13 @@
 import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Flame, GitCommit, Plus, X, Check, Target, TrendingUp, Bot, Trophy, RefreshCw, ExternalLink, Pencil
+  Flame, GitCommit, Plus, X, Check, Target, TrendingUp, RefreshCw, ExternalLink, Bookmark, Globe
 } from "lucide-react";
 import {
   type Habit, type HabitOp,
   applyHabitOps, getStreak, todayLocal, weekDays as buildWeekDays,
 } from "@/lib/habits";
+import { type TrackerLink, type LinkOp, applyLinkOps, hostOf, safeUrl } from "@/lib/links";
 import { useOpSync, type SyncState } from "@/lib/useOpSync";
 
 const FREQUENCIES = [
@@ -16,13 +17,6 @@ const FREQUENCIES = [
   { value: 3, label: "Every 3 days" },
   { value: 7, label: "Weekly" },
 ];
-
-interface LLMModel {
-  rank: number;
-  name: string;
-  score: number;
-  org: string;
-}
 
 const HABIT_COLORS = [
   { name: "Orange", value: "orange", bg: "bg-orange-500", text: "text-orange-400", border: "border-orange-500" },
@@ -37,6 +31,21 @@ const getHabitColor = (color: string, type: "bg" | "text" | "border") => {
   const found = HABIT_COLORS.find(c => c.value === color);
   if (!found) return HABIT_COLORS[0][type];
   return found[type];
+};
+
+const LinkIcon = ({ url }: { url: string }) => {
+  const [failed, setFailed] = useState(false);
+  const host = hostOf(url);
+  if (failed || !host) return <Globe size={16} className="text-zinc-600" />;
+  return (
+    <img
+      src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=64`}
+      alt=""
+      className="w-5 h-5 object-contain"
+      onError={() => setFailed(true)}
+      draggable="false"
+    />
+  );
 };
 
 const SYNC_LABEL: Record<SyncState, { text: string; cls: string }> = {
@@ -76,10 +85,20 @@ export default function TrackerPage() {
   const [loadingGithub, setLoadingGithub] = useState(false);
   const [showGithubInput, setShowGithubInput] = useState(false);
   const [githubFetchedAt, setGithubFetchedAt] = useState("");
-  const [board, setBoard] = useState<{ models: LLMModel[]; updatedAt: string }>({ models: [], updatedAt: "" });
-  const [editingBoard, setEditingBoard] = useState(false);
-  const [boardDraft, setBoardDraft] = useState("");
-  const [savingBoard, setSavingBoard] = useState(false);
+  const [showAddLink, setShowAddLink] = useState(false);
+  const [newLinkTitle, setNewLinkTitle] = useState("");
+  const [newLinkUrl, setNewLinkUrl] = useState("");
+  const [newLinkNote, setNewLinkNote] = useState("");
+  const [linkError, setLinkError] = useState("");
+  const [confirmLinkId, setConfirmLinkId] = useState<string | null>(null);
+
+  // Pinned links live on the server too, so they follow you between devices.
+  const { items: links, syncState: linkSync, queueOps: queueLinkOps } = useOpSync<TrackerLink, LinkOp>({
+    endpoint: "/api/links",
+    apply: applyLinkOps,
+    resultKey: "links",
+    password,
+  });
 
   // Listen for admin mode and password changes
   useEffect(() => {
@@ -146,24 +165,6 @@ export default function TrackerPage() {
     loadGithub(saved);
   }, [loadGithub]);
 
-  // The coding board is stored on the server so it can be updated from here.
-  const loadBoard = useCallback(async () => {
-    try {
-      const res = await fetch("/api/leaderboard", { cache: "no-store" });
-      if (!res.ok) return;
-      const data = await res.json();
-      if (Array.isArray(data?.models)) {
-        setBoard({ models: data.models, updatedAt: String(data.updatedAt || "") });
-      }
-    } catch {
-      // Leave the board as it is rather than breaking the page.
-    }
-  }, []);
-
-  useEffect(() => {
-    loadBoard();
-  }, [loadBoard]);
-
   const addHabit = () => {
     if (!newHabitName.trim()) return;
     const newHabit: Habit = {
@@ -200,32 +201,34 @@ export default function TrackerPage() {
     queueOps([{ type: "set", id: habitId, date, done: !habit.history.includes(date) }]);
   };
 
-  const saveBoard = async () => {
-    setSavingBoard(true);
-    const models = boardDraft
-      .split("\n")
-      .map((line) => line.trim())
-      .filter(Boolean)
-      .map((line, i) => {
-        const [name = "", org = "", score = ""] = line.split("|").map((part) => part.trim());
-        return { rank: i + 1, name, org, score: Number(score) || 0 };
-      })
-      .filter((m) => m.name);
-    try {
-      const res = await fetch("/api/leaderboard", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password, models }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setBoard({ models: data.models, updatedAt: String(data.updatedAt || "") });
-        setEditingBoard(false);
-      }
-    } catch {
-      // Keep the editor open so the text is not lost.
+  const addLink = () => {
+    const url = safeUrl(newLinkUrl);
+    if (!url) {
+      setLinkError("That does not look like a web address.");
+      return;
     }
-    setSavingBoard(false);
+    const note = newLinkNote.trim();
+    queueLinkOps([
+      {
+        type: "add",
+        link: {
+          id: Date.now().toString(),
+          title: newLinkTitle.trim() || hostOf(url),
+          url,
+          ...(note ? { note } : {}),
+        },
+      },
+    ]);
+    setNewLinkTitle("");
+    setNewLinkUrl("");
+    setNewLinkNote("");
+    setLinkError("");
+    setShowAddLink(false);
+  };
+
+  const removeLink = (id: string) => {
+    queueLinkOps([{ type: "remove", id }]);
+    setConfirmLinkId(null);
   };
 
   const weekDays = buildWeekDays();
@@ -689,111 +692,137 @@ export default function TrackerPage() {
           </div>
         </section>
 
-        {/* BOTTOM GRID - CODE ARENA & FUTURE */}
+        {/* LINKS */}
         <section>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            
-            {/* CODE ARENA - COLUMN 1 */}
-            <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <Bot size={20} className="text-orange-400" />
-                  <span className="text-xs font-black uppercase tracking-[0.2em] text-zinc-400">Code Arena</span>
-                  {board.updatedAt && (
-                    <span className="text-[9px] text-zinc-700 uppercase tracking-wider">as of {board.updatedAt}</span>
-                  )}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+            <div className="flex items-center gap-3">
+              <Bookmark size={20} className="text-orange-400" />
+              <span className="text-xs font-black uppercase tracking-[0.2em] text-zinc-400">Links</span>
+              {adminMode && linkSync !== "synced" && (
+                <span className={`text-[10px] font-bold ${SYNC_LABEL[linkSync].cls}`}>
+                  {SYNC_LABEL[linkSync].text}
+                </span>
+              )}
+            </div>
+            {adminMode && (
+              <button
+                onClick={() => {
+                  setShowAddLink(!showAddLink);
+                  setLinkError("");
+                }}
+                className="flex items-center justify-center gap-2 px-4 py-2 border border-orange-500/30 text-orange-400 text-xs font-black uppercase tracking-wider hover:bg-orange-500/10 transition-colors"
+              >
+                <Plus size={14} />
+                Add
+              </button>
+            )}
+          </div>
+
+          <AnimatePresence>
+            {showAddLink && adminMode && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                className="mb-6 p-4 border border-zinc-800 bg-black/60 overflow-hidden"
+              >
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <input
+                    type="text"
+                    placeholder="Name, e.g. Arena"
+                    value={newLinkTitle}
+                    onChange={(e) => setNewLinkTitle(e.target.value)}
+                    className="bg-black border border-zinc-800 px-3 py-2.5 text-sm text-white outline-none focus:border-orange-500 placeholder:text-zinc-700"
+                  />
+                  <input
+                    type="text"
+                    inputMode="url"
+                    placeholder="Address, e.g. arena.ai/leaderboard/code"
+                    value={newLinkUrl}
+                    onChange={(e) => {
+                      setNewLinkUrl(e.target.value);
+                      if (linkError) setLinkError("");
+                    }}
+                    onKeyDown={(e) => e.key === "Enter" && addLink()}
+                    className="bg-black border border-zinc-800 px-3 py-2.5 text-sm text-white outline-none focus:border-orange-500 placeholder:text-zinc-700"
+                  />
+                  <input
+                    type="text"
+                    placeholder="What it is for (optional)"
+                    value={newLinkNote}
+                    onChange={(e) => setNewLinkNote(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && addLink()}
+                    className="bg-black border border-zinc-800 px-3 py-2.5 text-sm text-white outline-none focus:border-orange-500 placeholder:text-zinc-700 sm:col-span-2"
+                  />
                 </div>
-                <div className="flex items-center gap-3">
-                  {adminMode && (
-                    <button
-                      onClick={() => {
-                        setBoardDraft(board.models.map((m) => `${m.name} | ${m.org} | ${m.score}`).join("\n"));
-                        setEditingBoard(!editingBoard);
-                      }}
-                      title="Edit the board"
-                      className="text-zinc-600 hover:text-orange-400 transition-colors"
-                    >
-                      <Pencil size={12} />
-                    </button>
-                  )}
+                {linkError && <div className="mt-3 text-[11px] text-red-400 font-bold">{linkError}</div>}
+                <div className="flex flex-col sm:flex-row gap-2 mt-4">
+                  <button
+                    onClick={addLink}
+                    className="flex-1 py-2.5 border border-orange-500/30 text-orange-400 text-xs font-black uppercase tracking-wider hover:bg-orange-500/10 transition-colors"
+                  >
+                    Save link
+                  </button>
+                  <button
+                    onClick={() => setShowAddLink(false)}
+                    className="px-6 py-2.5 border border-zinc-800 text-zinc-500 text-xs font-black uppercase tracking-wider hover:border-zinc-700 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {links.length === 0 ? (
+            <div className="p-10 border border-dashed border-zinc-900 bg-black/20 text-center">
+              <Bookmark size={32} className="mx-auto mb-3 text-zinc-800" />
+              <p className="text-zinc-600 text-xs uppercase tracking-wider">Nothing pinned yet</p>
+              {adminMode && <p className="text-zinc-700 text-[11px] mt-2 normal-case">Add the pages you check often.</p>}
+            </div>
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {links.map((link) => (
+                <motion.div key={link.id} layout className="relative group">
                   <a
-                    href="https://arena.ai/leaderboard/code"
+                    href={link.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-[10px] text-zinc-600 hover:text-orange-400 transition-colors"
+                    className="flex items-start gap-3 p-4 border border-zinc-900 bg-[#0a0a0a] hover:border-orange-500/40 hover:bg-orange-500/[0.03] transition-colors h-full"
                   >
-                    Live →
+                    <span className="w-9 h-9 shrink-0 grid place-items-center border border-zinc-800 bg-black">
+                      <LinkIcon url={link.url} />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-black uppercase tracking-wide text-white truncate group-hover:text-orange-300 transition-colors">
+                        {link.title}
+                      </span>
+                      {link.note && <span className="block text-[11px] text-zinc-600 truncate mt-0.5">{link.note}</span>}
+                      <span className="block text-[10px] text-zinc-700 font-mono truncate mt-1.5">{hostOf(link.url)}</span>
+                    </span>
+                    <ExternalLink
+                      size={14}
+                      className="text-zinc-800 group-hover:text-orange-400 transition-colors shrink-0 mt-0.5"
+                    />
                   </a>
-                </div>
-              </div>
-
-              {editingBoard && adminMode && (
-                <div className="space-y-2 p-3 border border-zinc-800 bg-black/60">
-                  <div className="text-[9px] font-black uppercase tracking-wider text-zinc-600">
-                    One model per line: name | org | score
-                  </div>
-                  <textarea
-                    value={boardDraft}
-                    onChange={(e) => setBoardDraft(e.target.value)}
-                    rows={10}
-                    className="w-full bg-black border border-zinc-800 px-3 py-2 text-[11px] font-mono text-zinc-300 outline-none focus:border-orange-500/50 resize-y"
-                  />
-                  <div className="flex gap-2">
+                  {adminMode && (
                     <button
-                      onClick={saveBoard}
-                      disabled={savingBoard}
-                      className="flex-1 py-2 border border-orange-500/30 text-orange-400 text-[10px] font-black uppercase hover:bg-orange-500/10 transition-colors disabled:opacity-50"
+                      onClick={() => (confirmLinkId === link.id ? removeLink(link.id) : setConfirmLinkId(link.id))}
+                      onBlur={() => setConfirmLinkId((id) => (id === link.id ? null : id))}
+                      title={confirmLinkId === link.id ? "Click again to remove" : "Remove link"}
+                      className={`absolute -top-2 -right-2 grid place-items-center transition-all ${
+                        confirmLinkId === link.id
+                          ? "px-2 h-6 border border-red-500/50 bg-black text-red-400 text-[9px] font-black uppercase"
+                          : "h-6 w-6 border border-zinc-800 bg-black text-zinc-700 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-red-400 hover:border-red-500/40"
+                      }`}
                     >
-                      {savingBoard ? "Saving..." : "Save board"}
+                      {confirmLinkId === link.id ? "Remove?" : <X size={12} />}
                     </button>
-                    <button
-                      onClick={() => setEditingBoard(false)}
-                      className="px-4 py-2 border border-zinc-800 text-zinc-500 text-[10px] font-black uppercase hover:border-zinc-700 transition-colors"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              <div className="space-y-2">
-                {board.models.map((model) => (
-                  <div
-                    key={model.rank}
-                    className={`p-3 border flex items-center gap-3 transition-all ${
-                      model.rank === 1
-                        ? "border-orange-500/30 bg-orange-500/5"
-                        : model.rank <= 3
-                          ? "border-zinc-800 bg-zinc-900/30"
-                          : "border-zinc-900 bg-black/40"
-                    }`}
-                  >
-                    <div className={`w-6 h-6 flex items-center justify-center font-black text-xs ${
-                      model.rank === 1 ? "text-orange-400" : model.rank === 2 ? "text-zinc-300" : model.rank === 3 ? "text-amber-600" : "text-zinc-600"
-                    }`}>
-                      {model.rank === 1 ? <Trophy size={14} /> : `#${model.rank}`}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="font-bold text-xs text-white truncate">{model.name}</div>
-                      <div className="text-[8px] text-zinc-600 uppercase">{model.org}</div>
-                    </div>
-                    <div className="text-right">
-                      <div className={`text-sm font-black ${model.rank === 1 ? "text-orange-400" : "text-zinc-400"}`}>
-                        {model.score}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  )}
+                </motion.div>
+              ))}
             </div>
-
-            {/* FUTURE COLUMN 2 */}
-            <div></div>
-
-            {/* FUTURE COLUMN 3 */}
-            <div></div>
-
-          </div>
+          )}
         </section>
       </div>
     </main>
