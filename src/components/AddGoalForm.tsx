@@ -1,84 +1,44 @@
 "use client";
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Plus, X } from "lucide-react"; // Import X for close button
-import React from "react";
-
-interface SubGoal {
-  id: string;
-  text: string;
-  completed: boolean;
-}
-
-interface Goal {
-  id: string;
-  task: string;
-  project: string;
-  priority: string;
-  date: string;
-  deadline?: string; // ISO datetime for countdown (optional)
-  description?: string;
-  subgoals?: SubGoal[];
-}
+import { Plus, X } from "lucide-react";
+import { type Goal, hoursFromNow } from "@/lib/goals";
 
 interface AddGoalFormProps {
-  password: string;
-  setGoals: React.Dispatch<React.SetStateAction<Goal[]>>;
-  currentGoals: Goal[];
-  setLoadingAction: React.Dispatch<React.SetStateAction<boolean>>;
-  loadingAction: boolean;
-  onClose: () => void; // Function to close the modal
+  /** Hands the new goal to the page, which queues it for saving. */
+  onAdd: (goal: Goal) => void;
+  onClose: () => void;
 }
 
-export const AddGoalForm = ({ password, setGoals, currentGoals, setLoadingAction, loadingAction, onClose }: AddGoalFormProps) => {
+export const AddGoalForm = ({ onAdd, onClose }: AddGoalFormProps) => {
   const [task, setTask] = useState("");
   const [project, setProject] = useState("");
   const [priority, setPriority] = useState("Low");
-  const [deadline, setDeadline] = useState(""); // Optional deadline datetime
+  const [deadline, setDeadline] = useState("");
   const [description, setDescription] = useState("");
+  const [error, setError] = useState("");
 
-  const handleAddGoal = async () => {
+  const handleAddGoal = () => {
     if (!task.trim()) {
-      alert("Goal task cannot be empty.");
+      setError("A goal needs a title.");
       return;
     }
-    setLoadingAction(true);
 
-    // Use ISO date format (YYYY-MM-DD) to match PC addgoal function
-    const today = new Date();
-    const dateStr = today.toISOString().split('T')[0];
+    // ISO date (YYYY-MM-DD), matching every goal already stored.
+    const dateStr = new Date().toISOString().split("T")[0];
 
     const newGoal: Goal = {
       id: Date.now().toString(),
       task: task.trim(),
       project: project.trim() || "GLOBAL",
-      priority: priority,
+      priority,
       date: dateStr,
-      ...(deadline && { deadline }), // Only include if set
-      ...(description.trim() && { description: description.trim() }), // Only include if set
+      ...(deadline && { deadline }),
+      ...(description.trim() && { description: description.trim() }),
     };
 
-    // currentGoals is displayed reversed (newest first), so reverse back for storage (oldest first)
-    // then add new goal at the end
-    const goalsForStorage = [...currentGoals].reverse();
-    goalsForStorage.push(newGoal);
-
-    const res = await fetch('/api/goals', {
-      method: 'POST',
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password, updatedGoals: goalsForStorage })
-    });
-
-    if (res.ok) {
-      setGoals([newGoal, ...currentGoals]); // Add to front of display (newest first)
-      setTask("");
-      setProject("");
-      setPriority("Low");
-      setDeadline("");
-      setDescription("");
-      onClose();
-    }
-    setLoadingAction(false);
+    onAdd(newGoal);
+    onClose();
   };
 
   return (
@@ -90,22 +50,25 @@ export const AddGoalForm = ({ password, setGoals, currentGoals, setLoadingAction
     >
       {/* Overlay */}
       <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose}></div>
-      
+
       {/* Modal Content */}
-      <div className="relative bg-[#0a0a0a] border border-zinc-800 p-8 rounded-xl shadow-2xl w-full max-w-md font-mono z-[610]">
-        <button onClick={onClose} className="absolute top-4 right-4 text-zinc-600 hover:text-emerald-400 transition-colors">
+      <div className="relative bg-[#0a0a0a] border border-zinc-800 p-8 rounded-xl shadow-2xl w-full max-w-md font-mono z-[610] max-h-[90dvh] overflow-y-auto">
+        <button onClick={onClose} aria-label="Close" className="absolute top-4 right-4 text-zinc-600 hover:text-emerald-400 transition-colors">
             <X size={20} />
         </button>
         <h4 className="text-emerald-400 text-xl font-black uppercase tracking-wider mb-6 border-b border-zinc-700 pb-3">Add New Goal:</h4>
-        
+
         <div className="flex flex-col gap-4">
             <input
                 type="text"
                 placeholder="Task Title..."
                 className="bg-black border border-zinc-800 px-4 py-2.5 text-base outline-none focus:border-emerald-400 text-zinc-300 placeholder:text-zinc-600"
                 value={task}
-                onChange={(e) => setTask(e.target.value)}
+                onChange={(e) => { setTask(e.target.value); if (error) setError(""); }}
+                onKeyDown={(e) => e.key === "Enter" && handleAddGoal()}
+                autoFocus
             />
+            {error && <div className="text-red-400 text-xs font-bold -mt-2">{error}</div>}
             <textarea
                 placeholder="Description (optional)..."
                 className="bg-black border border-zinc-800 px-4 py-2.5 text-base outline-none focus:border-emerald-400 text-zinc-300 placeholder:text-zinc-600 resize-none h-20"
@@ -147,12 +110,7 @@ export const AddGoalForm = ({ password, setGoals, currentGoals, setLoadingAction
                     <button
                       key={preset.label}
                       type="button"
-                      onClick={() => {
-                        const date = new Date();
-                        date.setHours(date.getHours() + preset.hours);
-                        const iso = date.toISOString().slice(0, 16);
-                        setDeadline(iso);
-                      }}
+                      onClick={() => setDeadline(hoursFromNow(preset.hours))}
                       className="px-2.5 py-1.5 bg-zinc-900/50 border border-zinc-800 text-zinc-500 text-xs font-bold uppercase hover:border-emerald-500/30 hover:text-emerald-400 transition-colors"
                     >
                       +{preset.label}
@@ -162,7 +120,7 @@ export const AddGoalForm = ({ password, setGoals, currentGoals, setLoadingAction
                 <div className="flex gap-2">
                     <input
                         type="datetime-local"
-                        className="flex-1 bg-black border border-zinc-800 px-4 py-2.5 text-base outline-none focus:border-emerald-400 text-zinc-300 font-mono"
+                        className="flex-1 min-w-0 bg-black border border-zinc-800 px-4 py-2.5 text-base outline-none focus:border-emerald-400 text-zinc-300 font-mono"
                         value={deadline}
                         onChange={(e) => setDeadline(e.target.value)}
                     />
@@ -185,9 +143,8 @@ export const AddGoalForm = ({ password, setGoals, currentGoals, setLoadingAction
             <button
                 onClick={handleAddGoal}
                 className="flex items-center justify-center gap-2 bg-emerald-700/30 text-emerald-400 px-4 py-2.5 text-base font-bold uppercase border border-emerald-500/30 hover:bg-emerald-700/50 transition-colors"
-                disabled={loadingAction}
             >
-                <Plus size={18} /> {loadingAction ? "Adding..." : "ADD GOAL"}
+                <Plus size={18} /> ADD GOAL
             </button>
         </div>
       </div>

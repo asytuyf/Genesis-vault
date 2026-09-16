@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { requestNotifPermission, sendNotification, playChime } from "@/lib/notify";
 import {
   Play, Pause, RotateCcw,
   Youtube, Settings,
@@ -61,65 +62,6 @@ interface SessionTask {
   completed: boolean;
 }
 
-// ─── Notification helpers ────────────────────────────────────────────────────
-
-/** Request browser notification permission once. */
-function requestNotifPermission() {
-  if (typeof window !== "undefined" && "Notification" in window) {
-    if (Notification.permission === "default") {
-      Notification.requestPermission();
-    }
-  }
-}
-
-/** Fire a system notification (works on macOS & Windows via the browser). */
-function sendNotification(title: string, body: string, icon?: string) {
-  if (typeof window === "undefined" || !("Notification" in window)) return;
-  if (Notification.permission !== "granted") return;
-  try {
-    const n = new Notification(title, {
-      body,
-      icon: icon ?? "/favicon.ico",
-      requireInteraction: false,
-      silent: false,
-    });
-    // Auto-close after 8 s so it doesn't linger
-    setTimeout(() => n.close(), 8000);
-  } catch {
-    // Some browsers block programmatic notifications silently — ignore.
-  }
-}
-
-/** Play a short, pleasant 3-note chime using the Web Audio API. */
-function playChime(type: "work" | "break") {
-  if (typeof window === "undefined") return;
-  try {
-    const ctx = new (window.AudioContext ||
-      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
-    // Work-done → ascending major triad  |  Break-done → descending soft tones
-    const notes = type === "work" ? [523.25, 659.25, 783.99] : [783.99, 659.25, 523.25];
-    notes.forEach((freq, i) => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.type = "sine";
-      osc.frequency.value = freq;
-      const start = ctx.currentTime + i * 0.22;
-      gain.gain.setValueAtTime(0, start);
-      gain.gain.linearRampToValueAtTime(0.18, start + 0.04);
-      gain.gain.exponentialRampToValueAtTime(0.001, start + 0.55);
-      osc.start(start);
-      osc.stop(start + 0.6);
-    });
-    // Close the context after all notes finish
-    setTimeout(() => ctx.close(), 2500);
-  } catch {
-    // AudioContext not available — ignore.
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 
 export default function StudyPage() {
   // Timer state
@@ -216,13 +158,13 @@ export default function StudyPage() {
   const fetchGoals = async () => {
     setLoadingGoals(true);
     try {
-      const res = await fetch("/api/goals");
+      const res = await fetch("/api/goals", { cache: "no-store" });
       const data = await res.json();
       if (Array.isArray(data)) {
         setGoals(data);
       }
     } catch {
-      setGoals([]);
+      // Keep whatever is already on screen rather than blanking the list.
     }
     setLoadingGoals(false);
   };
@@ -233,9 +175,9 @@ export default function StudyPage() {
     return () => clearInterval(interval);
   }, []);
 
-  // Fetch goals when modal opens
+  // Fetch goals every time the panel opens, so it never shows a stale list.
   useEffect(() => {
-    if (showUpcoming && goals.length === 0) {
+    if (showUpcoming) {
       fetchGoals();
     }
   }, [showUpcoming]);
@@ -282,15 +224,16 @@ export default function StudyPage() {
       deadline: newDeadline,
     };
 
-    const updatedGoals = [...goals, newGoal];
-
     try {
+      // One operation per change: goals edited elsewhere are left alone.
       const res = await fetch("/api/goals", {
         method: "POST",
-        body: JSON.stringify({ password, updatedGoals }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password, ops: [{ type: "add", goal: newGoal }] }),
       });
       if (res.ok) {
-        setGoals(updatedGoals);
+        const data = await res.json();
+        setGoals(Array.isArray(data?.goals) ? data.goals : [...goals, newGoal]);
         setNewTask("");
         setNewProject("");
         setNewDeadline("");
@@ -303,30 +246,35 @@ export default function StudyPage() {
 
   // Delete a flight/goal
   const deleteFlight = async (id: string) => {
-    const updatedGoals = goals.filter((g) => g.id !== id);
     try {
       const res = await fetch("/api/goals", {
         method: "POST",
-        body: JSON.stringify({ password, updatedGoals }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password, ops: [{ type: "remove", id }] }),
       });
       if (res.ok) {
-        setGoals(updatedGoals);
+        const data = await res.json();
+        setGoals(Array.isArray(data?.goals) ? data.goals : goals.filter((g) => g.id !== id));
       }
     } catch { }
   };
 
   // Toggle flight completion
   const toggleFlightCompletion = async (id: string) => {
-    const updatedGoals = goals.map((g) =>
-      g.id === id ? { ...g, completed: !g.completed } : g
-    );
+    const completed = !goals.find((g) => g.id === id)?.completed;
     try {
       const res = await fetch("/api/goals", {
         method: "POST",
-        body: JSON.stringify({ password, updatedGoals }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password, ops: [{ type: "patch", id, set: { completed } }] }),
       });
       if (res.ok) {
-        setGoals(updatedGoals);
+        const data = await res.json();
+        setGoals(
+          Array.isArray(data?.goals)
+            ? data.goals
+            : goals.map((g) => (g.id === id ? { ...g, completed } : g))
+        );
       }
     } catch { }
   };

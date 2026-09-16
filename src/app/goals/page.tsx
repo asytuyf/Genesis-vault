@@ -1,52 +1,25 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, Tag, Clock, Activity, Hash, Box, Trash2, Plus, Terminal, ListChecks, Timer, ArrowUpDown } from "lucide-react";
+import { Tag, Clock, Activity, Hash, Box, Trash2, Plus, Terminal, ListChecks, Timer, ArrowUpDown } from "lucide-react";
 import { AddGoalForm } from "@/components/AddGoalForm";
 import { GoalDetailModal } from "@/components/GoalDetailModal";
+import {
+  type Goal, type GoalOp, type SubGoal,
+  activeSubgoals, formatClock, formatCountdown, timerEndsAt, timerRemaining, timerRunning,
+} from "@/lib/goals";
+import { useGoalSync, type SyncState } from "@/lib/useGoalSync";
+import { playChime, sendNotification } from "@/lib/notify";
 
-interface SubGoal {
-  id: string;
-  text: string;
-  completed: boolean;
+const BASE_TITLE = "GOALS";
+
+interface OrderInputProps {
+  index: number;
+  totalGoals: number;
+  moveGoalToIndex: (from: number, to: number) => void;
 }
 
-interface Goal {
-  id: string;
-  task: string;
-  project: string;
-  priority: string;
-  date: string;
-  deadline?: string;
-  description?: string;
-  subgoals?: SubGoal[];
-}
-
-// Helper to format countdown
-const formatCountdown = (deadline: string): { text: string; urgent: boolean; overdue: boolean } => {
-  const now = new Date().getTime();
-  const target = new Date(deadline).getTime();
-  const diff = target - now;
-
-  if (diff < 0) {
-    const absDiff = Math.abs(diff);
-    const days = Math.floor(absDiff / (1000 * 60 * 60 * 24));
-    const hours = Math.floor((absDiff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-    if (days > 0) return { text: `${days}d ${hours}h overdue`, urgent: true, overdue: true };
-    if (hours > 0) return { text: `${hours}h overdue`, urgent: true, overdue: true };
-    return { text: "Just passed", urgent: true, overdue: true };
-  }
-
-  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-  const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-  const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-
-  if (days > 0) return { text: `${days}d ${hours}h`, urgent: days < 2, overdue: false };
-  if (hours > 0) return { text: `${hours}h ${minutes}m`, urgent: hours < 6, overdue: false };
-  return { text: `${minutes}m`, urgent: true, overdue: false };
-};
-
-const OrderInput = ({ index, totalGoals, moveGoalToIndex, loadingAction }: any) => {
+const OrderInput = ({ index, totalGoals, moveGoalToIndex }: OrderInputProps) => {
   const [val, setVal] = useState((index + 1).toString());
 
   useEffect(() => {
@@ -77,37 +50,73 @@ const OrderInput = ({ index, totalGoals, moveGoalToIndex, loadingAction }: any) 
       onKeyDown={(e) => {
         if (e.key === 'Enter') e.currentTarget.blur();
       }}
-      disabled={loadingAction}
-      className="w-8 bg-transparent border-b border-zinc-700/50 text-center text-[10px] text-zinc-500 font-mono focus:text-emerald-400 focus:border-emerald-400 outline-none disabled:opacity-50 m-0 p-0"
+      className="w-8 bg-transparent border-b border-zinc-700/50 text-center text-[10px] text-zinc-500 font-mono focus:text-emerald-400 focus:border-emerald-400 outline-none m-0 p-0"
       style={{ WebkitAppearance: 'none', MozAppearance: 'textfield' }}
       onClick={(e) => e.stopPropagation()}
     />
   );
 };
 
-const GoalItem = ({ g, index, totalGoals, isAdmin, sortBy, search, moveGoalToIndex, nukeGoal, setSelectedGoal, loadingAction }: any) => {
+interface GoalItemProps {
+  g: Goal;
+  index: number;
+  totalGoals: number;
+  isAdmin: boolean;
+  sortBy: string;
+  search: string;
+  moveGoalToIndex: (from: number, to: number) => void;
+  nukeGoal: (id: string) => void;
+  setSelectedId: (id: string) => void;
+}
+
+const GoalItem = ({ g, index, totalGoals, isAdmin, sortBy, search, moveGoalToIndex, nukeGoal, setSelectedId }: GoalItemProps) => {
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  useEffect(() => {
+    if (!confirmDelete) return;
+    const t = setTimeout(() => setConfirmDelete(false), 4000);
+    return () => clearTimeout(t);
+  }, [confirmDelete]);
+
+  const subgoals: SubGoal[] = g.subgoals ?? [];
+  const doneCount = subgoals.filter((s) => s.completed).length;
+  const active = activeSubgoals(g);
+  const running = subgoals.find((s) => timerRunning(s.timer));
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.8, transition: { duration: 0.3 } }}
       layout
-      onClick={() => setSelectedGoal(g)}
-      className="group bg-[#0a0a0a] border border-zinc-800 p-8 hover:border-emerald-500 transition-all shadow-xl relative overflow-hidden cursor-pointer"
+      onClick={() => setSelectedId(g.id)}
+      className={`group bg-[#0a0a0a] border p-8 transition-all shadow-xl relative overflow-hidden cursor-pointer ${
+        active.length ? "border-amber-500/25 hover:border-amber-400" : "border-zinc-800 hover:border-emerald-500"
+      }`}
     >
+      {active.length > 0 && <span className="absolute left-0 top-0 bottom-0 w-[2px] bg-amber-400/80" />}
+
       {isAdmin && sortBy === "custom" && search.trim() === "" && (
         <div className="absolute top-3 left-4 flex items-center z-20">
           <span className="text-[10px] text-zinc-700 font-mono mr-1">#</span>
-          <OrderInput index={index} totalGoals={totalGoals} moveGoalToIndex={moveGoalToIndex} loadingAction={loadingAction} />
+          <OrderInput index={index} totalGoals={totalGoals} moveGoalToIndex={moveGoalToIndex} />
         </div>
       )}
       {isAdmin && (
         <button
-          onClick={(e) => { e.stopPropagation(); nukeGoal(g.id); }}
-          className="absolute top-4 right-4 text-zinc-800 hover:text-red-500 transition-none z-20"
-          disabled={loadingAction}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (confirmDelete) nukeGoal(g.id);
+            else setConfirmDelete(true);
+          }}
+          title={confirmDelete ? "Click again to delete" : "Delete goal"}
+          className={`absolute top-4 right-4 z-20 transition-colors ${
+            confirmDelete
+              ? "text-red-500 text-[10px] font-black uppercase tracking-wider border border-red-500/50 bg-red-500/10 px-2 py-1"
+              : "text-zinc-800 hover:text-red-500"
+          }`}
         >
-          <Trash2 size={18} />
+          {confirmDelete ? "Delete?" : <Trash2 size={18} />}
         </button>
       )}
       <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-100 transition-opacity">
@@ -152,21 +161,39 @@ const GoalItem = ({ g, index, totalGoals, isAdmin, sortBy, search, moveGoalToInd
         </div>
       )}
 
-      {g.subgoals && g.subgoals.length > 0 && (
+      {active.length > 0 && (
+        <div className="mb-6 flex items-start gap-2.5">
+          <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.9)] motion-safe:animate-pulse" />
+          <div className="min-w-0 flex-1">
+            <div className="text-[9px] font-black uppercase tracking-widest text-amber-500/80 mb-0.5">Working on</div>
+            <div className="text-xs text-zinc-400 truncate">
+              {active[0].text}
+              {active.length > 1 && <span className="text-zinc-600"> +{active.length - 1} more</span>}
+            </div>
+          </div>
+          {running?.timer && (
+            <span className="text-[11px] font-bold font-mono text-amber-300 motion-safe:animate-pulse shrink-0">
+              {formatClock(timerRemaining(running.timer))}
+            </span>
+          )}
+        </div>
+      )}
+
+      {subgoals.length > 0 && (
         <div className="mb-6">
           <div className="flex items-center justify-between text-[10px] font-bold uppercase mb-2">
             <span className="flex items-center gap-1.5 text-zinc-600">
               <ListChecks size={12} />
               Sub-tasks
             </span>
-            <span className={g.subgoals.filter((s: SubGoal) => s.completed).length === g.subgoals.length ? 'text-emerald-400' : 'text-zinc-600'}>
-              {g.subgoals.filter((s: SubGoal) => s.completed).length}/{g.subgoals.length}
+            <span className={doneCount === subgoals.length ? 'text-emerald-400' : 'text-zinc-600'}>
+              {doneCount}/{subgoals.length}
             </span>
           </div>
           <div className="h-1 bg-zinc-900 rounded-full overflow-hidden">
             <div
               className="h-full bg-emerald-500 transition-all duration-300"
-              style={{ width: `${(g.subgoals.filter((s: SubGoal) => s.completed).length / g.subgoals.length) * 100}%` }}
+              style={{ width: `${(doneCount / subgoals.length) * 100}%` }}
             />
           </div>
         </div>
@@ -187,34 +214,23 @@ const GoalItem = ({ g, index, totalGoals, isAdmin, sortBy, search, moveGoalToInd
   );
 };
 
+const SYNC_CHIP: Record<SyncState, { text: string; cls: string }> = {
+  synced: { text: "● SYNCED", cls: "text-emerald-600 border-emerald-500/20" },
+  syncing: { text: "◌ SYNCING", cls: "text-amber-400 border-amber-500/30 motion-safe:animate-pulse" },
+  unsaved: { text: "○ QUEUED", cls: "text-zinc-500 border-zinc-800" },
+  error: { text: "! UNSENT_KEPT_ON_DEVICE", cls: "text-red-400 border-red-500/30" },
+};
+
 export default function DirectiveLog() {
-  const [goals, setGoals] = useState<Goal[]>([]);
   const [search, setSearch] = useState("");
-  const [loading, setLoading] = useState(true);
   const [password, setPassword] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
-  const [loadingAction, setLoadingAction] = useState(false);
   const [isAddGoalModalOpen, setIsAddGoalModalOpen] = useState(false);
-  const [selectedGoal, setSelectedGoal] = useState<Goal | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [, forceUpdate] = useState(0);
   const [sortBy, setSortBy] = useState<"custom" | "newest" | "deadline" | "priority" | "oldest">("custom");
 
-  useEffect(() => {
-    const interval = setInterval(() => forceUpdate(n => n + 1), 60000);
-    return () => clearInterval(interval);
-  }, []);
-
-  useEffect(() => {
-    fetch("/api/goals")
-      .then(res => res.json())
-      .then(data => {
-        if (Array.isArray(data)) {
-          setGoals([...data].reverse());
-        }
-      })
-      .catch(() => setGoals([]))
-      .finally(() => setLoading(false));
-  }, []);
+  const { goals, loading, loadFailed, syncState, queueOps, retrySync, refresh } = useGoalSync(password);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -258,6 +274,86 @@ export default function DirectiveLog() {
     window.localStorage.setItem("goals_admin_mode", isAdmin ? "1" : "0");
   }, [isAdmin]);
 
+  // Every running time-box on the page, with the moment it runs out.
+  const runningTimers = useMemo(() => {
+    const out: { key: string; endsAt: number; sub: string; task: string }[] = [];
+    for (const g of goals) {
+      for (const sg of g.subgoals ?? []) {
+        if (sg.timer?.startedAt && !sg.completed) {
+          out.push({
+            key: `${g.id}:${sg.id}:${sg.timer.startedAt}`,
+            endsAt: timerEndsAt(sg.timer),
+            sub: sg.text,
+            task: g.task,
+          });
+        }
+      }
+    }
+    return out;
+  }, [goals]);
+
+  // Refresh countdowns: every second while a time-box runs, otherwise every minute.
+  useEffect(() => {
+    let timeout: ReturnType<typeof setTimeout>;
+    const step = () => {
+      const live = runningTimers.some((t) => t.endsAt > Date.now());
+      timeout = setTimeout(() => {
+        forceUpdate((n) => n + 1);
+        step();
+      }, live ? 1000 : 60000);
+    };
+    step();
+    return () => clearTimeout(timeout);
+  }, [runningTimers]);
+
+  // Chime and notify the moment a time-box runs out, even from another tab.
+  const firedRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const announce = (t: { key: string; sub: string; task: string }) => {
+      if (firedRef.current.has(t.key)) return;
+      firedRef.current.add(t.key);
+      playChime("work");
+      sendNotification("Time-box finished", `${t.sub} — ${t.task}`, "/goals/icon.png");
+    };
+
+    const timeouts: ReturnType<typeof setTimeout>[] = [];
+    for (const t of runningTimers) {
+      if (firedRef.current.has(t.key)) continue;
+      const ms = t.endsAt - Date.now();
+      if (ms <= 0) {
+        // Ran out while this page was open: announce it. Older than that (a
+        // timer that ended before the page loaded) is marked as already seen.
+        if (ms > -2000) announce(t);
+        else firedRef.current.add(t.key);
+        continue;
+      }
+      timeouts.push(setTimeout(() => announce(t), ms));
+    }
+    return () => timeouts.forEach(clearTimeout);
+  }, [runningTimers]);
+
+  // Put the live countdown in the browser tab.
+  useEffect(() => {
+    const next = runningTimers.filter((t) => t.endsAt > Date.now()).sort((a, b) => a.endsAt - b.endsAt)[0];
+    if (!next) {
+      document.title = BASE_TITLE;
+      return;
+    }
+    const paint = () => {
+      const left = (next.endsAt - Date.now()) / 1000;
+      document.title = left > 0 ? `${formatClock(left)} · ${next.sub}` : `Time's up · ${next.sub}`;
+    };
+    paint();
+    const i = setInterval(paint, 1000);
+    return () => {
+      clearInterval(i);
+      document.title = BASE_TITLE;
+    };
+  }, [runningTimers]);
+
+  // A goal deleted on another device simply stops rendering its window.
+  const selectedGoal = selectedId ? goals.find((g) => g.id === selectedId) : undefined;
+
   const filtered = goals.filter(g =>
     g.task?.toLowerCase().includes(search.toLowerCase()) ||
     g.project?.toLowerCase().includes(search.toLowerCase())
@@ -286,79 +382,24 @@ export default function DirectiveLog() {
     }
   });
 
-  const moveGoalToIndex = async (fromIndex: number, toIndex: number) => {
-    if (search.trim() !== "" || !isAdmin || !password) return;
-    if (fromIndex === toIndex) return;
-    
-    const newGoals = [...goals];
-    const [movedItem] = newGoals.splice(fromIndex, 1);
-    newGoals.splice(toIndex, 0, movedItem);
-    
-    setGoals(newGoals);
-    
-    setLoadingAction(true);
-    const goalsForGitHub = [...newGoals].reverse();
-    try {
-      const res = await fetch('/api/goals', {
-        method: 'POST',
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password, updatedGoals: goalsForGitHub })
-      });
-      if (!res.ok) console.error("Failed to update order");
-    } catch (e) {
-      console.error(e);
-    }
-    setLoadingAction(false);
+  const moveGoalToIndex = (fromIndex: number, toIndex: number) => {
+    if (search.trim() !== "" || !isAdmin || fromIndex === toIndex) return;
+    const ids = goals.map((g) => g.id);
+    const [moved] = ids.splice(fromIndex, 1);
+    ids.splice(toIndex, 0, moved);
+    // Goals are displayed newest first and stored oldest first.
+    queueOps([{ type: "order", ids: [...ids].reverse() }]);
   };
 
-  const nukeGoal = async (idToDelete: string) => {
-    setLoadingAction(true);
-
-    const remainingGoals = goals.filter(g => g.id !== idToDelete);
-    const goalsForGitHub = [...remainingGoals].reverse();
-
-    const res = await fetch('/api/goals', {
-      method: 'POST',
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password, updatedGoals: goalsForGitHub })
-    });
-
-    if (res.ok) {
-      setGoals(remainingGoals);
-    }
-    setLoadingAction(false);
+  const nukeGoal = (idToDelete: string) => {
+    if (!isAdmin) return;
+    if (selectedId === idToDelete) setSelectedId(null);
+    queueOps([{ type: "remove", id: idToDelete }]);
   };
 
-  const updateGoal = async (updatedGoal: Goal) => {
-    const updatedGoals = goals.map(g => g.id === updatedGoal.id ? updatedGoal : g);
-    setGoals(updatedGoals);
+  const addGoal = (goal: Goal) => queueOps([{ type: "add", goal }]);
 
-    if (!isAdmin || !password) {
-      return;
-    }
-    if (isAdmin && password) {
-      setLoadingAction(true);
-      const goalsForGitHub = [...updatedGoals].reverse();
-
-      try {
-        const res = await fetch('/api/goals', {
-          method: 'POST',
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ password, updatedGoals: goalsForGitHub })
-        });
-
-        if (!res.ok) {
-          const text = await res.text();
-          console.error("Failed to update goal:", res.status, text);
-          alert(`Failed to save: ${res.status} - ${text}`);
-        }
-      } catch (e) {
-        console.error("Failed to update goal:", e);
-        alert(`Failed to save: ${e}`);
-      }
-      setLoadingAction(false);
-    }
-  };
+  const handleOps = (ops: GoalOp[]) => queueOps(ops);
 
   return (
     <main className="relative min-h-screen bg-[#0d0d0d] text-[#f4f4f5] font-mono overflow-hidden px-4 py-12 pt-14 md:p-24">
@@ -387,10 +428,15 @@ export default function DirectiveLog() {
         </div>
 
         <div className="text-zinc-600 mb-6 md:mb-10 text-[10px] md:text-sm font-black uppercase tracking-wider">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3 flex-wrap">
             <Terminal size={12} className="shrink-0" />
             <span className="hidden md:inline">Click the top-left menu to open file explorer</span>
             <span className="md:hidden">Tap menu for file explorer</span>
+            {isAdmin && syncState !== "synced" && (
+              <span className={`px-2 py-0.5 border text-[9px] font-bold ${SYNC_CHIP[syncState].cls}`}>
+                {SYNC_CHIP[syncState].text}
+              </span>
+            )}
           </div>
         </div>
 
@@ -444,14 +490,7 @@ export default function DirectiveLog() {
 
       <AnimatePresence>
         {isAddGoalModalOpen && isAdmin && (
-          <AddGoalForm
-            password={password}
-            setGoals={setGoals}
-            currentGoals={goals}
-            setLoadingAction={setLoadingAction}
-            loadingAction={loadingAction}
-            onClose={() => setIsAddGoalModalOpen(false)}
-          />
+          <AddGoalForm onAdd={addGoal} onClose={() => setIsAddGoalModalOpen(false)} />
         )}
       </AnimatePresence>
 
@@ -460,9 +499,10 @@ export default function DirectiveLog() {
           <GoalDetailModal
             goal={selectedGoal}
             isAdmin={isAdmin}
-            password={password}
-            onClose={() => setSelectedGoal(null)}
-            onUpdate={updateGoal}
+            syncState={syncState}
+            onOps={handleOps}
+            onRetrySync={retrySync}
+            onClose={() => setSelectedId(null)}
           />
         )}
       </AnimatePresence>
@@ -471,6 +511,19 @@ export default function DirectiveLog() {
         <div className="relative z-10 grid gap-6 md:grid-cols-2 lg:grid-cols-3 pb-20">
           <div className="col-span-full py-20 text-zinc-800 uppercase font-black text-2xl animate-pulse text-center">
             Accessing Manifest...
+          </div>
+        </div>
+      ) : loadFailed ? (
+        <div className="relative z-10 grid gap-6 md:grid-cols-2 lg:grid-cols-3 pb-20">
+          <div className="col-span-full py-20 text-center border border-dashed border-red-500/30">
+            <div className="text-red-400 uppercase font-black text-xl mb-2">Manifest_Unreachable</div>
+            <div className="text-zinc-600 text-xs mb-6 normal-case">Your goals are safe on the server. This page could not read them.</div>
+            <button
+              onClick={() => refresh(true)}
+              className="px-4 py-2 border border-zinc-700 text-zinc-400 text-xs font-bold uppercase hover:border-emerald-500/40 hover:text-emerald-400 transition-colors"
+            >
+              Try again
+            </button>
           </div>
         </div>
       ) : sortedGoals.length === 0 ? (
@@ -493,8 +546,7 @@ export default function DirectiveLog() {
                 search={search}
                 moveGoalToIndex={moveGoalToIndex}
                 nukeGoal={nukeGoal}
-                setSelectedGoal={setSelectedGoal}
-                loadingAction={loadingAction}
+                setSelectedId={setSelectedId}
               />
             ))}
           </AnimatePresence>
