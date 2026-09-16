@@ -121,7 +121,7 @@ export const FileExplorer = ({ mobileOpen, setMobileOpen, desktopOpen }: FileExp
     return (
       <div className="relative h-full flex flex-col overflow-hidden">
         {/* NOISE OVERLAY */}
-        <div className="absolute inset-0 opacity-[0.03] pointer-events-none bg-[url('https://grainy-gradients.vercel.app/noise.svg')]" />
+        <div className="absolute inset-0 opacity-[0.03] pointer-events-none noise-grain" />
         <div
           className="absolute inset-0 pointer-events-none"
           style={{
