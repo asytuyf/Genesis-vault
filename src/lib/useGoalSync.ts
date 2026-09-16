@@ -52,9 +52,6 @@ export function useGoalSync(password: string) {
   const flushRef = useRef<() => void>(() => {});
   const passwordRef = useRef(password);
 
-  useEffect(() => {
-    passwordRef.current = password;
-  }, [password]);
 
   const saveOutbox = useCallback(() => {
     const ops = [...(inflightRef.current ?? []), ...pendingRef.current];
@@ -164,7 +161,12 @@ export function useGoalSync(password: string) {
     async (initial = false) => {
       const version = versionRef.current;
       try {
-        const res = await fetch("/api/goals", { cache: "no-store" });
+        const pw = passwordRef.current;
+        const res = await fetch("/api/goals", {
+          cache: "no-store",
+          // Private fields come back only for a request that carries the key.
+          headers: pw ? { "x-admin-key": pw } : undefined,
+        });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
         if (!Array.isArray(data)) throw new Error("Unexpected payload");
@@ -183,6 +185,14 @@ export function useGoalSync(password: string) {
     },
     [publish]
   );
+
+  // Entering or clearing the admin key changes what the server will send back.
+  const lastKeyRef = useRef<string | null>(null);
+  useEffect(() => {
+    passwordRef.current = password;
+    if (lastKeyRef.current !== null && lastKeyRef.current !== password) refresh();
+    lastKeyRef.current = password;
+  }, [password, refresh]);
 
   const queueOps = useCallback(
     (ops: GoalOp[]) => {

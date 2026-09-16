@@ -139,7 +139,7 @@ const GoalItem = ({ g, index, totalGoals, isAdmin, sortBy, search, moveGoalToInd
         </h3>
       </div>
 
-      {g.description && (
+      {isAdmin && g.description && (
         <p className="text-sm text-zinc-600 mb-6 line-clamp-2 leading-relaxed">
           {g.description}
         </p>

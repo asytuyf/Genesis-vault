@@ -4,7 +4,7 @@ import { motion, AnimatePresence, Reorder, useDragControls } from "framer-motion
 import {
   X, Tag, Clock, Activity, Timer, AlertTriangle, Pencil, Check, GripVertical,
   ChevronUp, ChevronDown, SlidersHorizontal, Play, Pause, RotateCcw, Hourglass,
-  CalendarClock, Trash2,
+  CalendarClock, Trash2, Lock,
 } from "lucide-react";
 import {
   type Goal, type GoalOp, type GoalPatch, type SubGoal,
@@ -694,8 +694,9 @@ export const GoalDetailModal = ({ goal, isAdmin, syncState, onOps, onRetrySync, 
             {goalCd && goal.deadline && (
               <button
                 onClick={() => {
+                  if (!isAdmin) return;
                   setTab("info");
-                  if (isAdmin) setShowDeadlineInput(true);
+                  setShowDeadlineInput(true);
                 }}
                 title={fmtDateTime(goal.deadline)}
                 className={`flex items-center gap-1.5 px-2.5 py-1 border text-[10px] font-bold font-mono ${
@@ -727,6 +728,7 @@ export const GoalDetailModal = ({ goal, isAdmin, syncState, onOps, onRetrySync, 
                 }`}
               >
                 {t.label}
+                {t.key === "info" && !isAdmin && <Lock size={9} className="inline ml-1.5 -mt-0.5" />}
                 {t.meta && (
                   <span className={`ml-2 font-mono ${tab === t.key ? "text-emerald-600" : "text-zinc-700"}`}>{t.meta}</span>
                 )}
@@ -803,6 +805,17 @@ export const GoalDetailModal = ({ goal, isAdmin, syncState, onOps, onRetrySync, 
                   <span className="hidden md:inline">Drag the grip, or use the arrows, to reorder</span>
                 </div>
               )}
+            </div>
+          ) : !isAdmin ? (
+            <div className="p-5">
+              <div className="border border-dashed border-zinc-800 py-12 px-6 text-center">
+                <Lock size={20} className="mx-auto text-zinc-700 mb-4" />
+                <div className="text-[11px] font-black uppercase tracking-[0.2em] text-zinc-500">Private</div>
+                <p className="mt-3 text-xs text-zinc-700 leading-relaxed max-w-xs mx-auto">
+                  Notes, deadline and priority for this goal are locked. Enter the admin key in the
+                  menu to read them.
+                </p>
+              </div>
             </div>
           ) : (
             <div className="p-5 space-y-5">
