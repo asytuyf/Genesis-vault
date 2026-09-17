@@ -4,7 +4,7 @@ import { motion, AnimatePresence, Reorder, useDragControls } from "framer-motion
 import {
   X, Tag, Clock, Activity, Timer, AlertTriangle, Pencil, Check, GripVertical,
   ChevronUp, ChevronDown, SlidersHorizontal, Play, Pause, RotateCcw, Hourglass,
-  CalendarClock, Trash2, Lock,
+  CalendarClock, Trash2, Lock, Eye,
 } from "lucide-react";
 import {
   type Goal, type GoalOp, type GoalPatch, type SubGoal,
@@ -679,6 +679,12 @@ export const GoalDetailModal = ({ goal, isAdmin, syncState, onOps, onRetrySync, 
               <Clock size={10} /> {goal.date}
             </span>
 
+            {goal.private && (
+              <span className={`flex items-center gap-2 ${chip} font-black`} title="Hidden unless the admin key is entered">
+                <Lock size={10} /> Private
+              </span>
+            )}
+
             <span
               className={`flex items-center gap-2 px-2.5 py-1 border text-[10px] font-black uppercase ${
                 goal.priority === "High"
@@ -819,6 +825,39 @@ export const GoalDetailModal = ({ goal, isAdmin, syncState, onOps, onRetrySync, 
             </div>
           ) : (
             <div className="p-5 space-y-5">
+              {isAdmin && (
+                <div>
+                  <Label>Who can see this goal</Label>
+                  <div className="flex gap-1">
+                    <button
+                      onClick={() => patch({ private: false })}
+                      className={`flex-1 py-2 inline-flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-wider border transition-all ${
+                        goal.private
+                          ? "bg-zinc-900/30 text-zinc-600 border-zinc-800 hover:border-zinc-700 hover:text-zinc-500"
+                          : "bg-emerald-500/20 text-emerald-400 border-emerald-500/50"
+                      }`}
+                    >
+                      <Eye size={11} /> Anyone
+                    </button>
+                    <button
+                      onClick={() => patch({ private: true })}
+                      className={`flex-1 py-2 inline-flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-wider border transition-all ${
+                        goal.private
+                          ? "bg-zinc-100/10 text-zinc-100 border-zinc-400/50"
+                          : "bg-zinc-900/30 text-zinc-600 border-zinc-800 hover:border-zinc-700 hover:text-zinc-500"
+                      }`}
+                    >
+                      <Lock size={11} /> Only me
+                    </button>
+                  </div>
+                  <p className="mt-2 text-[10px] text-zinc-700 leading-relaxed">
+                    {goal.private
+                      ? "This goal is left out of the page for anyone without the admin key, and it disappears here the moment you lock admin mode."
+                      : "Everyone who opens the site can see this goal, though its notes stay private."}
+                  </p>
+                </div>
+              )}
+
               {isAdmin && (
                 <div>
                   <Label>Priority Level</Label>

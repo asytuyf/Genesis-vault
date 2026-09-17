@@ -36,6 +36,8 @@ export interface Goal {
   deadline?: string;
   description?: string;
   completed?: boolean;
+  /** Kept out of every response that does not carry the admin key. */
+  private?: boolean;
   subgoals?: SubGoal[];
 }
 
@@ -50,6 +52,7 @@ export interface GoalPatch {
   /** Empty string removes the description. */
   description?: string;
   completed?: boolean;
+  private?: boolean;
 }
 
 export type GoalOp =
@@ -158,6 +161,10 @@ export function applyOps(list: Goal[], ops: GoalOp[]): Goal[] {
         else delete g.description;
       }
       if (typeof set.completed === "boolean") g.completed = set.completed;
+      if (typeof set.private === "boolean") {
+        if (set.private) g.private = true;
+        else delete g.private;
+      }
       next[i] = g;
       continue;
     }

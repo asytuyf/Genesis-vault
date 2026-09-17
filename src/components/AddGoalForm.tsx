@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Plus, X } from "lucide-react";
+import { Plus, X, Lock, Eye } from "lucide-react";
 import { type Goal, hoursFromNow } from "@/lib/goals";
 
 interface AddGoalFormProps {
@@ -16,6 +16,7 @@ export const AddGoalForm = ({ onAdd, onClose }: AddGoalFormProps) => {
   const [priority, setPriority] = useState("Low");
   const [deadline, setDeadline] = useState("");
   const [description, setDescription] = useState("");
+  const [isPrivate, setIsPrivate] = useState(false);
   const [error, setError] = useState("");
 
   const handleAddGoal = () => {
@@ -35,6 +36,7 @@ export const AddGoalForm = ({ onAdd, onClose }: AddGoalFormProps) => {
       date: dateStr,
       ...(deadline && { deadline }),
       ...(description.trim() && { description: description.trim() }),
+      ...(isPrivate && { private: true }),
     };
 
     onAdd(newGoal);
@@ -138,6 +140,40 @@ export const AddGoalForm = ({ onAdd, onClose }: AddGoalFormProps) => {
                   <div className="text-[10px] text-zinc-500 font-mono mt-2">
                     {new Date(deadline).toLocaleDateString([], { weekday: "short", day: "numeric", month: "short", year: "numeric" })} at {new Date(deadline).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })}
                   </div>
+                )}
+            </div>
+            <div>
+                <label className="block text-[10px] font-black uppercase tracking-wider text-zinc-600 mb-2">
+                  Who can see it
+                </label>
+                <div className="flex gap-2">
+                    <button
+                        type="button"
+                        onClick={() => setIsPrivate(false)}
+                        className={`flex-1 py-2.5 inline-flex items-center justify-center gap-2 text-xs font-black uppercase tracking-wider border transition-colors ${
+                          isPrivate
+                            ? "border-zinc-800 text-zinc-500 hover:border-zinc-700"
+                            : "border-emerald-500/50 text-emerald-400 bg-emerald-500/10"
+                        }`}
+                    >
+                        <Eye size={13} /> Anyone
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setIsPrivate(true)}
+                        className={`flex-1 py-2.5 inline-flex items-center justify-center gap-2 text-xs font-black uppercase tracking-wider border transition-colors ${
+                          isPrivate
+                            ? "border-zinc-400/50 text-zinc-100 bg-zinc-100/10"
+                            : "border-zinc-800 text-zinc-500 hover:border-zinc-700"
+                        }`}
+                    >
+                        <Lock size={13} /> Only me
+                    </button>
+                </div>
+                {isPrivate && (
+                  <p className="text-[10px] text-zinc-600 mt-2 leading-relaxed">
+                    Kept out of the page entirely for anyone without the admin key.
+                  </p>
                 )}
             </div>
             <button

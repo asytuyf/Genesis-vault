@@ -158,7 +158,12 @@ export default function StudyPage() {
   const fetchGoals = async () => {
     setLoadingGoals(true);
     try {
-      const res = await fetch("/api/goals", { cache: "no-store" });
+      const key = localStorage.getItem("goals_admin_mode") === "1" ? localStorage.getItem("goals_admin_key") || "" : "";
+      const res = await fetch("/api/goals", {
+        cache: "no-store",
+        // Private goals come back only for a request that carries the key.
+        headers: key ? { "x-admin-key": key } : undefined,
+      });
       const data = await res.json();
       if (Array.isArray(data)) {
         setGoals(data);

@@ -5,9 +5,10 @@ import { readGoals, writeGoals, checkPassword } from '@/lib/goalStore';
 export const dynamic = 'force-dynamic';
 
 /**
- * Descriptions can hold private notes and plans, so they are sent only to a
- * request carrying the admin key. Everything else about a goal stays public,
- * the same as it has always been.
+ * Two things are held back from a request that does not carry the admin key:
+ * goals marked private, which are left out of the response entirely, and
+ * descriptions, which can hold private notes on an otherwise public goal.
+ * Everything else about a goal stays public, the same as it has always been.
  */
 export async function GET(req: Request) {
   try {
@@ -15,12 +16,14 @@ export async function GET(req: Request) {
     const unlocked = checkPassword(req.headers.get('x-admin-key'));
     const payload = unlocked
       ? goals
-      : goals.map((goal) => {
-          if (!goal.description) return goal;
-          const stripped = { ...goal };
-          delete stripped.description;
-          return stripped;
-        });
+      : goals
+          .filter((goal) => !goal.private)
+          .map((goal) => {
+            if (!goal.description) return goal;
+            const stripped = { ...goal };
+            delete stripped.description;
+            return stripped;
+          });
     return NextResponse.json(payload, { headers: { 'Cache-Control': 'no-store' } });
   } catch (err) {
     console.error('Failed to fetch goals:', err);

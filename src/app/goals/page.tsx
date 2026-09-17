@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Tag, Clock, Activity, Hash, Box, Trash2, Plus, Terminal, ListChecks, Timer, ArrowUpDown } from "lucide-react";
+import { Tag, Clock, Activity, Hash, Box, Trash2, Plus, Terminal, ListChecks, Timer, ArrowUpDown, Lock } from "lucide-react";
 import { AddGoalForm } from "@/components/AddGoalForm";
 import { GoalDetailModal } from "@/components/GoalDetailModal";
 import {
@@ -128,6 +128,15 @@ const GoalItem = ({ g, index, totalGoals, isAdmin, sortBy, search, moveGoalToInd
           <Tag size={10} />
           <span className="whitespace-normal break-words">{g.project}</span>
         </div>
+        {g.private && (
+          <div
+            title="Only visible with the admin key"
+            className="inline-flex flex-none items-center gap-1.5 px-2 py-0.5 bg-zinc-900 border border-zinc-800 rounded text-zinc-500 text-[10px] font-black uppercase tracking-widest"
+          >
+            <Lock size={10} />
+            Private
+          </div>
+        )}
         <div className="flex items-center gap-2 text-zinc-700 text-[10px] font-bold whitespace-nowrap ml-auto">
           <Clock size={12} /> {g.date}
         </div>
@@ -350,10 +359,14 @@ export default function DirectiveLog() {
     return () => clearInterval(i);
   }, [runningTimers]);
 
-  // A goal deleted on another device simply stops rendering its window.
-  const selectedGoal = selectedId ? goals.find((g) => g.id === selectedId) : undefined;
+  // Locking admin mode hides private goals at once, even though the browser
+  // already holds them. Without the key the server never sends them at all.
+  const visible = isAdmin ? goals : goals.filter((g) => !g.private);
 
-  const filtered = goals.filter(g =>
+  // A goal deleted on another device simply stops rendering its window.
+  const selectedGoal = selectedId ? visible.find((g) => g.id === selectedId) : undefined;
+
+  const filtered = visible.filter(g =>
     g.task?.toLowerCase().includes(search.toLowerCase()) ||
     g.project?.toLowerCase().includes(search.toLowerCase())
   );
