@@ -19,6 +19,8 @@ export interface SubGoal {
   id: string;
   text: string;
   completed: boolean;
+  /** When it was ticked off. Finished sub-tasks clear themselves a day later. */
+  completedAt?: string;
   /** Currently being worked on. */
   active?: boolean;
   /** Optional per-sub-task deadline (datetime-local string). */
@@ -264,6 +266,22 @@ export const hoursFromNow = (hours: number): string => {
   d.setHours(d.getHours() + hours);
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
+
+/** How long a finished sub-task stays in the Done list before it clears itself. */
+export const DONE_TTL_MS = 24 * 60 * 60 * 1000;
+
+/** Moment a finished sub-task will be removed, in epoch ms, or 0 if it has no stamp yet. */
+export const subClearsAt = (sub: SubGoal): number =>
+  sub.completedAt ? Date.parse(sub.completedAt) + DONE_TTL_MS : 0;
+
+/** "23h", "45m", "soon" -- how long a finished sub-task has left. */
+export const formatTimeLeft = (ms: number): string => {
+  if (ms <= 0) return "any moment";
+  const hours = Math.floor(ms / 3600000);
+  if (hours >= 1) return `${hours}h`;
+  const minutes = Math.max(1, Math.round(ms / 60000));
+  return `${minutes}m`;
 };
 
 /** Sub-tasks flagged as being worked on. */

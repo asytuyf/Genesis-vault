@@ -6,7 +6,7 @@ import { AddGoalForm } from "@/components/AddGoalForm";
 import { GoalDetailModal } from "@/components/GoalDetailModal";
 import {
   type Goal, type GoalOp, type SubGoal,
-  activeSubgoals, formatClock, formatCountdown, timerEndsAt, timerRemaining, timerRunning,
+  DONE_TTL_MS, activeSubgoals, formatClock, formatCountdown, timerEndsAt, timerRemaining, timerRunning,
 } from "@/lib/goals";
 import { useGoalSync, type SyncState } from "@/lib/useGoalSync";
 import { playChime, sendNotification } from "@/lib/notify";
@@ -340,6 +340,33 @@ export default function DirectiveLog() {
     }
     return () => timeouts.forEach(clearTimeout);
   }, [runningTimers]);
+
+  // Finished sub-tasks clear themselves a day after they were ticked, so a goal
+  // shows what is left to do rather than a growing pile of done. Anything that
+  // was ticked before this existed gets its day from the first time it is seen.
+  useEffect(() => {
+    if (!isAdmin) return;
+
+    const sweep = () => {
+      const ops: GoalOp[] = [];
+      const now = Date.now();
+      for (const g of goals) {
+        for (const sg of g.subgoals ?? []) {
+          if (!sg.completed) continue;
+          if (!sg.completedAt) {
+            ops.push({ type: "sub", id: g.id, sub: { ...sg, completedAt: new Date().toISOString() } });
+          } else if (now - Date.parse(sg.completedAt) > DONE_TTL_MS) {
+            ops.push({ type: "subRemove", id: g.id, subId: sg.id });
+          }
+        }
+      }
+      if (ops.length) queueOps(ops);
+    };
+
+    sweep();
+    const i = setInterval(sweep, 5 * 60 * 1000);
+    return () => clearInterval(i);
+  }, [goals, isAdmin, queueOps]);
 
   // Put the live countdown in the browser tab.
   useEffect(() => {

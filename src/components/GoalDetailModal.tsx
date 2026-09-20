@@ -4,12 +4,12 @@ import { motion, AnimatePresence, Reorder, useDragControls } from "framer-motion
 import {
   X, Tag, Clock, Activity, Timer, AlertTriangle, Pencil, Check, GripVertical,
   ChevronUp, ChevronDown, SlidersHorizontal, Play, Pause, RotateCcw, Hourglass,
-  CalendarClock, Trash2, Lock, Eye,
+  CalendarClock, Trash2, Lock, Eye, CheckCheck, Undo2,
 } from "lucide-react";
 import {
   type Goal, type GoalOp, type GoalPatch, type SubGoal,
-  formatCountdown, formatClock, formatDuration, hoursFromNow,
-  timerRemaining, timerRunning, timerFinished,
+  formatCountdown, formatClock, formatDuration, formatTimeLeft, hoursFromNow,
+  subClearsAt, timerRemaining, timerRunning, timerFinished,
 } from "@/lib/goals";
 import { requestNotifPermission } from "@/lib/notify";
 import type { SyncState } from "@/lib/useGoalSync";
@@ -92,11 +92,15 @@ const SubgoalItem = ({
     const completed = !sg.completed;
     const next: SubGoal = { ...sg, completed };
     if (completed) {
-      // Finishing stops the stopwatch and clears the working-on flag.
+      // Finishing stops the stopwatch, clears the working-on flag, and starts
+      // the day it spends in the Done list.
       delete next.active;
+      next.completedAt = new Date().toISOString();
       if (next.timer?.startedAt) {
         next.timer = { duration: next.timer.duration, remaining: timerRemaining(next.timer) };
       }
+    } else {
+      delete next.completedAt;
     }
     onChange(next);
   };
@@ -437,8 +441,14 @@ interface GoalDetailModalProps {
 }
 
 export const GoalDetailModal = ({ goal, isAdmin, syncState, onOps, onRetrySync, onClose }: GoalDetailModalProps) => {
-  const [tab, setTab] = useState<"tasks" | "info">("tasks");
-  const subgoals = useMemo(() => goal.subgoals ?? [], [goal.subgoals]);
+  const [tab, setTab] = useState<"tasks" | "done" | "info">("tasks");
+  const all = useMemo(() => goal.subgoals ?? [], [goal.subgoals]);
+  // The working list holds what is still to do; finished ones move next door.
+  const subgoals = useMemo(() => all.filter((sg) => !sg.completed), [all]);
+  const finished = useMemo(
+    () => all.filter((sg) => sg.completed).sort((a, b) => (b.completedAt ?? "").localeCompare(a.completedAt ?? "")),
+    [all]
+  );
 
   // While a drag is in progress the list follows the pointer; the new order is
   // saved once, on drop.
@@ -477,12 +487,14 @@ export const GoalDetailModal = ({ goal, isAdmin, syncState, onOps, onRetrySync, 
 
   // Keep the clocks moving while any time-box runs.
   const anyRunning = subgoals.some((sg) => timerRunning(sg.timer));
-  const [, tick] = useState(0);
+  // Held in state rather than read during render, so the clocks tick without
+  // the component reading the wall clock while React is drawing it.
+  const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
-    if (!anyRunning) return;
-    const i = setInterval(() => tick((n) => n + 1), 1000);
+    if (!anyRunning && tab !== "done") return;
+    const i = setInterval(() => setNow(Date.now()), anyRunning ? 1000 : 60000);
     return () => clearInterval(i);
-  }, [anyRunning]);
+  }, [anyRunning, tab]);
 
   useEffect(() => {
     document.body.style.overflow = "hidden";
@@ -530,13 +542,16 @@ export const GoalDetailModal = ({ goal, isAdmin, syncState, onOps, onRetrySync, 
     [goal.id, isAdmin, onOps, subgoals]
   );
 
+  /** Unfinished order first, finished ones kept behind it. */
+  const withFinished = (ids: string[]) => [...ids, ...finished.map((sg) => sg.id)];
+
   const moveSubgoal = (id: string, dir: -1 | 1) => {
     const from = subgoals.findIndex((sg) => sg.id === id);
     const to = from + dir;
     if (from < 0 || to < 0 || to >= subgoals.length) return;
     const ids = subgoals.map((sg) => sg.id);
     [ids[from], ids[to]] = [ids[to], ids[from]];
-    onOps([{ type: "subOrder", id: goal.id, ids }]);
+    onOps([{ type: "subOrder", id: goal.id, ids: withFinished(ids) }]);
   };
 
   const commitDragOrder = () => {
@@ -547,7 +562,7 @@ export const GoalDetailModal = ({ goal, isAdmin, syncState, onOps, onRetrySync, 
     const ids = dragged.map((sg) => sg.id);
     const current = subgoals.map((sg) => sg.id);
     if (ids.length === current.length && ids.every((id, i) => id === current[i])) return;
-    onOps([{ type: "subOrder", id: goal.id, ids }]);
+    onOps([{ type: "subOrder", id: goal.id, ids: withFinished(ids) }]);
   };
 
   const addSubgoal = () => {
@@ -557,15 +572,22 @@ export const GoalDetailModal = ({ goal, isAdmin, syncState, onOps, onRetrySync, 
     setNewSubgoal("");
   };
 
+  const restoreSubgoal = (sg: SubGoal) => {
+    if (!isAdmin) return;
+    const next: SubGoal = { ...sg, completed: false };
+    delete next.completedAt;
+    onOps([{ type: "sub", id: goal.id, sub: next }]);
+  };
+
   const removeSubgoal = (subId: string) => {
     if (!isAdmin) return;
     setExpandedId(null);
     onOps([{ type: "subRemove", id: goal.id, subId }]);
   };
 
-  const done = subgoals.filter((sg) => sg.completed).length;
-  const progress = subgoals.length ? (done / subgoals.length) * 100 : 0;
-  const activeCount = subgoals.filter((sg) => sg.active && !sg.completed).length;
+  const done = finished.length;
+  const progress = all.length ? (done / all.length) * 100 : 0;
+  const activeCount = subgoals.filter((sg) => sg.active).length;
   const goalCd = goal.deadline ? formatCountdown(goal.deadline) : null;
 
   const sync: Record<SyncState, { text: string; cls: string }> = {
@@ -722,7 +744,8 @@ export const GoalDetailModal = ({ goal, isAdmin, syncState, onOps, onRetrySync, 
           <div className="flex -mb-px">
             {(
               [
-                { key: "tasks", label: "Tasks", meta: subgoals.length ? `${done}/${subgoals.length}` : "" },
+                { key: "tasks", label: "Tasks", meta: subgoals.length ? `${subgoals.length}` : "" },
+                { key: "done", label: "Done", meta: done ? `${done}` : "" },
                 { key: "info", label: "Info", meta: "" },
               ] as const
             ).map((t) => (
@@ -750,11 +773,11 @@ export const GoalDetailModal = ({ goal, isAdmin, syncState, onOps, onRetrySync, 
         <motion.div layoutScroll className="flex-1 overflow-y-auto overscroll-contain custom-scrollbar-mobile">
           {tab === "tasks" ? (
             <div className="p-5">
-              {subgoals.length > 0 && (
+              {all.length > 0 && (
                 <div className="mb-5">
                   <div className="flex justify-between text-[10px] font-bold uppercase mb-2">
                     <span className="text-zinc-600">Progress</span>
-                    <span className={done === subgoals.length ? "text-emerald-400" : "text-zinc-500"}>
+                    <span className={done === all.length ? "text-emerald-400" : "text-zinc-500"}>
                       {Math.round(progress)}%
                     </span>
                   </div>
@@ -771,8 +794,12 @@ export const GoalDetailModal = ({ goal, isAdmin, syncState, onOps, onRetrySync, 
 
               {subgoals.length === 0 ? (
                 <div className="text-zinc-700 text-sm py-10 text-center border border-dashed border-zinc-800 uppercase">
-                  No_Sub-Tasks_Found
-                  {isAdmin && <div className="mt-2 text-[10px] text-zinc-800 normal-case">Add the first one below.</div>}
+                  {done > 0 ? "All_Done" : "No_Sub-Tasks_Found"}
+                  {isAdmin && (
+                    <div className="mt-2 text-[10px] text-zinc-800 normal-case">
+                      {done > 0 ? "Nothing left to do here." : "Add the first one below."}
+                    </div>
+                  )}
                 </div>
               ) : (
                 <Reorder.Group
@@ -810,6 +837,67 @@ export const GoalDetailModal = ({ goal, isAdmin, syncState, onOps, onRetrySync, 
                   <span className="md:hidden">Arrows move a task up or down</span>
                   <span className="hidden md:inline">Drag the grip, or use the arrows, to reorder</span>
                 </div>
+              )}
+            </div>
+          ) : tab === "done" ? (
+            <div className="p-5">
+              {finished.length === 0 ? (
+                <div className="text-zinc-700 text-sm py-10 text-center border border-dashed border-zinc-800 uppercase">
+                  Nothing_Finished_Yet
+                  <div className="mt-2 text-[10px] text-zinc-800 normal-case">
+                    Ticked sub-tasks rest here for a day before they clear.
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className="flex items-center gap-2 mb-4 text-[10px] text-zinc-700 uppercase tracking-wider">
+                    <CheckCheck size={12} className="text-emerald-700" />
+                    Clears itself a day after you tick it
+                  </div>
+                  <ul className="space-y-1">
+                    {finished.map((sg) => {
+                      const clearsAt = subClearsAt(sg);
+                      return (
+                        <li
+                          key={sg.id}
+                          className="group flex items-start gap-3 p-2.5 pl-3 border border-zinc-800 bg-zinc-900/30"
+                        >
+                          <span className="font-mono text-sm mt-0.5 text-emerald-500">
+                            [<span className="text-emerald-400">■</span>]
+                          </span>
+                          <span className="flex-1 min-w-0">
+                            <span className="block text-sm font-mono text-zinc-600 line-through break-words leading-snug">
+                              {sg.text}
+                            </span>
+                            <span className="block text-[10px] text-zinc-700 font-mono mt-1">
+                              {clearsAt ? `clears in ${formatTimeLeft(clearsAt - now)}` : "clears within a day"}
+                            </span>
+                          </span>
+                          {isAdmin && (
+                            <span className="flex items-center gap-0.5 shrink-0">
+                              <button
+                                onClick={() => restoreSubgoal(sg)}
+                                title="Put it back on the list"
+                                aria-label="Put it back on the list"
+                                className="p-1.5 text-zinc-700 hover:text-emerald-400 transition-colors"
+                              >
+                                <Undo2 size={14} />
+                              </button>
+                              <button
+                                onClick={() => removeSubgoal(sg.id)}
+                                title="Clear it now"
+                                aria-label="Clear it now"
+                                className="p-1.5 text-zinc-800 hover:text-red-400 transition-colors"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </span>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </>
               )}
             </div>
           ) : !isAdmin ? (
@@ -1017,7 +1105,7 @@ export const GoalDetailModal = ({ goal, isAdmin, syncState, onOps, onRetrySync, 
         {/* footer */}
         {isAdmin && (
           <div className="p-4 md:p-5 border-t border-zinc-800 space-y-2.5 shrink-0 bg-[#0a0a0a]">
-            {tab === "tasks" && (
+            {tab !== "info" && tab === "tasks" && (
               <div className="flex gap-2">
                 <input
                   type="text"
