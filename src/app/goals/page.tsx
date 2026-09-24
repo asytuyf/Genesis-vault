@@ -10,6 +10,7 @@ import {
 } from "@/lib/goals";
 import { useGoalSync, type SyncState } from "@/lib/useGoalSync";
 import { playChime, sendNotification } from "@/lib/notify";
+import { useLocalReminders } from "@/lib/useLocalReminders";
 
 const BASE_TITLE = "GOALS";
 
@@ -235,7 +236,10 @@ export default function DirectiveLog() {
   const [password, setPassword] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
   const [isAddGoalModalOpen, setIsAddGoalModalOpen] = useState(false);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  // A tapped reminder lands here as /goals?goal=<id>.
+  const [selectedId, setSelectedId] = useState<string | null>(() =>
+    typeof window === "undefined" ? null : new URLSearchParams(window.location.search).get("goal")
+  );
   const [, forceUpdate] = useState(0);
   const [sortBy, setSortBy] = useState<"custom" | "newest" | "deadline" | "priority" | "oldest">("custom");
 
@@ -271,6 +275,25 @@ export default function DirectiveLog() {
       window.removeEventListener("goals-admin-mode", modeHandler as EventListener);
     };
   }, []);
+
+  // With the page already open, a tapped reminder arrives as an event from the
+  // service worker instead. The ?goal= that opened the page is tidied away.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.has("goal")) {
+      params.delete("goal");
+      const rest = params.toString();
+      window.history.replaceState(null, "", `${window.location.pathname}${rest ? `?${rest}` : ""}`);
+    }
+    const onOpen = (event: Event) => {
+      const id = (event as CustomEvent<string>).detail;
+      if (typeof id === "string") setSelectedId(id);
+    };
+    window.addEventListener("open-goal", onOpen);
+    return () => window.removeEventListener("open-goal", onOpen);
+  }, []);
+
+  useLocalReminders(goals, isAdmin);
 
   useEffect(() => {
     if (!password && isAdmin) {
@@ -538,6 +561,7 @@ export default function DirectiveLog() {
           <GoalDetailModal
             goal={selectedGoal}
             isAdmin={isAdmin}
+            adminKey={password}
             syncState={syncState}
             onOps={handleOps}
             onRetrySync={retrySync}

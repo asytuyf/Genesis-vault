@@ -8,6 +8,8 @@
 //   * Pages are fetched from the network first and kept as a fallback, so
 //     opening the app with no signal still shows the interface. What you do
 //     there is queued by the app itself and sent when the signal returns.
+//   * Sub-task reminders arrive as push messages and are shown even while the
+//     app is closed. Tapping one opens the goal it is about.
 
 const VERSION = "v1";
 const CACHE = `genesis-${VERSION}`;
@@ -69,6 +71,43 @@ self.addEventListener("fetch", (event) => {
         }
         throw err;
       }
+    })()
+  );
+});
+
+self.addEventListener("push", (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {
+    data = { body: event.data ? event.data.text() : "" };
+  }
+  event.waitUntil(
+    self.registration.showNotification(data.title || "Genesis Vault", {
+      body: data.body || "",
+      tag: data.tag,
+      renotify: !!data.tag,
+      icon: "/icon-192.png",
+      badge: "/icon-192.png",
+      data: { url: data.url || "/goals" },
+    })
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const target = new URL((event.notification.data && event.notification.data.url) || "/goals", self.location.origin).href;
+  event.waitUntil(
+    (async () => {
+      const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+      for (const client of windows) {
+        if (new URL(client.url).origin !== self.location.origin) continue;
+        await client.focus();
+        // The goals page listens for this and opens the goal in place.
+        client.postMessage({ type: "open-url", url: target });
+        return;
+      }
+      await self.clients.openWindow(target);
     })()
   );
 });

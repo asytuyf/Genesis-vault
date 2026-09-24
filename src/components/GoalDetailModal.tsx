@@ -13,6 +13,7 @@ import {
 } from "@/lib/goals";
 import { requestNotifPermission } from "@/lib/notify";
 import type { SyncState } from "@/lib/useGoalSync";
+import { DeviceReminders, GoalReminders } from "@/components/ReminderSettings";
 
 // --- shared bits ------------------------------------------------------------
 
@@ -434,13 +435,15 @@ const SubgoalItem = ({
 interface GoalDetailModalProps {
   goal: Goal;
   isAdmin: boolean;
+  /** The admin key, for signing this device up for reminders. */
+  adminKey: string;
   syncState: SyncState;
   onOps: (ops: GoalOp[]) => void;
   onRetrySync: () => void;
   onClose: () => void;
 }
 
-export const GoalDetailModal = ({ goal, isAdmin, syncState, onOps, onRetrySync, onClose }: GoalDetailModalProps) => {
+export const GoalDetailModal = ({ goal, isAdmin, adminKey, syncState, onOps, onRetrySync, onClose }: GoalDetailModalProps) => {
   const [tab, setTab] = useState<"tasks" | "done" | "info">("tasks");
   const all = useMemo(() => goal.subgoals ?? [], [goal.subgoals]);
   // The working list holds what is still to do; finished ones move next door.
@@ -1096,6 +1099,10 @@ export const GoalDetailModal = ({ goal, isAdmin, syncState, onOps, onRetrySync, 
                   <div className="p-3 border border-zinc-800 text-zinc-700 text-sm italic">No deadline set</div>
                 )}
               </div>
+
+              <GoalReminders goal={goal} onChange={(reminders) => patch({ reminders })} />
+
+              <DeviceReminders adminKey={adminKey} />
 
               <div className="text-[10px] text-zinc-800 font-mono pt-2">REF_{goal.id}</div>
             </div>

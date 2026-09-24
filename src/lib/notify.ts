@@ -1,6 +1,8 @@
 // Shared browser notification + audio chime helpers.
 // Used by the study pomodoro and by timed sub-tasks on the goals page.
 
+import { showLocalNotification } from "@/lib/push";
+
 /** Request browser notification permission once. */
 export function requestNotifPermission() {
   if (typeof window !== "undefined" && "Notification" in window) {
@@ -10,22 +12,14 @@ export function requestNotifPermission() {
   }
 }
 
-/** Fire a system notification (works on macOS & Windows via the browser). */
+/**
+ * Fire a system notification. Goes through the service worker when there is
+ * one, which is the only way an installed app on Android or iPhone may show it.
+ */
 export function sendNotification(title: string, body: string, icon?: string) {
-  if (typeof window === "undefined" || !("Notification" in window)) return;
-  if (Notification.permission !== "granted") return;
-  try {
-    const n = new Notification(title, {
-      body,
-      icon: icon ?? "/favicon.ico",
-      requireInteraction: false,
-      silent: false,
-    });
-    // Auto-close after 8 s so it doesn't linger
-    setTimeout(() => n.close(), 8000);
-  } catch {
+  showLocalNotification(title, { body, icon }).catch(() => {
     // Some browsers block programmatic notifications silently — ignore.
-  }
+  });
 }
 
 /** Play a short, pleasant 3-note chime using the Web Audio API. */

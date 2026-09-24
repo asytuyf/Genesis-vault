@@ -29,6 +29,13 @@ export interface SubGoal {
   timer?: SubTimer;
 }
 
+/** When to be reminded about this goal's sub-task deadlines. */
+export interface ReminderSettings {
+  enabled: boolean;
+  /** Minutes before a sub-task is due; 0 means at the moment it is due. */
+  offsets: number[];
+}
+
 export interface Goal {
   id: string;
   task: string;
@@ -40,6 +47,8 @@ export interface Goal {
   completed?: boolean;
   /** Kept out of every response that does not carry the admin key. */
   private?: boolean;
+  /** Absent means the defaults: on, an hour before and when it is due. */
+  reminders?: ReminderSettings;
   subgoals?: SubGoal[];
 }
 
@@ -55,6 +64,7 @@ export interface GoalPatch {
   description?: string;
   completed?: boolean;
   private?: boolean;
+  reminders?: ReminderSettings;
 }
 
 export type GoalOp =
@@ -167,6 +177,9 @@ export function applyOps(list: Goal[], ops: GoalOp[]): Goal[] {
         if (set.private) g.private = true;
         else delete g.private;
       }
+      if (set.reminders && typeof set.reminders === "object") {
+        g.reminders = cleanReminders(set.reminders);
+      }
       next[i] = g;
       continue;
     }
@@ -193,6 +206,31 @@ export function applyOps(list: Goal[], ops: GoalOp[]): Goal[] {
 
   return next;
 }
+
+// --- Reminders --------------------------------------------------------------
+
+export const DEFAULT_REMINDERS: ReminderSettings = { enabled: true, offsets: [60, 0] };
+
+/** Longest lead time accepted: 30 days. */
+const MAX_OFFSET = 30 * 24 * 60;
+const MAX_OFFSETS = 8;
+
+/** Whole minutes, no duplicates, furthest first. */
+export function cleanReminders(r: Partial<ReminderSettings>): ReminderSettings {
+  const offsets = Array.isArray(r.offsets)
+    ? [...new Set(
+        r.offsets
+          .filter((n): n is number => typeof n === "number" && Number.isFinite(n))
+          .map((n) => Math.round(n))
+          .filter((n) => n >= 0 && n <= MAX_OFFSET)
+      )]
+        .sort((a, b) => b - a)
+        .slice(0, MAX_OFFSETS)
+    : DEFAULT_REMINDERS.offsets;
+  return { enabled: r.enabled !== false, offsets };
+}
+
+export const reminderSettings = (goal: Goal): ReminderSettings => goal.reminders ?? DEFAULT_REMINDERS;
 
 // --- Formatting -------------------------------------------------------------
 
