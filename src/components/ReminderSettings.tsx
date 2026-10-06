@@ -205,9 +205,23 @@ export function DeviceReminders({ adminKey }: { adminKey: string }) {
 
   useEffect(() => {
     let live = true;
-    deviceStatus().then((s) => live && setStatus(s)).catch(() => live && setStatus("unsupported"));
+    const look = () =>
+      deviceStatus()
+        .then((s) => live && setStatus(s))
+        .catch(() => live && setStatus("unsupported"));
+
+    look();
+    // Coming back to the app re-checks, so the panel never shows a stale "off"
+    // from the moment before the service worker was ready.
+    const onVisible = () => {
+      if (document.visibilityState === "visible") look();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", look);
     return () => {
       live = false;
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", look);
     };
   }, []);
 

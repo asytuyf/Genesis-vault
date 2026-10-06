@@ -35,7 +35,28 @@ const post = (body: string, keepalive: boolean) =>
     cache: "no-store",
   });
 
-export function useGoalSync(password: string) {
+/**
+ * The admin key as stored on this device, read straight from localStorage.
+ *
+ * The first request has to carry the key, otherwise the server answers without
+ * the private goals and they only appear after a second round trip. React state
+ * is not set yet at that point, so it is read here instead of waited for.
+ * Locked means no key, so the private ones never reach the browser at all.
+ */
+const storedKey = (): string => {
+  try {
+    if (window.localStorage.getItem("goals_admin_mode") !== "1") return "";
+    return window.localStorage.getItem("goals_admin_key") || "";
+  } catch {
+    return "";
+  }
+};
+
+/**
+ * @param password the admin key, used to save changes
+ * @param unlocked whether admin mode is on; only then are private goals asked for
+ */
+export function useGoalSync(password: string, unlocked = true) {
   // Display order: newest first, matching how the page has always shown goals.
   const [goals, setGoals] = useState<Goal[]>([]);
   const [loading, setLoading] = useState(true);
@@ -51,6 +72,9 @@ export function useGoalSync(password: string) {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const flushRef = useRef<() => void>(() => {});
   const passwordRef = useRef(password);
+  // What the GET sends. Empty while locked, so a locked app is served the same
+  // list as any visitor.
+  const authRef = useRef("");
 
 
   const saveOutbox = useCallback(() => {
@@ -161,11 +185,13 @@ export function useGoalSync(password: string) {
     async (initial = false) => {
       const version = versionRef.current;
       try {
-        const pw = passwordRef.current;
+        // On the very first load React state is still empty, so fall back to
+        // what this device already has saved.
+        const key = initial ? authRef.current || storedKey() : authRef.current;
         const res = await fetch("/api/goals", {
           cache: "no-store",
-          // Private fields come back only for a request that carries the key.
-          headers: pw ? { "x-admin-key": pw } : undefined,
+          // Private goals and notes come back only for a request with the key.
+          headers: key ? { "x-admin-key": key } : undefined,
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
@@ -186,13 +212,15 @@ export function useGoalSync(password: string) {
     [publish]
   );
 
-  // Entering or clearing the admin key changes what the server will send back.
+  // Entering the key, or locking and unlocking, changes what the server sends.
   const lastKeyRef = useRef<string | null>(null);
   useEffect(() => {
     passwordRef.current = password;
-    if (lastKeyRef.current !== null && lastKeyRef.current !== password) refresh();
-    lastKeyRef.current = password;
-  }, [password, refresh]);
+    const key = unlocked ? password : "";
+    authRef.current = key;
+    if (lastKeyRef.current !== null && lastKeyRef.current !== key) refresh();
+    lastKeyRef.current = key;
+  }, [password, unlocked, refresh]);
 
   const queueOps = useCallback(
     (ops: GoalOp[]) => {

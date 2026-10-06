@@ -11,6 +11,7 @@ import {
 import { useGoalSync, type SyncState } from "@/lib/useGoalSync";
 import { playChime, sendNotification } from "@/lib/notify";
 import { useLocalReminders } from "@/lib/useLocalReminders";
+import { ensurePush } from "@/lib/push";
 
 const BASE_TITLE = "GOALS";
 
@@ -243,7 +244,7 @@ export default function DirectiveLog() {
   const [, forceUpdate] = useState(0);
   const [sortBy, setSortBy] = useState<"custom" | "newest" | "deadline" | "priority" | "oldest">("custom");
 
-  const { goals, loading, loadFailed, syncState, queueOps, retrySync, refresh } = useGoalSync(password);
+  const { goals, loading, loadFailed, syncState, queueOps, retrySync, refresh } = useGoalSync(password, isAdmin);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -294,6 +295,14 @@ export default function DirectiveLog() {
   }, []);
 
   useLocalReminders(goals, isAdmin);
+
+  // Every start, put this device's push subscription back if the browser
+  // dropped it. Silent: it never prompts, it only repairs what was already
+  // allowed, so reminders stop looking as if they switch themselves off.
+  useEffect(() => {
+    if (!isAdmin || !password) return;
+    ensurePush(password).catch(() => {});
+  }, [isAdmin, password]);
 
   useEffect(() => {
     if (!password && isAdmin) {
