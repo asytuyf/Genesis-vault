@@ -11,67 +11,20 @@ import {
 import { useGoalSync, type SyncState } from "@/lib/useGoalSync";
 import { playChime, sendNotification } from "@/lib/notify";
 import { useLocalReminders } from "@/lib/useLocalReminders";
+import { SortableList, useSortableItem } from "@/components/Sortable";
 import { ensurePush } from "@/lib/push";
 
 const BASE_TITLE = "GOALS";
 
-interface OrderInputProps {
-  index: number;
-  totalGoals: number;
-  moveGoalToIndex: (from: number, to: number) => void;
-}
-
-const OrderInput = ({ index, totalGoals, moveGoalToIndex }: OrderInputProps) => {
-  const [val, setVal] = useState((index + 1).toString());
-
-  useEffect(() => {
-    setVal((index + 1).toString());
-  }, [index]);
-
-  const handleCommit = () => {
-    let parsed = parseInt(val, 10);
-    if (isNaN(parsed)) {
-      setVal((index + 1).toString());
-      return;
-    }
-    if (parsed < 1) parsed = 1;
-    if (parsed > totalGoals) parsed = totalGoals;
-    setVal(parsed.toString());
-    const newIndex = parsed - 1;
-    if (newIndex !== index) {
-      moveGoalToIndex(index, newIndex);
-    }
-  };
-
-  return (
-    <input
-      type="number"
-      value={val}
-      onChange={(e) => setVal(e.target.value)}
-      onBlur={handleCommit}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter') e.currentTarget.blur();
-      }}
-      className="w-8 bg-transparent border-b border-zinc-700/50 text-center text-[10px] text-zinc-500 font-mono focus:text-emerald-400 focus:border-emerald-400 outline-none m-0 p-0"
-      style={{ WebkitAppearance: 'none', MozAppearance: 'textfield' }}
-      onClick={(e) => e.stopPropagation()}
-    />
-  );
-};
-
 interface GoalItemProps {
   g: Goal;
-  index: number;
-  totalGoals: number;
   isAdmin: boolean;
-  sortBy: string;
-  search: string;
-  moveGoalToIndex: (from: number, to: number) => void;
   nukeGoal: (id: string) => void;
   setSelectedId: (id: string) => void;
 }
 
-const GoalItem = ({ g, index, totalGoals, isAdmin, sortBy, search, moveGoalToIndex, nukeGoal, setSelectedId }: GoalItemProps) => {
+const GoalItem = ({ g, isAdmin, nukeGoal, setSelectedId }: GoalItemProps) => {
+  const { handle, setNodeRef, style, isDragging, enabled: canDrag } = useSortableItem(g.id);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   useEffect(() => {
@@ -86,24 +39,19 @@ const GoalItem = ({ g, index, totalGoals, isAdmin, sortBy, search, moveGoalToInd
   const running = subgoals.find((s) => timerRunning(s.timer));
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, scale: 0.8, transition: { duration: 0.3 } }}
-      layout
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...handle}
       onClick={() => setSelectedId(g.id)}
-      className={`group bg-[#0a0a0a] border p-8 transition-all shadow-xl relative overflow-hidden cursor-pointer ${
+      className={`group bg-[#0a0a0a] border p-8 transition-colors shadow-xl relative overflow-hidden cursor-pointer ${
+        isDragging ? "border-emerald-500 shadow-2xl shadow-black/60" : ""
+      } ${
         active.length ? "border-amber-500/25 hover:border-amber-400" : "border-zinc-800 hover:border-emerald-500"
       }`}
     >
       {active.length > 0 && <span className="absolute left-0 top-0 bottom-0 w-[2px] bg-amber-400/80" />}
 
-      {isAdmin && sortBy === "custom" && search.trim() === "" && (
-        <div className="absolute top-3 left-4 flex items-center z-20">
-          <span className="text-[10px] text-zinc-700 font-mono mr-1">#</span>
-          <OrderInput index={index} totalGoals={totalGoals} moveGoalToIndex={moveGoalToIndex} />
-        </div>
-      )}
       {isAdmin && (
         <button
           onClick={(e) => {
@@ -221,7 +169,7 @@ const GoalItem = ({ g, index, totalGoals, isAdmin, sortBy, search, moveGoalToInd
         </div>
         <span className="text-[10px] text-zinc-800 font-mono">REF_{g.id}</span>
       </div>
-    </motion.div>
+    </div>
   );
 };
 
@@ -453,12 +401,12 @@ export default function DirectiveLog() {
     }
   });
 
-  const moveGoalToIndex = (fromIndex: number, toIndex: number) => {
-    if (search.trim() !== "" || !isAdmin || fromIndex === toIndex) return;
-    const ids = goals.map((g) => g.id);
-    const [moved] = ids.splice(fromIndex, 1);
-    ids.splice(toIndex, 0, moved);
-    // Goals are displayed newest first and stored oldest first.
+  // Dragging is only honest while the shown order is the stored one.
+  const canRearrange = isAdmin && sortBy === "custom" && search.trim() === "";
+
+  const reorderGoals = (ids: string[]) => {
+    if (!canRearrange) return;
+    // Goals are shown newest first and stored oldest first.
     queueOps([{ type: "order", ids: [...ids].reverse() }]);
   };
 
@@ -503,6 +451,11 @@ export default function DirectiveLog() {
             <Terminal size={12} className="shrink-0" />
             <span className="hidden md:inline">Click the top-left menu to open file explorer</span>
             <span className="md:hidden">Tap menu for file explorer</span>
+            {canRearrange && (
+              <span className="text-[9px] text-zinc-700 normal-case tracking-normal hidden sm:inline">
+                Drag a card to reorder
+              </span>
+            )}
             {isAdmin && syncState !== "synced" && (
               <span className={`px-2 py-0.5 border text-[9px] font-bold ${SYNC_CHIP[syncState].cls}`}>
                 {SYNC_CHIP[syncState].text}
@@ -605,24 +558,24 @@ export default function DirectiveLog() {
           </div>
         </div>
       ) : (
-        <div className="relative z-10 grid gap-6 md:grid-cols-2 lg:grid-cols-3 pb-20">
-          <AnimatePresence mode="popLayout">
-            {sortedGoals.map((g, index) => (
+        <SortableList
+          ids={sortedGoals.map((g) => g.id)}
+          onReorder={reorderGoals}
+          enabled={canRearrange}
+          layout="grid"
+        >
+          <div className="relative z-10 grid gap-6 md:grid-cols-2 lg:grid-cols-3 pb-20">
+            {sortedGoals.map((g) => (
               <GoalItem
                 key={g.id}
                 g={g}
-                index={index}
-                totalGoals={sortedGoals.length}
                 isAdmin={isAdmin}
-                sortBy={sortBy}
-                search={search}
-                moveGoalToIndex={moveGoalToIndex}
                 nukeGoal={nukeGoal}
                 setSelectedId={setSelectedId}
               />
             ))}
-          </AnimatePresence>
-        </div>
+          </div>
+        </SortableList>
       )}
 
       <div className="fixed inset-0 z-0 opacity-[0.02] pointer-events-none flex items-center justify-center">

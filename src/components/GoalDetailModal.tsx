@@ -1,6 +1,7 @@
 "use client";
-import { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { motion, AnimatePresence, Reorder, useDragControls } from "framer-motion";
+import { useState, useEffect, useMemo, useCallback } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { SortableList, useSortableItem } from "@/components/Sortable";
 import {
   X, Tag, Clock, Activity, Timer, AlertTriangle, Pencil, Check, GripVertical,
   ChevronUp, ChevronDown, SlidersHorizontal, Play, Pause, RotateCcw, Hourglass,
@@ -57,13 +58,12 @@ interface SubgoalItemProps {
   onChange: (next: SubGoal) => void;
   onRemove: () => void;
   onMove: (dir: -1 | 1) => void;
-  onReorderEnd: () => void;
 }
 
 const SubgoalItem = ({
-  sg, index, total, isAdmin, expanded, onToggleExpanded, onChange, onRemove, onMove, onReorderEnd,
+  sg, index, total, isAdmin, expanded, onToggleExpanded, onChange, onRemove, onMove,
 }: SubgoalItemProps) => {
-  const dragControls = useDragControls();
+  const { handle, setNodeRef, style, isDragging, enabled: canDrag } = useSortableItem(sg.id);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(sg.text);
   const [customMin, setCustomMin] = useState("");
@@ -154,15 +154,12 @@ const SubgoalItem = ({
   };
 
   return (
-    <Reorder.Item
-      value={sg}
-      dragListener={false}
-      dragControls={dragControls}
-      onDragEnd={onReorderEnd}
-      initial={{ opacity: 0, x: -10 }}
-      animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: 10 }}
+    <li
+      ref={setNodeRef}
+      style={style}
       className={`group relative border transition-colors ${
+        isDragging ? "border-emerald-500/50 shadow-lg shadow-black/40" : ""
+      } ${
         sg.completed
           ? "bg-zinc-900/30 border-zinc-800"
           : isActive
@@ -173,17 +170,16 @@ const SubgoalItem = ({
       {isActive && <span className="absolute left-0 top-0 bottom-0 w-[2px] bg-amber-400 motion-safe:animate-pulse" />}
 
       <div className="flex items-start gap-2 p-2.5 pl-3">
-        {isAdmin && (
-          <div
-            className="cursor-grab active:cursor-grabbing text-zinc-700 hover:text-zinc-400 transition-colors p-1 -ml-1 mt-0.5 touch-none select-none"
-            onPointerDown={(e) => {
-              e.preventDefault();
-              dragControls.start(e);
-            }}
-            title="Drag to reorder"
+        {isAdmin && canDrag && (
+          <button
+            type="button"
+            {...handle}
+            title="Hold and drag to reorder"
+            aria-label="Reorder this sub-task"
+            className="shrink-0 -ml-1.5 -my-1 px-2 py-2.5 grid place-items-center text-zinc-700 hover:text-zinc-400 transition-colors select-none cursor-grab active:cursor-grabbing"
           >
             <GripVertical size={14} />
-          </div>
+          </button>
         )}
 
         <button
@@ -426,7 +422,7 @@ const SubgoalItem = ({
           </motion.div>
         )}
       </AnimatePresence>
-    </Reorder.Item>
+    </li>
   );
 };
 
@@ -453,11 +449,6 @@ export const GoalDetailModal = ({ goal, isAdmin, adminKey, syncState, onOps, onR
     [all]
   );
 
-  // While a drag is in progress the list follows the pointer; the new order is
-  // saved once, on drop.
-  const [dragOrder, setDragOrder] = useState<SubGoal[] | null>(null);
-  const dragOrderRef = useRef<SubGoal[] | null>(null);
-  const list = dragOrder ?? subgoals;
 
   const [newSubgoal, setNewSubgoal] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -557,14 +548,8 @@ export const GoalDetailModal = ({ goal, isAdmin, adminKey, syncState, onOps, onR
     onOps([{ type: "subOrder", id: goal.id, ids: withFinished(ids) }]);
   };
 
-  const commitDragOrder = () => {
-    const dragged = dragOrderRef.current;
-    dragOrderRef.current = null;
-    setDragOrder(null);
-    if (!dragged || !isAdmin) return;
-    const ids = dragged.map((sg) => sg.id);
-    const current = subgoals.map((sg) => sg.id);
-    if (ids.length === current.length && ids.every((id, i) => id === current[i])) return;
+  const reorderSubgoals = (ids: string[]) => {
+    if (!isAdmin) return;
     onOps([{ type: "subOrder", id: goal.id, ids: withFinished(ids) }]);
   };
 
@@ -805,39 +790,34 @@ export const GoalDetailModal = ({ goal, isAdmin, adminKey, syncState, onOps, onR
                   )}
                 </div>
               ) : (
-                <Reorder.Group
-                  axis="y"
-                  values={list}
-                  onReorder={(next: SubGoal[]) => {
-                    if (!isAdmin) return;
-                    dragOrderRef.current = next;
-                    setDragOrder(next);
-                  }}
-                  className="space-y-1"
+                <SortableList
+                  ids={subgoals.map((sg) => sg.id)}
+                  onReorder={reorderSubgoals}
+                  enabled={isAdmin}
+                  layout="list"
                 >
-                  <AnimatePresence initial={false}>
-                    {list.map((sg, i) => (
+                  <ul className="space-y-1">
+                    {subgoals.map((sg, i) => (
                       <SubgoalItem
                         key={sg.id}
                         sg={sg}
                         index={i}
-                        total={list.length}
+                        total={subgoals.length}
                         isAdmin={isAdmin}
                         expanded={expandedId === sg.id}
                         onToggleExpanded={() => setExpandedId((cur) => (cur === sg.id ? null : sg.id))}
                         onChange={changeSubgoal}
                         onRemove={() => removeSubgoal(sg.id)}
                         onMove={(dir) => moveSubgoal(sg.id, dir)}
-                        onReorderEnd={commitDragOrder}
                       />
                     ))}
-                  </AnimatePresence>
-                </Reorder.Group>
+                  </ul>
+                </SortableList>
               )}
 
               {isAdmin && subgoals.length > 1 && (
                 <div className="mt-3 text-[9px] text-zinc-800 uppercase tracking-wider">
-                  <span className="md:hidden">Arrows move a task up or down</span>
+                  <span className="md:hidden">Hold the grip to drag, or tap the arrows</span>
                   <span className="hidden md:inline">Drag the grip, or use the arrows, to reorder</span>
                 </div>
               )}
