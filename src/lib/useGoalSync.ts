@@ -13,11 +13,14 @@
 //     made on another device.
 //   * The list is refetched when the page regains focus and every 45 seconds
 //     while visible, so a second device shows fresh data.
+//   * A key the server refuses is reported as such ("rejected"), not as a
+//     network hiccup that a retry could fix. The unsent work stays on the
+//     device and goes by itself once admin mode is unlocked with the right key.
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { applyOps, type Goal, type GoalOp } from "@/lib/goals";
 
-export type SyncState = "synced" | "syncing" | "unsaved" | "error";
+export type SyncState = "synced" | "syncing" | "unsaved" | "error" | "rejected";
 
 const OUTBOX_KEY = "goals_outbox_v1";
 const FLUSH_DELAY = 400;
@@ -67,6 +70,8 @@ export function useGoalSync(password: string, unlocked = true) {
   const pendingRef = useRef<GoalOp[]>([]); // queued, not sent yet
   const inflightRef = useRef<GoalOp[] | null>(null); // sent, awaiting a reply
   const failedRef = useRef(false);
+  // The server refused the admin key this device holds.
+  const rejectedRef = useRef(false);
   const retryRef = useRef(0);
   const versionRef = useRef(0);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -95,7 +100,9 @@ export function useGoalSync(password: string, unlocked = true) {
     setSyncState(
       inflightRef.current
         ? "syncing"
-        : pendingRef.current.length
+        : rejectedRef.current
+          ? "rejected"
+          : pendingRef.current.length
           ? failedRef.current
             ? "error"
             : "unsaved"
@@ -129,11 +136,13 @@ export function useGoalSync(password: string, unlocked = true) {
     try {
       const res = await post(body, body.length < KEEPALIVE_MAX);
       // A refused request (wrong admin key, bad payload) will be refused again:
-      // keep the work queued, show the error, and wait for a manual retry.
+      // keep the work queued, show the error, and wait for a manual retry, or
+      // for the key to be put right.
       if (res.status >= 400 && res.status < 500) {
         pendingRef.current = [...(inflightRef.current ?? []), ...pendingRef.current];
         inflightRef.current = null;
         failedRef.current = true;
+        rejectedRef.current = res.status === 401;
         saveOutbox();
         publish();
         return;
@@ -146,6 +155,7 @@ export function useGoalSync(password: string, unlocked = true) {
       }
       inflightRef.current = null;
       failedRef.current = false;
+      rejectedRef.current = false;
       retryRef.current = 0;
       saveOutbox();
       publish();
@@ -194,6 +204,13 @@ export function useGoalSync(password: string, unlocked = true) {
           headers: key ? { "x-admin-key": key } : undefined,
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        // Sent with a key the server did not accept: say so now, before the
+        // first save bounces, rather than quietly showing the public list.
+        const refused = !!key && res.headers.get("x-admin-key-rejected") === "1";
+        if (refused !== rejectedRef.current) {
+          rejectedRef.current = refused;
+          publish();
+        }
         const data = await res.json();
         if (!Array.isArray(data)) throw new Error("Unexpected payload");
         // A save landed while this was in flight: its reply is the fresher truth.
@@ -213,14 +230,22 @@ export function useGoalSync(password: string, unlocked = true) {
   );
 
   // Entering the key, or locking and unlocking, changes what the server sends.
+  // Unlocking with a different key (it was checked on the way) also sends
+  // whatever the old one had refused.
   const lastKeyRef = useRef<string | null>(null);
   useEffect(() => {
     passwordRef.current = password;
     const key = unlocked ? password : "";
     authRef.current = key;
-    if (lastKeyRef.current !== null && lastKeyRef.current !== key) refresh();
+    if (lastKeyRef.current !== null && lastKeyRef.current !== key) {
+      refresh();
+      if (key && failedRef.current && pendingRef.current.length) {
+        retryRef.current = 0;
+        schedule(0);
+      }
+    }
     lastKeyRef.current = key;
-  }, [password, unlocked, refresh]);
+  }, [password, unlocked, refresh, schedule]);
 
   const queueOps = useCallback(
     (ops: GoalOp[]) => {
@@ -237,6 +262,7 @@ export function useGoalSync(password: string, unlocked = true) {
   const retrySync = useCallback(() => {
     retryRef.current = 0;
     failedRef.current = false;
+    rejectedRef.current = false;
     publish();
     schedule(0);
   }, [publish, schedule]);

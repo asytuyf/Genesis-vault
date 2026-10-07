@@ -13,7 +13,8 @@ export const dynamic = 'force-dynamic';
 export async function GET(req: Request) {
   try {
     const goals = await readGoals();
-    const unlocked = checkPassword(req.headers.get('x-admin-key'));
+    const given = req.headers.get('x-admin-key');
+    const unlocked = checkPassword(given);
     const payload = unlocked
       ? goals
       : goals
@@ -24,7 +25,11 @@ export async function GET(req: Request) {
             delete stripped.description;
             return stripped;
           });
-    return NextResponse.json(payload, { headers: { 'Cache-Control': 'no-store' } });
+    const headers: Record<string, string> = { 'Cache-Control': 'no-store' };
+    // A device holding a wrong key is told, so it can say so instead of
+    // failing every save without a reason.
+    if (given && !unlocked) headers['X-Admin-Key-Rejected'] = '1';
+    return NextResponse.json(payload, { headers });
   } catch (err) {
     console.error('Failed to fetch goals:', err);
     return NextResponse.json({ error: 'READ_FAILED' }, { status: 500 });

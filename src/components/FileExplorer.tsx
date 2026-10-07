@@ -510,12 +510,18 @@ export const FileExplorer = ({ mobileOpen, setMobileOpen, desktopOpen }: FileExp
                   Admin_Key
                 </label>
                 <div className="flex items-center gap-2">
+                  {/* Fixed while unlocked: the key is only checked on unlock, so
+                      typing (or autofill) here afterwards would swap in an
+                      unchecked key and every save would be refused. */}
                   <input
                     type="password"
                     placeholder="ADMIN_KEY"
                     value={adminKey}
+                    readOnly={adminMode}
+                    title={adminMode ? "Lock to change the key" : undefined}
+                    autoComplete="current-password"
                     onChange={(e) => updateAdminKey(e.target.value)}
-                    className="flex-1 bg-black border border-zinc-800 px-3 py-2 text-xs text-zinc-200 outline-none focus:border-emerald-400 transition-colors"
+                    className={`flex-1 bg-black border border-zinc-800 px-3 py-2 text-xs text-zinc-200 outline-none focus:border-emerald-400 transition-colors ${adminMode ? "opacity-60 cursor-default" : ""}`}
                   />
                   <button
                     type="button"

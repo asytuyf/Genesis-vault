@@ -53,6 +53,7 @@ const SYNC_LABEL: Record<SyncState, { text: string; cls: string }> = {
   syncing: { text: "◌ SYNCING", cls: "text-orange-400 animate-pulse" },
   unsaved: { text: "○ QUEUED", cls: "text-zinc-500" },
   error: { text: "! UNSENT_KEPT_ON_DEVICE", cls: "text-red-400" },
+  rejected: { text: "! ADMIN_KEY_REJECTED · LOCK, RE-ENTER, UNLOCK", cls: "text-red-400" },
 };
 
 export default function TrackerPage() {
@@ -72,6 +73,7 @@ export default function TrackerPage() {
     apply: applyHabitOps,
     resultKey: "habits",
     password,
+    unlocked: adminMode,
   });
 
   const [showAddHabit, setShowAddHabit] = useState(false);
@@ -98,6 +100,7 @@ export default function TrackerPage() {
     apply: applyLinkOps,
     resultKey: "links",
     password,
+    unlocked: adminMode,
   });
 
   // Listen for admin mode and password changes

@@ -583,6 +583,7 @@ export const GoalDetailModal = ({ goal, isAdmin, adminKey, syncState, onOps, onR
     syncing: { text: "◌ SYNCING", cls: "text-amber-400 motion-safe:animate-pulse" },
     unsaved: { text: "○ QUEUED", cls: "text-zinc-500" },
     error: { text: "! UNSENT_KEPT_ON_DEVICE", cls: "text-red-400" },
+    rejected: { text: "! ADMIN_KEY_REJECTED", cls: "text-red-400" },
   };
 
   return (
@@ -1117,6 +1118,10 @@ export const GoalDetailModal = ({ goal, isAdmin, adminKey, syncState, onOps, onR
                 <button onClick={onRetrySync} className="text-red-400 hover:text-red-300 underline underline-offset-2">
                   Retry now
                 </button>
+              ) : syncState === "rejected" ? (
+                // Retrying with the same key is refused again. Kept here, it
+                // sends itself once the key is put right.
+                <span className="text-red-400/80 text-right">Lock, re-enter key, unlock</span>
               ) : (
                 <span className="text-zinc-800">Saves by itself</span>
               )}

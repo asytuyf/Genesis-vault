@@ -13,13 +13,16 @@
 //     never wipe edits made on another device.
 //   * The list is refetched when the page regains focus and every 45 seconds
 //     while visible, so a second device shows fresh data.
+//   * A key the server refuses is reported as such ("rejected"). The unsent
+//     work stays on the device and goes by itself once admin mode is unlocked
+//     with the right key.
 //
 // Operations must be safe to send twice: say what a thing should become, never
 // "flip it".
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-export type SyncState = "synced" | "syncing" | "unsaved" | "error";
+export type SyncState = "synced" | "syncing" | "unsaved" | "error" | "rejected";
 
 const FLUSH_DELAY = 400;
 const POLL_MS = 45000;
@@ -36,9 +39,11 @@ interface Options<T, Op> {
   resultKey: string;
   /** Admin key. Without one, nothing is sent. */
   password: string;
+  /** Admin mode is on, so the key has been checked. */
+  unlocked?: boolean;
 }
 
-export function useOpSync<T, Op>({ endpoint, apply, resultKey, password }: Options<T, Op>) {
+export function useOpSync<T, Op>({ endpoint, apply, resultKey, password, unlocked = true }: Options<T, Op>) {
   const [items, setItems] = useState<T[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
@@ -48,6 +53,8 @@ export function useOpSync<T, Op>({ endpoint, apply, resultKey, password }: Optio
   const pendingRef = useRef<Op[]>([]); // queued, not sent yet
   const inflightRef = useRef<Op[] | null>(null); // sent, awaiting a reply
   const failedRef = useRef(false);
+  // The server refused the admin key this device holds.
+  const rejectedRef = useRef(false);
   const retryRef = useRef(0);
   const versionRef = useRef(0);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -76,7 +83,9 @@ export function useOpSync<T, Op>({ endpoint, apply, resultKey, password }: Optio
     setSyncState(
       inflightRef.current
         ? "syncing"
-        : pendingRef.current.length
+        : rejectedRef.current && pendingRef.current.length
+          ? "rejected"
+          : pendingRef.current.length
           ? failedRef.current
             ? "error"
             : "unsaved"
@@ -116,11 +125,13 @@ export function useOpSync<T, Op>({ endpoint, apply, resultKey, password }: Optio
         cache: "no-store",
       });
       // A refused request (wrong admin key, bad payload) will be refused again:
-      // keep the work queued, show the error, and wait for a manual retry.
+      // keep the work queued, show the error, and wait for a manual retry, or
+      // for the key to be put right.
       if (res.status >= 400 && res.status < 500) {
         pendingRef.current = [...(inflightRef.current ?? []), ...pendingRef.current];
         inflightRef.current = null;
         failedRef.current = true;
+        rejectedRef.current = res.status === 401;
         saveOutbox();
         publish();
         return;
@@ -133,6 +144,7 @@ export function useOpSync<T, Op>({ endpoint, apply, resultKey, password }: Optio
       }
       inflightRef.current = null;
       failedRef.current = false;
+      rejectedRef.current = false;
       retryRef.current = 0;
       saveOutbox();
       publish();
@@ -197,9 +209,18 @@ export function useOpSync<T, Op>({ endpoint, apply, resultKey, password }: Optio
     [endpoint, publish]
   );
 
+  // Unlocking with a different key (it was checked on the way) sends whatever
+  // the old one had refused.
+  const lastKeyRef = useRef<string | null>(null);
   useEffect(() => {
     passwordRef.current = password;
-  }, [password]);
+    const key = unlocked ? password : "";
+    if (lastKeyRef.current !== null && lastKeyRef.current !== key && key && failedRef.current && pendingRef.current.length) {
+      retryRef.current = 0;
+      schedule(0);
+    }
+    lastKeyRef.current = key;
+  }, [password, unlocked, schedule]);
 
   const queueOps = useCallback(
     (ops: Op[]) => {
@@ -216,6 +237,7 @@ export function useOpSync<T, Op>({ endpoint, apply, resultKey, password }: Optio
   const retrySync = useCallback(() => {
     retryRef.current = 0;
     failedRef.current = false;
+    rejectedRef.current = false;
     publish();
     schedule(0);
   }, [publish, schedule]);
