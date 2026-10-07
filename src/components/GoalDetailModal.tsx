@@ -67,13 +67,6 @@ const SubgoalItem = ({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(sg.text);
   const [customMin, setCustomMin] = useState("");
-  const [confirmDelete, setConfirmDelete] = useState(false);
-
-  useEffect(() => {
-    if (!confirmDelete) return;
-    const t = setTimeout(() => setConfirmDelete(false), 4000);
-    return () => clearTimeout(t);
-  }, [confirmDelete]);
 
   const running = timerRunning(sg.timer);
   const finished = timerFinished(sg.timer);
@@ -308,12 +301,20 @@ const SubgoalItem = ({
             </button>
             <button
               onClick={onToggleExpanded}
-              title="Timer, deadline, delete"
+              title="Timer, deadline"
               aria-label="Sub-task options"
               aria-expanded={expanded}
               className={`p-1.5 transition-colors ${expanded ? "text-emerald-400" : "text-zinc-700 hover:text-zinc-300"}`}
             >
               <SlidersHorizontal size={14} />
+            </button>
+            <button
+              onClick={onRemove}
+              title="Delete sub-task"
+              aria-label="Delete sub-task"
+              className="p-1.5 text-zinc-700 hover:text-red-400 transition-colors"
+            >
+              <Trash2 size={13} />
             </button>
           </div>
         )}
@@ -406,18 +407,6 @@ const SubgoalItem = ({
                 />
               </div>
 
-              <div className="flex justify-end pt-1">
-                <button
-                  onClick={() => (confirmDelete ? onRemove() : setConfirmDelete(true))}
-                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 border text-[10px] font-bold uppercase transition-colors ${
-                    confirmDelete
-                      ? "border-red-500/60 text-red-400 bg-red-500/10"
-                      : "border-zinc-800 text-zinc-600 hover:border-red-500/40 hover:text-red-400"
-                  }`}
-                >
-                  <Trash2 size={10} /> {confirmDelete ? "Tap again to delete" : "Delete sub-task"}
-                </button>
-              </div>
             </div>
           </motion.div>
         )}
