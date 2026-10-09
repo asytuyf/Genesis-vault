@@ -432,6 +432,53 @@ export const FileExplorer = ({ mobileOpen, setMobileOpen, desktopOpen }: FileExp
                           )}
                         </div>
 
+                        {/* SPEND FOLDER: only exists once you are unlocked */}
+                        {adminMode && (
+                          <div>
+                            <div
+                              className="flex items-center gap-2 text-white cursor-pointer py-1.5 select-none transition-colors"
+                              onClick={() => toggleFolder("spend")}
+                            >
+                              <span className="text-cyan-400 transition-colors">
+                                {expandedFolders.includes("spend") ? (
+                                  <ChevronDown size={20} />
+                                ) : (
+                                  <ChevronRight size={20} />
+                                )}
+                              </span>
+                              <Folder
+                                size={20}
+                                className={expandedFolders.includes("spend") ? "text-cyan-400" : "text-zinc-600"}
+                              />
+                              <span className="text-sm font-bold tracking-wide">spend</span>
+                            </div>
+                            {expandedFolders.includes("spend") && (
+                              <div className="ml-2 pl-2 border-l border-zinc-900 mt-1">
+                                <Link
+                                  href="/spend"
+                                  className="flex items-center gap-2 group/file py-1"
+                                  onClick={() => isMobileView && setMobileOpenValue(false)}
+                                >
+                                  <File size={18} className="text-cyan-400 transition-colors" />
+                                  <span
+                                    className={`text-sm font-medium transition-colors ${isMobileView
+                                      ? pathname === "/spend"
+                                        ? "text-cyan-400"
+                                        : "text-zinc-400"
+                                      : "text-white"
+                                      }`}
+                                  >
+                                    page.tsx
+                                  </span>
+                                  <span className="ml-auto text-[9px] px-1.5 py-0.5 rounded bg-zinc-900/80 font-bold border transition-all text-cyan-400 border-cyan-400/30">
+                                    SPEND
+                                  </span>
+                                </Link>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
                         {/* LIBRARY FOLDER */}
                         <div>
                           <div

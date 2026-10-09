@@ -41,9 +41,21 @@ interface Options<T, Op> {
   password: string;
   /** Admin mode is on, so the key has been checked. */
   unlocked?: boolean;
+  /**
+   * Send the admin key when reading too. Needed for lists the server refuses
+   * to show at all without it, like money.
+   */
+  authReads?: boolean;
 }
 
-export function useOpSync<T, Op>({ endpoint, apply, resultKey, password, unlocked = true }: Options<T, Op>) {
+export function useOpSync<T, Op>({
+  endpoint,
+  apply,
+  resultKey,
+  password,
+  unlocked = true,
+  authReads = false,
+}: Options<T, Op>) {
   const [items, setItems] = useState<T[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
@@ -60,6 +72,8 @@ export function useOpSync<T, Op>({ endpoint, apply, resultKey, password, unlocke
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const flushRef = useRef<() => void>(() => {});
   const passwordRef = useRef(password);
+  // The key a read may use: empty while locked.
+  const authRef = useRef("");
   const applyRef = useRef(apply);
   applyRef.current = apply;
 
@@ -189,7 +203,17 @@ export function useOpSync<T, Op>({ endpoint, apply, resultKey, password, unlocke
     async (initial = false) => {
       const version = versionRef.current;
       try {
-        const res = await fetch(endpoint, { cache: "no-store" });
+        const key = authReads ? authRef.current : "";
+        // A read that needs the key is pointless without one: skip it rather
+        // than take a 401 and show a load failure.
+        if (authReads && !key) {
+          if (initial) setLoading(false);
+          return;
+        }
+        const res = await fetch(endpoint, {
+          cache: "no-store",
+          headers: key ? { "x-admin-key": key } : undefined,
+        });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
         if (!Array.isArray(data)) throw new Error("Unexpected payload");
@@ -206,21 +230,28 @@ export function useOpSync<T, Op>({ endpoint, apply, resultKey, password, unlocke
         if (initial) setLoading(false);
       }
     },
-    [endpoint, publish]
+    [authReads, endpoint, publish]
   );
 
-  // Unlocking with a different key (it was checked on the way) sends whatever
-  // the old one had refused.
+  // The key both saves changes and, for a private list, unlocks reading it.
+  // Locking clears it, so a locked page asks for nothing it may not see.
   const lastKeyRef = useRef<string | null>(null);
   useEffect(() => {
     passwordRef.current = password;
     const key = unlocked ? password : "";
-    if (lastKeyRef.current !== null && lastKeyRef.current !== key && key && failedRef.current && pendingRef.current.length) {
-      retryRef.current = 0;
-      schedule(0);
+    authRef.current = key;
+    if (lastKeyRef.current !== null && lastKeyRef.current !== key) {
+      // A private list is fetched with the key, so a different key means a
+      // different answer.
+      if (authReads) refresh();
+      // Unlocking with a key that works sends whatever the old one could not.
+      if (key && failedRef.current && pendingRef.current.length) {
+        retryRef.current = 0;
+        schedule(0);
+      }
     }
     lastKeyRef.current = key;
-  }, [password, unlocked, schedule]);
+  }, [authReads, password, refresh, schedule, unlocked]);
 
   const queueOps = useCallback(
     (ops: Op[]) => {

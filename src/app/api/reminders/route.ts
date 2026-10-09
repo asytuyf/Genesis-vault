@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server';
 import { readGoals } from '@/lib/goalStore';
+import { readList } from '@/lib/kv';
+import { pickDueMoney } from '@/lib/moneyReminders';
+import type { Expense, PaymentCard } from '@/lib/money';
 import { pickDue, reminderMessage } from '@/lib/reminders';
 import { pushConfigured, pushToAll, readPushState, readSent, writePushState, writeSent } from '@/lib/pushStore';
 
@@ -29,7 +32,13 @@ async function run(req: Request) {
 
   try {
     const now = Date.now();
-    const [goals, state, sent] = await Promise.all([readGoals(), readPushState(), readSent(now)]);
+    const [goals, expenses, cards, state, sent] = await Promise.all([
+      readGoals(),
+      readList<Expense>('money_expenses'),
+      readList<PaymentCard>('money_cards'),
+      readPushState(),
+      readSent(now),
+    ]);
     if (!state.subscriptions.length) return NextResponse.json({ reminders: 0, delivered: 0, devices: 0 });
 
     const { send, skip } = pickDue(goals, now, (key) => key in sent, state.timeZone);
@@ -48,11 +57,22 @@ async function run(req: Request) {
       sent[r.key] = now;
     }
 
-    if (send.length || skip.length) await writeSent(sent);
+    // Money: a warning before a charge, and a louder one before a trial bites.
+    const moneyDue = pickDueMoney(expenses, cards, (key) => key in sent, state.timeZone);
+    for (const m of moneyDue) {
+      const result = await pushToAll(current, { title: m.title, body: m.body, tag: m.tag, url: m.url }, url.origin);
+      current = result.state;
+      delivered += result.sent;
+      changed ||= result.changed;
+      sent[m.key] = now;
+    }
+
+    if (send.length || skip.length || moneyDue.length) await writeSent(sent);
     if (changed) await writePushState(current);
 
     return NextResponse.json({
       reminders: send.length,
+      money: moneyDue.length,
       delivered,
       skipped: skip.length,
       devices: current.subscriptions.length,
