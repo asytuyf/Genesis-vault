@@ -224,3 +224,26 @@ body:has([data-sheet]) .nav-menu-button {
   translate: 0 -14px;
   pointer-events: none;
 }
+
+/*
+ * Bottom sheets in the installed app on a phone. The screen there has rounded
+ * corners, so a square sheet runs into them. The sheet floats a few pixels in
+ * from the edges with corners that follow the screen's own curve (about 53px
+ * on an iPhone 14 Plus, minus the gap), and keeps its last line clear of the
+ * home bar. A normal browser tab is left as it was.
+ */
+@media (display-mode: standalone) and (max-width: 767px) {
+  .pwa-sheet {
+    --screen-curve: 53px;
+    --sheet-gap: 6px;
+    width: calc(100% - 2 * var(--sheet-gap)) !important;
+    margin: 0 var(--sheet-gap) var(--sheet-gap);
+    border-radius: 24px 24px calc(var(--screen-curve) - var(--sheet-gap)) calc(var(--screen-curve) - var(--sheet-gap));
+  }
+
+  .pwa-sheet-bottom {
+    padding-bottom: max(1.25rem, calc(env(safe-area-inset-bottom) - 2px)) !important;
+    padding-left: 1.25rem !important;
+    padding-right: 1.25rem !important;
+  }
+}

@@ -28,6 +28,9 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
+  // Lets the page know where the home bar is (env(safe-area-inset-*)), so
+  // the installed app can keep sheets clear of it.
+  viewportFit: "cover",
   themeColor: "#0d0d0d",
 };
 

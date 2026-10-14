@@ -85,7 +85,7 @@ export function SpendForm({ expense, cards, onSave, onClose }: SpendFormProps) {
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: 40 }}
         transition={{ type: "spring", stiffness: 380, damping: 34 }}
-        className="relative bg-[#0a0a0a] border border-zinc-800 w-full md:max-w-md max-h-[92dvh] overflow-y-auto font-mono z-[610] p-5 space-y-4"
+        className="pwa-sheet pwa-sheet-bottom relative bg-[#0a0a0a] border border-zinc-800 w-full md:max-w-md max-h-[92dvh] overflow-y-auto font-mono z-[610] p-5 space-y-4"
       >
         <div className="flex items-center justify-between">
           <h3 className="text-base font-black uppercase tracking-wider text-cyan-400">

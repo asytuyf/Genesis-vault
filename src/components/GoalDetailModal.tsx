@@ -575,7 +575,7 @@ export const GoalDetailModal = ({ goal, isAdmin, adminKey, syncState, onOps, onR
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: 40 }}
         transition={{ type: "spring", stiffness: 380, damping: 34 }}
-        className="relative bg-[#0a0a0a] border border-zinc-800 w-full md:max-w-lg h-[92dvh] md:h-auto md:max-h-[85vh] overflow-hidden font-mono z-[610] flex flex-col"
+        className="pwa-sheet relative bg-[#0a0a0a] border border-zinc-800 w-full md:max-w-lg h-[92dvh] md:h-auto md:max-h-[85vh] overflow-hidden font-mono z-[610] flex flex-col"
       >
         <button
           onClick={onClose}
@@ -1100,7 +1100,7 @@ export const GoalDetailModal = ({ goal, isAdmin, adminKey, syncState, onOps, onR
 
         {/* footer */}
         {isAdmin && (
-          <div className="p-4 md:p-5 border-t border-zinc-800 space-y-2.5 shrink-0 bg-[#0a0a0a]">
+          <div className="pwa-sheet-bottom p-4 md:p-5 border-t border-zinc-800 space-y-2.5 shrink-0 bg-[#0a0a0a]">
             {tab !== "info" && tab === "tasks" && (
               <div className="flex gap-2">
                 <input
