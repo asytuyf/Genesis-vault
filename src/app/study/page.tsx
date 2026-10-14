@@ -869,6 +869,7 @@ export default function StudyPage() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
+            data-sheet
             className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 backdrop-blur-sm p-6"
             onClick={() => setShowYoutubeInput(false)}
           >
@@ -940,6 +941,7 @@ export default function StudyPage() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
+            data-sheet
             className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 backdrop-blur-sm p-2 sm:p-6"
             onClick={() => { setShowUpcoming(false); setShowAddFlight(false); }}
           >
@@ -1350,6 +1352,7 @@ export default function StudyPage() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
+            data-sheet
             className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 backdrop-blur-sm p-6"
             onClick={() => setShowSettings(false)}
           >

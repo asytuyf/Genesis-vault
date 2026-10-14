@@ -28,6 +28,9 @@ const chip =
   "px-2.5 py-1 bg-zinc-900/50 border border-zinc-800 text-zinc-500 text-[10px] font-bold uppercase transition-colors";
 const chipHover = "hover:border-emerald-500/30 hover:text-emerald-400";
 
+/** How long a deleted to-do can be brought back. */
+const UNDO_MS = 5000;
+
 const DEADLINE_PRESETS = [
   { label: "1h", hours: 1 },
   { label: "3h", hours: 3 },
@@ -523,7 +526,7 @@ export const GoalDetailModal = ({ goal, isAdmin, adminKey, syncState, onOps, onR
   const [lastDeleted, setLastDeleted] = useState<{ sub: SubGoal; order: string[] } | null>(null);
   useEffect(() => {
     if (!lastDeleted) return;
-    const t = setTimeout(() => setLastDeleted(null), 5000);
+    const t = setTimeout(() => setLastDeleted(null), UNDO_MS);
     return () => clearTimeout(t);
   }, [lastDeleted]);
 
@@ -562,6 +565,7 @@ export const GoalDetailModal = ({ goal, isAdmin, adminKey, syncState, onOps, onR
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
+      data-sheet
       className="fixed inset-0 z-[600] flex items-end md:items-center justify-center md:p-4"
     >
       <div className="absolute inset-0 bg-black/90 backdrop-blur-sm" onClick={onClose} />
@@ -1048,8 +1052,10 @@ export const GoalDetailModal = ({ goal, isAdmin, adminKey, syncState, onOps, onR
           )}
         </motion.div>
 
-        {/* A small pill outside the window, so it never covers the list: in
-            the gap above it on a phone, under it on a computer. */}
+        {/* A small pill outside the window, so it never covers the list:
+            centred in the strip above the sheet on a phone (the menu button
+            steps aside while a sheet is open), under the window on a computer.
+            The line along its bottom runs down for as long as undo lasts. */}
         {typeof document !== "undefined" &&
           createPortal(
             <AnimatePresence>
@@ -1061,16 +1067,25 @@ export const GoalDetailModal = ({ goal, isAdmin, adminKey, syncState, onOps, onR
                   exit={{ opacity: 0, scale: 0.9, filter: "blur(4px)", transition: { duration: 0.18, ease: "easeIn" } }}
                   transition={{ type: "spring", stiffness: 380, damping: 26 }}
                   role="status"
-                  className="fixed left-1/2 -translate-x-1/2 top-4 md:top-auto md:bottom-14 z-[700] flex items-center gap-1 pl-4 pr-1 py-1 rounded-full bg-zinc-900/95 backdrop-blur border border-emerald-500/50 shadow-[0_0_24px_rgba(16,185,129,0.15)] text-xs font-mono"
+                  className="fixed left-1/2 -translate-x-1/2 top-[4dvh] -translate-y-1/2 md:top-auto md:bottom-14 md:translate-y-0 z-[700] flex items-center max-w-[calc(100vw-2rem)] h-9 pl-3.5 pr-1 rounded-full overflow-hidden bg-zinc-900/90 backdrop-blur-md border border-emerald-500/40 shadow-[0_8px_30px_rgba(0,0,0,0.5),0_0_20px_rgba(16,185,129,0.12)] text-xs font-mono"
                 >
-                  <Trash2 size={12} className="text-zinc-500" />
-                  <span className="text-zinc-400 pl-1.5 pr-2 whitespace-nowrap">Deleted</span>
+                  <Trash2 size={12} className="shrink-0 text-zinc-500" />
+                  <span className="pl-2 text-zinc-300 whitespace-nowrap">Deleted</span>
+                  <span className="pl-1.5 pr-1 min-w-0 max-w-[38vw] md:max-w-[220px] truncate text-zinc-500">{lastDeleted.sub.text}</span>
                   <button
                     onClick={undoDelete}
-                    className="px-3 py-1.5 rounded-full text-emerald-400 font-bold uppercase tracking-wider hover:bg-emerald-500/10 transition-colors"
+                    className="shrink-0 ml-1 h-7 px-3 rounded-full text-emerald-400 font-bold uppercase tracking-wider hover:bg-emerald-500/10 active:bg-emerald-500/20 transition-colors"
                   >
                     Undo
                   </button>
+                  <motion.span
+                    aria-hidden
+                    initial={{ scaleX: 1 }}
+                    animate={{ scaleX: 0 }}
+                    transition={{ duration: UNDO_MS / 1000, ease: "linear" }}
+                    style={{ originX: 0 }}
+                    className="absolute left-4 right-4 bottom-0 h-px bg-emerald-400/70"
+                  />
                 </motion.div>
               )}
             </AnimatePresence>,

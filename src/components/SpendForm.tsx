@@ -75,6 +75,7 @@ export function SpendForm({ expense, cards, onSave, onClose }: SpendFormProps) {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
+      data-sheet
       className="fixed inset-0 z-[600] flex items-end md:items-center justify-center md:p-4"
     >
       <div className="absolute inset-0 bg-black/90 backdrop-blur-sm" onClick={onClose} />
