@@ -2,6 +2,7 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { SortableList, useSortableItem } from "@/components/Sortable";
+import { SwipeToDelete } from "@/components/SwipeToDelete";
 import {
   X, Tag, Clock, Activity, Timer, AlertTriangle, Pencil, Check, GripVertical,
   ChevronUp, ChevronDown, SlidersHorizontal, Play, Pause, RotateCcw, Hourglass,
@@ -164,20 +165,25 @@ const SubgoalItem = ({
             : "bg-zinc-900/50 border-zinc-800 hover:border-zinc-700"
       }`}
     >
-      {isActive && <span className="absolute left-0 top-0 bottom-0 w-[2px] bg-amber-400 motion-safe:animate-pulse" />}
+      {isActive && <span className="absolute z-10 left-0 top-0 bottom-0 w-[2px] bg-amber-400 motion-safe:animate-pulse" />}
 
-      <div className="flex items-start gap-1 p-2 pl-2.5">
+      <div className="flex items-stretch">
         {isAdmin && canDrag && (
           <button
             type="button"
             {...handle}
             title="Hold and drag to reorder"
             aria-label="Reorder this to-do"
-            className="shrink-0 -ml-1.5 h-9 w-7 grid place-items-center text-zinc-700 hover:text-zinc-400 transition-colors select-none cursor-grab active:cursor-grabbing"
+            className="shrink-0 w-8 pt-2 flex justify-center text-zinc-700 hover:text-zinc-400 transition-colors select-none cursor-grab active:cursor-grabbing"
           >
-            <GripVertical size={14} />
+            <span className="h-9 grid place-items-center">
+              <GripVertical size={14} />
+            </span>
           </button>
         )}
+
+        <SwipeToDelete onDelete={onRemove} disabled={!isAdmin || editing} className="bg-[#0a0a0a]">
+        <div className={`flex items-start gap-1 p-2 ${canDrag && isAdmin ? "pl-0" : "pl-2.5"} ${isActive ? "bg-amber-500/[0.04]" : "bg-zinc-900/50"}`}>
 
         <button
           onClick={toggleDone}
@@ -287,16 +293,10 @@ const SubgoalItem = ({
             >
               <SlidersHorizontal size={14} />
             </button>
-            <button
-              onClick={onRemove}
-              title="Delete to-do"
-              aria-label="Delete to-do"
-              className="h-9 w-8 grid place-items-center text-zinc-700 hover:text-red-400 transition-colors"
-            >
-              <Trash2 size={13} />
-            </button>
           </div>
         )}
+        </div>
+        </SwipeToDelete>
       </div>
 
       <AnimatePresence initial={false}>
@@ -372,24 +372,34 @@ const SubgoalItem = ({
                 </div>
               </div>
 
-              {total > 1 && (
-                <div className="flex gap-1.5">
-                  <button
-                    onClick={() => onMove(-1)}
-                    disabled={index === 0}
-                    className={`${chip} ${chipHover} flex-1 inline-flex items-center justify-center gap-1 py-2 disabled:opacity-30 disabled:pointer-events-none`}
-                  >
-                    <ChevronUp size={12} /> Move up
-                  </button>
-                  <button
-                    onClick={() => onMove(1)}
-                    disabled={index === total - 1}
-                    className={`${chip} ${chipHover} flex-1 inline-flex items-center justify-center gap-1 py-2 disabled:opacity-30 disabled:pointer-events-none`}
-                  >
-                    <ChevronDown size={12} /> Move down
-                  </button>
-                </div>
-              )}
+              <div className="flex gap-1.5">
+                {total > 1 && (
+                  <>
+                    <button
+                      onClick={() => onMove(-1)}
+                      disabled={index === 0}
+                      aria-label="Move up"
+                      className={`${chip} ${chipHover} flex-1 inline-flex items-center justify-center gap-1 py-2 disabled:opacity-30 disabled:pointer-events-none`}
+                    >
+                      <ChevronUp size={12} /> Up
+                    </button>
+                    <button
+                      onClick={() => onMove(1)}
+                      disabled={index === total - 1}
+                      aria-label="Move down"
+                      className={`${chip} ${chipHover} flex-1 inline-flex items-center justify-center gap-1 py-2 disabled:opacity-30 disabled:pointer-events-none`}
+                    >
+                      <ChevronDown size={12} /> Down
+                    </button>
+                  </>
+                )}
+                <button
+                  onClick={onRemove}
+                  className={`${chip} flex-1 inline-flex items-center justify-center gap-1 py-2 hover:border-rose-400/30 hover:text-rose-300`}
+                >
+                  <Trash2 size={12} /> Delete
+                </button>
+              </div>
             </div>
           </motion.div>
         )}
@@ -539,10 +549,30 @@ export const GoalDetailModal = ({ goal, isAdmin, adminKey, syncState, onOps, onR
     onOps([{ type: "sub", id: goal.id, sub: next }]);
   };
 
+  // The last deleted to-do, held for a few seconds so a swipe that went too
+  // far can be taken back.
+  const [lastDeleted, setLastDeleted] = useState<{ sub: SubGoal; order: string[] } | null>(null);
+  useEffect(() => {
+    if (!lastDeleted) return;
+    const t = setTimeout(() => setLastDeleted(null), 5000);
+    return () => clearTimeout(t);
+  }, [lastDeleted]);
+
   const removeSubgoal = (subId: string) => {
     if (!isAdmin) return;
+    const sub = all.find((sg) => sg.id === subId);
     setExpandedId(null);
     onOps([{ type: "subRemove", id: goal.id, subId }]);
+    if (sub) setLastDeleted({ sub, order: all.map((sg) => sg.id) });
+  };
+
+  const undoDelete = () => {
+    if (!lastDeleted || !isAdmin) return;
+    onOps([
+      { type: "sub", id: goal.id, sub: lastDeleted.sub },
+      { type: "subOrder", id: goal.id, ids: lastDeleted.order },
+    ]);
+    setLastDeleted(null);
   };
 
   const done = finished.length;
@@ -790,8 +820,8 @@ export const GoalDetailModal = ({ goal, isAdmin, adminKey, syncState, onOps, onR
 
               {isAdmin && subgoals.length > 1 && (
                 <div className="mt-3 text-[9px] text-zinc-800 uppercase tracking-wider">
-                  <span className="md:hidden">Hold the grip to drag</span>
-                  <span className="hidden md:inline">Drag the grip to reorder</span>
+                  <span className="md:hidden">Hold the grip to drag · swipe left to delete</span>
+                  <span className="hidden md:inline">Drag the grip to reorder · drag a row left to delete</span>
                 </div>
               )}
             </div>
@@ -808,16 +838,15 @@ export const GoalDetailModal = ({ goal, isAdmin, adminKey, syncState, onOps, onR
                 <>
                   <div className="flex items-center gap-2 mb-4 text-[10px] text-zinc-700 uppercase tracking-wider">
                     <CheckCheck size={12} className="text-emerald-700" />
-                    Clears a day after you tick it · untick to bring back
+                    Clears a day after you tick it · untick to bring back · swipe left to delete
                   </div>
                   <ul className="space-y-1">
                     {finished.map((sg) => {
                       const clearsAt = subClearsAt(sg);
                       return (
-                        <li
-                          key={sg.id}
-                          className="group flex items-start gap-2 p-2.5 pl-2 border border-zinc-800 bg-zinc-900/30"
-                        >
+                        <li key={sg.id} className="border border-zinc-800">
+                          <SwipeToDelete onDelete={() => removeSubgoal(sg.id)} disabled={!isAdmin} className="bg-[#0a0a0a]">
+                          <div className="flex items-start gap-2 p-2.5 pl-2 bg-zinc-900/30">
                           <button
                             onClick={() => restoreSubgoal(sg)}
                             disabled={!isAdmin}
@@ -837,18 +866,8 @@ export const GoalDetailModal = ({ goal, isAdmin, adminKey, syncState, onOps, onR
                               {clearsAt ? `clears in ${formatTimeLeft(clearsAt - now)}` : "clears within a day"}
                             </span>
                           </span>
-                          {isAdmin && (
-                            <span className="flex items-center gap-0.5 shrink-0">
-                              <button
-                                onClick={() => removeSubgoal(sg.id)}
-                                title="Clear it now"
-                                aria-label="Clear it now"
-                                className="p-1.5 text-zinc-800 hover:text-red-400 transition-colors"
-                              >
-                                <Trash2 size={13} />
-                              </button>
-                            </span>
-                          )}
+                          </div>
+                          </SwipeToDelete>
                         </li>
                       );
                     })}
@@ -1061,6 +1080,22 @@ export const GoalDetailModal = ({ goal, isAdmin, adminKey, syncState, onOps, onR
             </div>
           )}
         </motion.div>
+
+        <AnimatePresence>
+          {lastDeleted && isAdmin && (
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 8 }}
+              className="absolute left-4 right-4 bottom-28 z-[630] flex items-center justify-between gap-3 px-4 py-2.5 bg-zinc-900 border border-zinc-700 shadow-xl shadow-black/60 text-xs font-mono"
+            >
+              <span className="text-zinc-400 truncate">Deleted “{lastDeleted.sub.text}”</span>
+              <button onClick={undoDelete} className="shrink-0 text-emerald-400 font-bold uppercase tracking-wider hover:text-emerald-300">
+                Undo
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* footer */}
         {isAdmin && (
