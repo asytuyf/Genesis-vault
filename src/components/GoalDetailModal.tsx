@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect, useMemo, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { SortableList, useSortableItem } from "@/components/Sortable";
 import { SwipeToDelete } from "@/components/SwipeToDelete";
@@ -1047,21 +1048,41 @@ export const GoalDetailModal = ({ goal, isAdmin, adminKey, syncState, onOps, onR
           )}
         </motion.div>
 
-        <AnimatePresence>
-          {lastDeleted && isAdmin && (
-            <motion.div
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 8 }}
-              className="absolute left-4 right-4 bottom-28 z-[630] flex items-center justify-between gap-3 px-4 py-2.5 bg-zinc-900 border border-zinc-700 shadow-xl shadow-black/60 text-xs font-mono"
-            >
-              <span className="text-zinc-400 truncate">Deleted “{lastDeleted.sub.text}”</span>
-              <button onClick={undoDelete} className="shrink-0 text-emerald-400 font-bold uppercase tracking-wider hover:text-emerald-300">
-                Undo
-              </button>
-            </motion.div>
+        {/* A small pill outside the window, so it never covers the list: in
+            the gap above it on a phone, under it on a computer. */}
+        {typeof document !== "undefined" &&
+          createPortal(
+            <AnimatePresence>
+              {lastDeleted && isAdmin && (
+                <motion.div
+                  key={lastDeleted.sub.id}
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.9 }}
+                  transition={{ type: "spring", stiffness: 420, damping: 30 }}
+                  role="status"
+                  className="fixed left-1/2 -translate-x-1/2 top-4 md:top-auto md:bottom-14 z-[700] flex items-center gap-1 pl-4 pr-1 py-1 rounded-full bg-zinc-900/95 backdrop-blur border border-zinc-700 shadow-2xl shadow-black/70 text-xs font-mono overflow-hidden"
+                >
+                  <Trash2 size={12} className="text-zinc-500" />
+                  <span className="text-zinc-400 pl-1.5 pr-2 whitespace-nowrap">Deleted</span>
+                  <button
+                    onClick={undoDelete}
+                    className="px-3 py-1.5 rounded-full text-emerald-400 font-bold uppercase tracking-wider hover:bg-emerald-500/10 transition-colors"
+                  >
+                    Undo
+                  </button>
+                  {/* the five seconds running out */}
+                  <motion.span
+                    initial={{ scaleX: 1 }}
+                    animate={{ scaleX: 0 }}
+                    transition={{ duration: 5, ease: "linear" }}
+                    className="absolute left-0 bottom-0 h-[2px] w-full origin-left bg-emerald-500/40"
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>,
+            document.body
           )}
-        </AnimatePresence>
 
         {/* footer */}
         {isAdmin && (
