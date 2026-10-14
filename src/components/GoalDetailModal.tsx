@@ -4,8 +4,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { SortableList, useSortableItem } from "@/components/Sortable";
 import { SwipeToDelete } from "@/components/SwipeToDelete";
 import {
-  X, Tag, Clock, Activity, Timer, AlertTriangle, Pencil, Check, GripVertical,
-  ChevronUp, ChevronDown, SlidersHorizontal, Play, Pause, RotateCcw, Hourglass,
+  X, Tag, Clock, Activity, Timer, AlertTriangle, Pencil, Check,
+  SlidersHorizontal, Play, Pause, RotateCcw, Hourglass,
   CalendarClock, Trash2, Lock, Eye, CheckCheck, Hammer, Snail,
 } from "lucide-react";
 import {
@@ -69,18 +69,15 @@ const clearBtn =
 
 interface SubgoalItemProps {
   sg: SubGoal;
-  index: number;
-  total: number;
   isAdmin: boolean;
   expanded: boolean;
   onToggleExpanded: () => void;
   onChange: (next: SubGoal) => void;
   onRemove: () => void;
-  onMove: (dir: -1 | 1) => void;
 }
 
 const SubgoalItem = ({
-  sg, index, total, isAdmin, expanded, onToggleExpanded, onChange, onRemove, onMove,
+  sg, isAdmin, expanded, onToggleExpanded, onChange, onRemove,
 }: SubgoalItemProps) => {
   const { handle, setNodeRef, style, isDragging, enabled: canDrag } = useSortableItem(sg.id);
   const [editing, setEditing] = useState(false);
@@ -151,10 +148,23 @@ const SubgoalItem = ({
     onChange(next);
   };
 
+  // The whole row is what you hold to move it. A key press only starts a move
+  // when the row itself has focus, never from the text box or a button in it.
+  const { onKeyDown: dragKey, ...dragHandle } = handle as { onKeyDown?: (e: React.KeyboardEvent) => void };
+  const rowHandle = canDrag && isAdmin && !editing
+    ? {
+        ...dragHandle,
+        onKeyDown: (e: React.KeyboardEvent) => {
+          if (e.target === e.currentTarget) dragKey?.(e);
+        },
+      }
+    : {};
+
   return (
     <li
       ref={setNodeRef}
       style={style}
+      {...rowHandle}
       className={`group relative border transition-colors ${
         isDragging ? "border-emerald-500/50 shadow-lg shadow-black/40" : ""
       } ${
@@ -168,22 +178,9 @@ const SubgoalItem = ({
       {isActive && <span className="absolute z-10 left-0 top-0 bottom-0 w-[2px] bg-amber-400 motion-safe:animate-pulse" />}
 
       <div className="flex items-stretch">
-        {isAdmin && canDrag && (
-          <button
-            type="button"
-            {...handle}
-            title="Hold and drag to reorder"
-            aria-label="Reorder this to-do"
-            className="shrink-0 w-8 pt-2 flex justify-center text-zinc-700 hover:text-zinc-400 transition-colors select-none cursor-grab active:cursor-grabbing"
-          >
-            <span className="h-9 grid place-items-center">
-              <GripVertical size={14} />
-            </span>
-          </button>
-        )}
 
-        <SwipeToDelete onDelete={onRemove} disabled={!isAdmin || editing} className="bg-[#0a0a0a]">
-        <div className={`flex items-start gap-1 p-2 ${canDrag && isAdmin ? "pl-0" : "pl-2.5"} ${isActive ? "bg-amber-500/[0.04]" : "bg-zinc-900/50"}`}>
+        <SwipeToDelete onDelete={onRemove} disabled={!isAdmin || editing || isDragging} className="bg-[#0a0a0a]">
+        <div className={`flex items-start gap-1 p-2 pl-2.5 ${isActive ? "bg-amber-500/[0.04]" : "bg-zinc-900/50"}`}>
 
         <button
           onClick={toggleDone}
@@ -373,29 +370,9 @@ const SubgoalItem = ({
               </div>
 
               <div className="flex gap-1.5">
-                {total > 1 && (
-                  <>
-                    <button
-                      onClick={() => onMove(-1)}
-                      disabled={index === 0}
-                      aria-label="Move up"
-                      className={`${chip} ${chipHover} flex-1 inline-flex items-center justify-center gap-1 py-2 disabled:opacity-30 disabled:pointer-events-none`}
-                    >
-                      <ChevronUp size={12} /> Up
-                    </button>
-                    <button
-                      onClick={() => onMove(1)}
-                      disabled={index === total - 1}
-                      aria-label="Move down"
-                      className={`${chip} ${chipHover} flex-1 inline-flex items-center justify-center gap-1 py-2 disabled:opacity-30 disabled:pointer-events-none`}
-                    >
-                      <ChevronDown size={12} /> Down
-                    </button>
-                  </>
-                )}
                 <button
                   onClick={onRemove}
-                  className={`${chip} flex-1 inline-flex items-center justify-center gap-1 py-2 hover:border-rose-400/30 hover:text-rose-300`}
+                  className={`${chip} w-full inline-flex items-center justify-center gap-1 py-2 hover:border-rose-400/30 hover:text-rose-300`}
                 >
                   <Trash2 size={12} /> Delete
                 </button>
@@ -520,15 +497,6 @@ export const GoalDetailModal = ({ goal, isAdmin, adminKey, syncState, onOps, onR
 
   /** Unfinished order first, finished ones kept behind it. */
   const withFinished = (ids: string[]) => [...ids, ...finished.map((sg) => sg.id)];
-
-  const moveSubgoal = (id: string, dir: -1 | 1) => {
-    const from = subgoals.findIndex((sg) => sg.id === id);
-    const to = from + dir;
-    if (from < 0 || to < 0 || to >= subgoals.length) return;
-    const ids = subgoals.map((sg) => sg.id);
-    [ids[from], ids[to]] = [ids[to], ids[from]];
-    onOps([{ type: "subOrder", id: goal.id, ids: withFinished(ids) }]);
-  };
 
   const reorderSubgoals = (ids: string[]) => {
     if (!isAdmin) return;
@@ -798,20 +766,18 @@ export const GoalDetailModal = ({ goal, isAdmin, adminKey, syncState, onOps, onR
                   onReorder={reorderSubgoals}
                   enabled={isAdmin}
                   layout="list"
+                  swipeRows
                 >
                   <ul className="space-y-1">
-                    {subgoals.map((sg, i) => (
+                    {subgoals.map((sg) => (
                       <SubgoalItem
                         key={sg.id}
                         sg={sg}
-                        index={i}
-                        total={subgoals.length}
                         isAdmin={isAdmin}
                         expanded={expandedId === sg.id}
                         onToggleExpanded={() => setExpandedId((cur) => (cur === sg.id ? null : sg.id))}
                         onChange={changeSubgoal}
                         onRemove={() => removeSubgoal(sg.id)}
-                        onMove={(dir) => moveSubgoal(sg.id, dir)}
                       />
                     ))}
                   </ul>
@@ -820,8 +786,8 @@ export const GoalDetailModal = ({ goal, isAdmin, adminKey, syncState, onOps, onR
 
               {isAdmin && subgoals.length > 1 && (
                 <div className="mt-3 text-[9px] text-zinc-800 uppercase tracking-wider">
-                  <span className="md:hidden">Hold the grip to drag · swipe left to delete</span>
-                  <span className="hidden md:inline">Drag the grip to reorder · drag a row left to delete</span>
+                  <span className="md:hidden">Hold a to-do, then drag to move it · swipe left to delete</span>
+                  <span className="hidden md:inline">Drag a to-do up or down to move it · drag it left to delete</span>
                 </div>
               )}
             </div>

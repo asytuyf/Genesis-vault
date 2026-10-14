@@ -41,6 +41,11 @@ const TOUCH_DELAY_MS = 180;
 const TOUCH_TOLERANCE = 8;
 /** Mouse travel before a press counts as a drag rather than a click. */
 const MOUSE_DISTANCE = 5;
+/**
+ * Rows that also swipe sideways (to delete) only lift on an up-or-down pull:
+ * a mouse that heads sideways first is left to the swipe.
+ */
+const ROW_MOUSE = { distance: { y: MOUSE_DISTANCE }, tolerance: { x: 8 } };
 
 const EnabledContext = createContext(false);
 
@@ -72,6 +77,8 @@ interface SortableListProps {
   enabled?: boolean;
   /** A list runs vertically; a grid can be rearranged in both directions. */
   layout?: "list" | "grid";
+  /** The rows also swipe left, so a sideways pull must not lift them. */
+  swipeRows?: boolean;
   children: ReactNode;
   onDragStateChange?: (draggingId: string | null) => void;
 }
@@ -81,11 +88,12 @@ export function SortableList({
   onReorder,
   enabled = true,
   layout = "list",
+  swipeRows = false,
   children,
   onDragStateChange,
 }: SortableListProps) {
   const sensors = useSensors(
-    useSensor(MouseSensor, { activationConstraint: { distance: MOUSE_DISTANCE } }),
+    useSensor(MouseSensor, { activationConstraint: swipeRows ? ROW_MOUSE : { distance: MOUSE_DISTANCE } }),
     useSensor(TouchSensor, {
       activationConstraint: { delay: TOUCH_DELAY_MS, tolerance: TOUCH_TOLERANCE },
     }),

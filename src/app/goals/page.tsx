@@ -17,6 +17,10 @@ import { ensurePush } from "@/lib/push";
 
 const BASE_TITLE = "GOALS";
 
+/** Every button in the row under the search box: one size for all of them. */
+const headerBtn =
+  "flex items-center justify-center gap-1.5 px-4 py-2.5 sm:min-w-[8.5rem] text-[11px] sm:text-sm font-bold uppercase border transition-colors";
+
 interface GoalItemProps {
   g: Goal;
   isAdmin: boolean;
@@ -480,8 +484,9 @@ export default function DirectiveLog() {
           />
         </div>
 
-        <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-3 sm:gap-4 mt-6">
-          <div className="grid grid-cols-3 sm:flex sm:items-center w-full sm:w-auto">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mt-6">
+          {/* left: how the goals are ordered */}
+          <div className="grid grid-cols-2 sm:flex sm:items-center w-full sm:w-auto">
             {(
               [
                 { value: "custom", label: "Custom" },
@@ -491,9 +496,7 @@ export default function DirectiveLog() {
               <button
                 key={option.value}
                 onClick={() => setSortBy(option.value)}
-                className={`flex items-center justify-center gap-1 px-2 sm:px-4 py-2 text-[10px] sm:text-sm font-bold uppercase border transition-colors ${
-                  index === 0 ? "" : "border-l-0"
-                } ${
+                className={`${headerBtn} ${index === 0 ? "" : "border-l-0"} ${
                   sortBy === option.value
                     ? "bg-emerald-700/30 text-emerald-400 border-emerald-500/30"
                     : "bg-zinc-900/30 text-zinc-600 border-zinc-800 hover:bg-zinc-800/50 hover:text-zinc-400"
@@ -503,29 +506,33 @@ export default function DirectiveLog() {
                 {option.label}
               </button>
             ))}
+          </div>
+
+          {/* right: the board, and a new goal -- same size, side by side */}
+          <div className={`grid ${isAdmin ? "grid-cols-2" : "grid-cols-1"} sm:flex sm:items-center gap-2 w-full sm:w-auto`}>
             <button
               onClick={() => chooseView(view === "board" ? "cards" : "board")}
               aria-pressed={view === "board"}
               title={view === "board" ? "Back to cards" : "All to-dos on a departures board"}
-              className={`flex items-center justify-center gap-1.5 px-2 sm:px-4 py-2 sm:ml-3 text-[10px] sm:text-sm font-bold uppercase border border-l-0 sm:border-l transition-colors ${
+              className={`${headerBtn} ${
                 view === "board"
                   ? "bg-yellow-500/15 text-yellow-400 border-yellow-500/40"
-                  : "bg-zinc-900/30 text-zinc-600 border-zinc-800 hover:bg-zinc-800/50 hover:text-yellow-400"
+                  : "bg-zinc-900/30 text-zinc-500 border-zinc-800 hover:bg-zinc-800/50 hover:text-yellow-400"
               }`}
             >
               <Plane size={12} className="-rotate-45" />
               Board
             </button>
+            {isAdmin && (
+              <button
+                onClick={() => setIsAddGoalModalOpen(true)}
+                className={`${headerBtn} bg-emerald-700/30 text-emerald-400 border-emerald-500/30 hover:bg-emerald-700/50`}
+              >
+                <Plus size={12} />
+                New goal
+              </button>
+            )}
           </div>
-
-          {isAdmin && (
-            <button
-              onClick={() => setIsAddGoalModalOpen(true)}
-              className="flex items-center justify-center gap-2 bg-emerald-700/30 text-emerald-400 px-4 sm:px-5 py-2.5 text-sm sm:text-base font-bold uppercase border border-emerald-500/30 hover:bg-emerald-700/50 transition-colors w-full sm:w-auto"
-            >
-              <Plus size={18} /> ADD NEW GOAL
-            </button>
-          )}
         </div>
       </header>
 
