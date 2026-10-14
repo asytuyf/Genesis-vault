@@ -2,6 +2,7 @@
 
 > **SYSTEM_STATUS:** ONLINE  
 > **SECURITY_LEVEL:** VERIFIED  
+> **UPLINKS:** [Live site](https://genesis.insects.ltd) · [Vercel dashboard](https://vercel.com/asytuyfs-projects/genisis-vault) · [Deployments](https://vercel.com/asytuyfs-projects/genisis-vault/deployments) · [Logs](https://vercel.com/asytuyfs-projects/genisis-vault/logs) · [Env vars](https://vercel.com/asytuyfs-projects/genisis-vault/settings/environment-variables)  
 
 A high-fidelity, industrial-themed directory for my personal projects. It features a kinetic hazard frame, draggable holographic stickers, and a live data uplink that fetches repository data directly from GitHub.
 
