@@ -5,12 +5,12 @@ import { SortableList, useSortableItem } from "@/components/Sortable";
 import {
   X, Tag, Clock, Activity, Timer, AlertTriangle, Pencil, Check, GripVertical,
   ChevronUp, ChevronDown, SlidersHorizontal, Play, Pause, RotateCcw, Hourglass,
-  CalendarClock, Trash2, Lock, Eye, CheckCheck, Hammer,
+  CalendarClock, Trash2, Lock, Eye, CheckCheck, Hammer, Snail,
 } from "lucide-react";
 import {
   type Goal, type GoalOp, type GoalPatch, type SubGoal,
   formatCountdown, formatClock, formatDuration, formatTimeLeft, hoursFromNow,
-  subClearsAt, timerRemaining, timerRunning, timerFinished,
+  subClearsAt, timerRemaining, timerRunning, timerFinished, toggleSubDone, lateText,
 } from "@/lib/goals";
 import { requestNotifPermission } from "@/lib/notify";
 import type { SyncState } from "@/lib/useGoalSync";
@@ -102,20 +102,7 @@ const SubgoalItem = ({
 
   const toggleDone = () => {
     if (!isAdmin) return;
-    const completed = !sg.completed;
-    const next: SubGoal = { ...sg, completed };
-    if (completed) {
-      // Finishing stops the stopwatch, clears the working-on flag, and starts
-      // the day it spends in the Done list.
-      delete next.active;
-      next.completedAt = new Date().toISOString();
-      if (next.timer?.startedAt) {
-        next.timer = { duration: next.timer.duration, remaining: timerRemaining(next.timer) };
-      }
-    } else {
-      delete next.completedAt;
-    }
-    onChange(next);
+    onChange(toggleSubDone(sg));
   };
 
   const toggleActive = () => {
@@ -263,14 +250,14 @@ const SubgoalItem = ({
                     sg.completed
                       ? "border-zinc-800 text-zinc-700"
                       : cd.overdue
-                        ? "bg-red-500/10 border-red-500/30 text-red-400"
+                        ? "bg-orange-300/[0.06] border-orange-300/20 text-orange-200/70"
                         : cd.urgent
                           ? "bg-yellow-500/10 border-yellow-500/30 text-yellow-400"
                           : "bg-zinc-900/60 border-zinc-800 text-zinc-500"
                   }`}
                 >
-                  {cd.overdue ? <AlertTriangle size={9} /> : <CalendarClock size={9} />}
-                  {cd.text}
+                  {cd.overdue ? <Snail size={9} /> : <CalendarClock size={9} />}
+                  {cd.overdue ? lateText(cd) : cd.text}
                 </span>
               )}
             </div>

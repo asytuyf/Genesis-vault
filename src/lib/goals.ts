@@ -329,3 +329,25 @@ export const formatTimeLeft = (ms: number): string => {
 /** Sub-tasks flagged as being worked on. */
 export const activeSubgoals = (goal: Goal): SubGoal[] =>
   (goal.subgoals ?? []).filter((sg) => sg.active && !sg.completed);
+
+/**
+ * The to-do ticked or unticked. Finishing stops its timer, clears the
+ * working-on flag, and starts the day it spends in the Done list.
+ */
+export const toggleSubDone = (sg: SubGoal): SubGoal => {
+  const completed = !sg.completed;
+  const next: SubGoal = { ...sg, completed };
+  if (completed) {
+    delete next.active;
+    next.completedAt = new Date().toISOString();
+    if (next.timer?.startedAt) {
+      next.timer = { duration: next.timer.duration, remaining: timerRemaining(next.timer) };
+    }
+  } else {
+    delete next.completedAt;
+  }
+  return next;
+};
+
+/** "2d 3h late" -- a softer way to say a due time has passed. */
+export const lateText = (cd: Countdown): string => cd.text.replace("overdue", "late");

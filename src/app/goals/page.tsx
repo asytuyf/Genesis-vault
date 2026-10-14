@@ -1,9 +1,10 @@
 "use client";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Tag, Clock, Activity, Hash, Box, Trash2, Plus, Terminal, ListChecks, Timer, ArrowUpDown, Lock, AlertTriangle } from "lucide-react";
+import { Tag, Clock, Activity, Hash, Box, Trash2, Plus, Terminal, ListChecks, Timer, ArrowUpDown, Lock, Snail, Plane } from "lucide-react";
 import { AddGoalForm } from "@/components/AddGoalForm";
 import { GoalDetailModal } from "@/components/GoalDetailModal";
+import { GoalBoard } from "@/components/GoalBoard";
 import {
   type Goal, type GoalOp, type SubGoal,
   DONE_TTL_MS, activeSubgoals, formatClock, formatCountdown, timerEndsAt, timerRemaining, timerRunning,
@@ -84,10 +85,10 @@ const GoalItem = ({ g, isAdmin, nukeGoal, setSelectedId }: GoalItemProps) => {
         {overdue.length > 0 && (
           <div
             title={`Overdue: ${overdue.map((s) => s.text).join(", ")}`}
-            className="inline-flex flex-none items-center gap-1.5 px-2 py-0.5 -rotate-2 bg-red-500 text-black border border-black/40 rounded-sm shadow-[2px_2px_0_rgba(0,0,0,0.6)] text-[10px] font-black uppercase tracking-widest"
+            className="inline-flex flex-none items-center gap-1.5 px-2 py-0.5 -rotate-2 bg-orange-300/[0.07] text-orange-200/70 border border-orange-300/20 rounded-full text-[10px] font-bold lowercase tracking-wider"
           >
-            <AlertTriangle size={10} strokeWidth={3} />
-            {overdue.length > 1 ? `${overdue.length} overdue` : "Overdue"}
+            <Snail size={11} />
+            {overdue.length > 1 ? `${overdue.length} running late` : "running late"}
           </div>
         )}
         {g.private && (
@@ -203,7 +204,15 @@ export default function DirectiveLog() {
     typeof window === "undefined" ? null : new URLSearchParams(window.location.search).get("goal")
   );
   const [, forceUpdate] = useState(0);
-  const [sortBy, setSortBy] = useState<"custom" | "newest" | "deadline" | "priority" | "oldest">("custom");
+  const [sortBy, setSortBy] = useState<"custom" | "newest">("custom");
+  // Cards, or every goal's to-dos on one departures board. Remembered per device.
+  const [view, setView] = useState<"cards" | "board">("cards");
+  const chooseView = (next: "cards" | "board") => {
+    setView(next);
+    try {
+      window.localStorage.setItem("goals_view", next);
+    } catch {}
+  };
 
   const { goals, loading, loadFailed, syncState, queueOps, retrySync, refresh } = useGoalSync(password, isAdmin);
 
@@ -213,6 +222,9 @@ export default function DirectiveLog() {
     const savedMode = window.localStorage.getItem("goals_admin_mode") === "1";
     setPassword(savedKey);
     setIsAdmin(!!savedKey && savedMode);
+    try {
+      if (window.localStorage.getItem("goals_view") === "board") setView("board");
+    } catch {}
 
     const keyHandler = (event: Event) => {
       const detail = (event as CustomEvent<string>).detail;
@@ -391,31 +403,12 @@ export default function DirectiveLog() {
     g.project?.toLowerCase().includes(search.toLowerCase())
   );
 
-  const sortedGoals = [...filtered].sort((a, b) => {
-    switch (sortBy) {
-      case "deadline":
-        if (a.deadline && !b.deadline) return -1;
-        if (!a.deadline && b.deadline) return 1;
-        if (a.deadline && b.deadline) {
-          return new Date(a.deadline).getTime() - new Date(b.deadline).getTime();
-        }
-        return 0;
-      case "priority":
-        const priorityOrder = { High: 0, Medium: 1, Low: 2 };
-        return (priorityOrder[a.priority as keyof typeof priorityOrder] || 2) -
-               (priorityOrder[b.priority as keyof typeof priorityOrder] || 2);
-      case "oldest":
-        return new Date(a.date).getTime() - new Date(b.date).getTime();
-      case "newest":
-        return new Date(b.date).getTime() - new Date(a.date).getTime();
-      case "custom":
-      default:
-        return 0;
-    }
-  });
+  const sortedGoals = [...filtered].sort((a, b) =>
+    sortBy === "newest" ? new Date(b.date).getTime() - new Date(a.date).getTime() : 0
+  );
 
   // Dragging is only honest while the shown order is the stored one.
-  const canRearrange = isAdmin && sortBy === "custom" && search.trim() === "";
+  const canRearrange = isAdmin && view === "cards" && sortBy === "custom" && search.trim() === "";
 
   const reorderGoals = (ids: string[]) => {
     if (!canRearrange) return;
@@ -488,17 +481,16 @@ export default function DirectiveLog() {
         </div>
 
         <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-3 sm:gap-4 mt-6">
-          <div className="grid grid-cols-5 sm:flex sm:items-center w-full sm:w-auto">
-            {[
-              { value: "custom", label: "Custom" },
-              { value: "newest", label: "New" },
-              { value: "deadline", label: "Due" },
-              { value: "priority", label: "Priority" },
-              { value: "oldest", label: "Old" },
-            ].map((option, index) => (
+          <div className="grid grid-cols-3 sm:flex sm:items-center w-full sm:w-auto">
+            {(
+              [
+                { value: "custom", label: "Custom" },
+                { value: "newest", label: "Newest" },
+              ] as const
+            ).map((option, index) => (
               <button
                 key={option.value}
-                onClick={() => setSortBy(option.value as typeof sortBy)}
+                onClick={() => setSortBy(option.value)}
                 className={`flex items-center justify-center gap-1 px-2 sm:px-4 py-2 text-[10px] sm:text-sm font-bold uppercase border transition-colors ${
                   index === 0 ? "" : "border-l-0"
                 } ${
@@ -508,10 +500,22 @@ export default function DirectiveLog() {
                 }`}
               >
                 {index === 0 && <ArrowUpDown size={12} className="hidden sm:block" />}
-                <span className="sm:hidden">{option.label}</span>
-                <span className="hidden sm:inline">{option.value === "custom" ? "Custom" : option.value === "newest" ? "Newest" : option.value === "deadline" ? "Deadline" : option.value === "priority" ? "Priority" : "Oldest"}</span>
+                {option.label}
               </button>
             ))}
+            <button
+              onClick={() => chooseView(view === "board" ? "cards" : "board")}
+              aria-pressed={view === "board"}
+              title={view === "board" ? "Back to cards" : "All to-dos on a departures board"}
+              className={`flex items-center justify-center gap-1.5 px-2 sm:px-4 py-2 sm:ml-3 text-[10px] sm:text-sm font-bold uppercase border border-l-0 sm:border-l transition-colors ${
+                view === "board"
+                  ? "bg-yellow-500/15 text-yellow-400 border-yellow-500/40"
+                  : "bg-zinc-900/30 text-zinc-600 border-zinc-800 hover:bg-zinc-800/50 hover:text-yellow-400"
+              }`}
+            >
+              <Plane size={12} className="-rotate-45" />
+              Board
+            </button>
           </div>
 
           {isAdmin && (
@@ -570,6 +574,8 @@ export default function DirectiveLog() {
             Zero_Directives_Found
           </div>
         </div>
+      ) : view === "board" ? (
+        <GoalBoard goals={sortedGoals} isAdmin={isAdmin} onOps={handleOps} onOpen={setSelectedId} />
       ) : (
         <SortableList
           ids={sortedGoals.map((g) => g.id)}
