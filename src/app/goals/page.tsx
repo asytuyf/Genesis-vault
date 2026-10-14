@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Tag, Clock, Activity, Hash, Box, Trash2, Plus, Terminal, ListChecks, Timer, ArrowUpDown, Lock } from "lucide-react";
+import { Tag, Clock, Activity, Hash, Box, Trash2, Plus, Terminal, ListChecks, Timer, ArrowUpDown, Lock, AlertTriangle } from "lucide-react";
 import { AddGoalForm } from "@/components/AddGoalForm";
 import { GoalDetailModal } from "@/components/GoalDetailModal";
 import {
@@ -37,6 +37,9 @@ const GoalItem = ({ g, isAdmin, nukeGoal, setSelectedId }: GoalItemProps) => {
   const doneCount = subgoals.filter((s) => s.completed).length;
   const active = activeSubgoals(g);
   const running = subgoals.find((s) => timerRunning(s.timer));
+  // Open to-dos whose due time has passed. The page redraws every minute, so
+  // the sticker turns up on its own once one runs late.
+  const overdue = subgoals.filter((s) => !s.completed && s.deadline && formatCountdown(s.deadline).overdue);
 
   return (
     <div
@@ -78,6 +81,15 @@ const GoalItem = ({ g, isAdmin, nukeGoal, setSelectedId }: GoalItemProps) => {
           <Tag size={10} />
           <span className="whitespace-normal break-words">{g.project}</span>
         </div>
+        {overdue.length > 0 && (
+          <div
+            title={`Overdue: ${overdue.map((s) => s.text).join(", ")}`}
+            className="inline-flex flex-none items-center gap-1.5 px-2 py-0.5 -rotate-2 bg-red-500 text-black border border-black/40 rounded-sm shadow-[2px_2px_0_rgba(0,0,0,0.6)] text-[10px] font-black uppercase tracking-widest"
+          >
+            <AlertTriangle size={10} strokeWidth={3} />
+            {overdue.length > 1 ? `${overdue.length} overdue` : "Overdue"}
+          </div>
+        )}
         {g.private && (
           <div
             title="Only visible with the admin key"
@@ -143,7 +155,7 @@ const GoalItem = ({ g, isAdmin, nukeGoal, setSelectedId }: GoalItemProps) => {
           <div className="flex items-center justify-between text-[10px] font-bold uppercase mb-2">
             <span className="flex items-center gap-1.5 text-zinc-600">
               <ListChecks size={12} />
-              Sub-tasks
+              To-dos
             </span>
             <span className={doneCount === subgoals.length ? 'text-emerald-400' : 'text-zinc-600'}>
               {doneCount}/{subgoals.length}

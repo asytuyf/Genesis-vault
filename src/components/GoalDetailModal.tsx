@@ -5,7 +5,7 @@ import { SortableList, useSortableItem } from "@/components/Sortable";
 import {
   X, Tag, Clock, Activity, Timer, AlertTriangle, Pencil, Check, GripVertical,
   ChevronUp, ChevronDown, SlidersHorizontal, Play, Pause, RotateCcw, Hourglass,
-  CalendarClock, Trash2, Lock, Eye, CheckCheck, Undo2,
+  CalendarClock, Trash2, Lock, Eye, CheckCheck, Hammer,
 } from "lucide-react";
 import {
   type Goal, type GoalOp, type GoalPatch, type SubGoal,
@@ -26,8 +26,6 @@ const chip =
   "px-2.5 py-1 bg-zinc-900/50 border border-zinc-800 text-zinc-500 text-[10px] font-bold uppercase transition-colors";
 const chipHover = "hover:border-emerald-500/30 hover:text-emerald-400";
 
-const TIMER_PRESETS = [5, 15, 25, 45, 60, 120];
-
 const DEADLINE_PRESETS = [
   { label: "1h", hours: 1 },
   { label: "3h", hours: 3 },
@@ -38,6 +36,21 @@ const DEADLINE_PRESETS = [
   { label: "1w", hours: 168 },
 ];
 
+const TIME_UNITS = [
+  { value: "m", label: "minutes", seconds: 60 },
+  { value: "h", label: "hours", seconds: 3600 },
+  { value: "d", label: "days", seconds: 86400 },
+] as const;
+type TimeUnit = (typeof TIME_UNITS)[number]["value"];
+
+/** The biggest unit a duration fits into evenly, so 7200s reads as "2 hours". */
+const splitDuration = (seconds: number): { amount: string; unit: TimeUnit } => {
+  for (const u of [...TIME_UNITS].reverse()) {
+    if (seconds >= u.seconds && seconds % u.seconds === 0) return { amount: String(seconds / u.seconds), unit: u.value };
+  }
+  return { amount: String(Math.max(1, Math.round(seconds / 60))), unit: "m" };
+};
+
 const fmtDateTime = (iso: string, withYear = false) =>
   `${new Date(iso).toLocaleDateString([], {
     weekday: "short",
@@ -46,7 +59,12 @@ const fmtDateTime = (iso: string, withYear = false) =>
     ...(withYear ? { year: "numeric" } : {}),
   })} at ${new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })}`;
 
-// --- one sub-task -----------------------------------------------------------
+const field =
+  "bg-black border border-zinc-800 px-3 py-2 text-xs outline-none focus:border-emerald-500/50 text-zinc-300 font-mono";
+const clearBtn =
+  "px-3 py-2 border border-zinc-800 bg-zinc-900/50 text-zinc-500 text-[10px] font-bold uppercase transition-colors hover:border-red-500/30 hover:text-red-400 disabled:opacity-30 disabled:pointer-events-none";
+
+// --- one to-do --------------------------------------------------------------
 
 interface SubgoalItemProps {
   sg: SubGoal;
@@ -66,7 +84,8 @@ const SubgoalItem = ({
   const { handle, setNodeRef, style, isDragging, enabled: canDrag } = useSortableItem(sg.id);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(sg.text);
-  const [customMin, setCustomMin] = useState("");
+  const [timeAmount, setTimeAmount] = useState(() => (sg.timer ? splitDuration(sg.timer.duration).amount : ""));
+  const [timeUnit, setTimeUnit] = useState<TimeUnit>(() => (sg.timer ? splitDuration(sg.timer.duration).unit : "m"));
 
   const running = timerRunning(sg.timer);
   const finished = timerFinished(sg.timer);
@@ -107,10 +126,12 @@ const SubgoalItem = ({
     onChange(next);
   };
 
-  const setTimer = (minutes: number) => {
-    const duration = Math.max(1, Math.round(minutes)) * 60;
+  const applyTimer = () => {
+    const amount = Number(timeAmount);
+    if (!(amount > 0)) return;
+    const unit = TIME_UNITS.find((u) => u.value === timeUnit) ?? TIME_UNITS[0];
+    const duration = Math.max(60, Math.round(amount * unit.seconds));
     onChange({ ...sg, timer: { duration, remaining: duration } });
-    setCustomMin("");
   };
 
   const startPause = () => {
@@ -128,14 +149,10 @@ const SubgoalItem = ({
     });
   };
 
-  const resetTimer = () => {
-    if (!sg.timer) return;
-    onChange({ ...sg, timer: { duration: sg.timer.duration, remaining: sg.timer.duration } });
-  };
-
   const clearTimer = () => {
     const next = { ...sg };
     delete next.timer;
+    setTimeAmount("");
     onChange(next);
   };
 
@@ -162,14 +179,14 @@ const SubgoalItem = ({
     >
       {isActive && <span className="absolute left-0 top-0 bottom-0 w-[2px] bg-amber-400 motion-safe:animate-pulse" />}
 
-      <div className="flex items-start gap-2 p-2.5 pl-3">
+      <div className="flex items-start gap-1 p-2 pl-2.5">
         {isAdmin && canDrag && (
           <button
             type="button"
             {...handle}
             title="Hold and drag to reorder"
-            aria-label="Reorder this sub-task"
-            className="shrink-0 -ml-1.5 -my-1 px-2 py-2.5 grid place-items-center text-zinc-700 hover:text-zinc-400 transition-colors select-none cursor-grab active:cursor-grabbing"
+            aria-label="Reorder this to-do"
+            className="shrink-0 -ml-1.5 h-9 w-7 grid place-items-center text-zinc-700 hover:text-zinc-400 transition-colors select-none cursor-grab active:cursor-grabbing"
           >
             <GripVertical size={14} />
           </button>
@@ -178,35 +195,16 @@ const SubgoalItem = ({
         <button
           onClick={toggleDone}
           disabled={!isAdmin}
-          className={`font-mono text-sm mt-0.5 transition-colors ${isAdmin ? "cursor-pointer" : "cursor-default"}`}
+          className={`shrink-0 h-9 w-9 grid place-items-center font-mono text-sm transition-colors ${isAdmin ? "cursor-pointer" : "cursor-default"}`}
           title={sg.completed ? "Mark as not done" : "Mark as done"}
+          aria-label={sg.completed ? "Mark as not done" : "Mark as done"}
         >
           <span className={sg.completed ? "text-emerald-500" : "text-zinc-700 hover:text-zinc-500"}>
             [{sg.completed ? <span className="text-emerald-400">■</span> : <span className="text-zinc-800">&nbsp;</span>}]
           </span>
         </button>
 
-        <button
-          onClick={toggleActive}
-          disabled={!isAdmin || sg.completed}
-          title={isActive ? "Stop working on this" : "Working on this"}
-          aria-pressed={isActive}
-          className={`mt-[7px] h-3 w-3 shrink-0 grid place-items-center ${
-            isAdmin && !sg.completed ? "cursor-pointer" : "cursor-default"
-          }`}
-        >
-          <span
-            className={`block h-2 w-2 rounded-full transition-all ${
-              isActive
-                ? "bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.9)] motion-safe:animate-pulse"
-                : sg.completed
-                  ? "border border-zinc-800"
-                  : "border border-zinc-700 group-hover:border-amber-500/60"
-            }`}
-          />
-        </button>
-
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 py-1.5 pl-1">
           {editing ? (
             <input
               type="text"
@@ -230,7 +228,7 @@ const SubgoalItem = ({
                 setDraft(sg.text);
                 setEditing(true);
               }}
-              className={`block text-sm font-mono break-words leading-snug py-0.5 ${
+              className={`block text-sm font-mono break-words leading-snug ${
                 isAdmin ? "cursor-text hover:text-white" : ""
               } ${sg.completed ? "text-zinc-600 line-through" : isActive ? "text-zinc-200" : "text-zinc-400"}`}
             >
@@ -271,7 +269,7 @@ const SubgoalItem = ({
                           : "bg-zinc-900/60 border-zinc-800 text-zinc-500"
                   }`}
                 >
-                  <CalendarClock size={9} />
+                  {cd.overdue ? <AlertTriangle size={9} /> : <CalendarClock size={9} />}
                   {cd.text}
                 </span>
               )}
@@ -280,39 +278,33 @@ const SubgoalItem = ({
         </div>
 
         {isAdmin && (
-          <div className="flex items-center gap-0.5 -mr-1 shrink-0">
+          <div className="flex items-center shrink-0 -mr-1">
+            {/* Working on it: far from the tick box, so a thumb cannot hit the wrong one. */}
             <button
-              onClick={() => onMove(-1)}
-              disabled={index === 0}
-              title="Move up"
-              aria-label="Move up"
-              className="p-1.5 text-zinc-700 hover:text-emerald-400 disabled:opacity-20 disabled:hover:text-zinc-700 transition-colors md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
+              onClick={toggleActive}
+              title={isActive ? "Stop working on this" : "Working on this"}
+              aria-label={isActive ? "Stop working on this" : "Working on this"}
+              aria-pressed={isActive}
+              className={`h-9 w-9 grid place-items-center transition-colors ${
+                isActive ? "text-amber-400" : "text-zinc-700 hover:text-amber-400"
+              }`}
             >
-              <ChevronUp size={14} />
-            </button>
-            <button
-              onClick={() => onMove(1)}
-              disabled={index === total - 1}
-              title="Move down"
-              aria-label="Move down"
-              className="p-1.5 text-zinc-700 hover:text-emerald-400 disabled:opacity-20 disabled:hover:text-zinc-700 transition-colors md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
-            >
-              <ChevronDown size={14} />
+              <Hammer size={15} className={isActive ? "motion-safe:animate-pulse" : ""} />
             </button>
             <button
               onClick={onToggleExpanded}
-              title="Timer, deadline"
-              aria-label="Sub-task options"
+              title="Timer, due date"
+              aria-label="To-do options"
               aria-expanded={expanded}
-              className={`p-1.5 transition-colors ${expanded ? "text-emerald-400" : "text-zinc-700 hover:text-zinc-300"}`}
+              className={`h-9 w-8 grid place-items-center transition-colors ${expanded ? "text-emerald-400" : "text-zinc-700 hover:text-zinc-300"}`}
             >
               <SlidersHorizontal size={14} />
             </button>
             <button
               onClick={onRemove}
-              title="Delete sub-task"
-              aria-label="Delete sub-task"
-              className="p-1.5 text-zinc-700 hover:text-red-400 transition-colors"
+              title="Delete to-do"
+              aria-label="Delete to-do"
+              className="h-9 w-8 grid place-items-center text-zinc-700 hover:text-red-400 transition-colors"
             >
               <Trash2 size={13} />
             </button>
@@ -329,55 +321,47 @@ const SubgoalItem = ({
             transition={{ duration: 0.18 }}
             className="overflow-hidden"
           >
-            <div className="border-t border-zinc-800/80 px-3 py-3 space-y-3 bg-black/40">
+            <div className="border-t border-zinc-800/80 px-3 py-3 space-y-4 bg-black/40">
               <div>
                 <Label>
                   <span className="inline-flex items-center gap-1.5">
-                    <Hourglass size={9} /> Time-box
+                    <Hourglass size={9} /> Timer
                   </span>
                 </Label>
-                <div className="flex flex-wrap gap-1">
-                  {TIMER_PRESETS.map((min) => (
-                    <button
-                      key={min}
-                      onClick={() => setTimer(min)}
-                      className={`${chip} ${chipHover} ${
-                        sg.timer?.duration === min * 60 ? "border-emerald-500/40 text-emerald-400" : ""
-                      }`}
-                    >
-                      {formatDuration(min * 60)}
-                    </button>
-                  ))}
-                  <div className="flex items-stretch">
-                    <input
-                      type="number"
-                      min={1}
-                      inputMode="numeric"
-                      placeholder="min"
-                      value={customMin}
-                      onChange={(e) => setCustomMin(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && Number(customMin) > 0) setTimer(Number(customMin));
-                      }}
-                      className="w-14 bg-black border border-zinc-800 border-r-0 px-2 py-1 text-[10px] font-mono text-zinc-300 outline-none focus:border-emerald-500/50 placeholder:text-zinc-700"
-                    />
-                    <button
-                      onClick={() => Number(customMin) > 0 && setTimer(Number(customMin))}
-                      className={`${chip} ${chipHover}`}
-                    >
-                      Set
-                    </button>
-                  </div>
-                  {sg.timer && (
-                    <>
-                      <button onClick={resetTimer} className={`${chip} ${chipHover} inline-flex items-center gap-1`}>
-                        <RotateCcw size={9} /> Reset
-                      </button>
-                      <button onClick={clearTimer} className={`${chip} hover:border-red-500/30 hover:text-red-400`}>
-                        Clear
-                      </button>
-                    </>
-                  )}
+                <div className="flex gap-1.5">
+                  <input
+                    type="number"
+                    min={1}
+                    inputMode="numeric"
+                    placeholder="25"
+                    aria-label="Timer length"
+                    value={timeAmount}
+                    onChange={(e) => setTimeAmount(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && applyTimer()}
+                    className={`${field} w-16 min-w-0`}
+                  />
+                  <select
+                    value={timeUnit}
+                    aria-label="Timer unit"
+                    onChange={(e) => setTimeUnit(e.target.value as TimeUnit)}
+                    className={`${field} flex-1 min-w-0`}
+                  >
+                    {TIME_UNITS.map((u) => (
+                      <option key={u.value} value={u.value}>
+                        {u.label}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={applyTimer}
+                    disabled={!(Number(timeAmount) > 0)}
+                    className="px-3 py-2 border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 text-[10px] font-bold uppercase transition-colors hover:bg-emerald-500/20 disabled:opacity-30 disabled:pointer-events-none"
+                  >
+                    Set
+                  </button>
+                  <button onClick={clearTimer} disabled={!sg.timer} className={clearBtn}>
+                    Clear
+                  </button>
                 </div>
               </div>
 
@@ -387,26 +371,38 @@ const SubgoalItem = ({
                     <CalendarClock size={9} /> Due
                   </span>
                 </Label>
-                <div className="flex flex-wrap gap-1 mb-2">
-                  {DEADLINE_PRESETS.map((p) => (
-                    <button key={p.label} onClick={() => setDeadline(hoursFromNow(p.hours))} className={`${chip} ${chipHover}`}>
-                      +{p.label}
-                    </button>
-                  ))}
-                  {sg.deadline && (
-                    <button onClick={() => setDeadline("")} className={`${chip} hover:border-red-500/30 hover:text-red-400`}>
-                      Clear
-                    </button>
-                  )}
+                <div className="flex gap-1.5">
+                  <input
+                    type="datetime-local"
+                    aria-label="Due date and time"
+                    value={sg.deadline || ""}
+                    onChange={(e) => setDeadline(e.target.value)}
+                    className={`${field} flex-1 min-w-0`}
+                  />
+                  <button onClick={() => setDeadline("")} disabled={!sg.deadline} className={clearBtn}>
+                    Clear
+                  </button>
                 </div>
-                <input
-                  type="datetime-local"
-                  value={sg.deadline || ""}
-                  onChange={(e) => setDeadline(e.target.value)}
-                  className="w-full bg-black border border-zinc-800 px-3 py-2 text-xs outline-none focus:border-emerald-500/50 text-zinc-300 font-mono"
-                />
               </div>
 
+              {total > 1 && (
+                <div className="flex gap-1.5">
+                  <button
+                    onClick={() => onMove(-1)}
+                    disabled={index === 0}
+                    className={`${chip} ${chipHover} flex-1 inline-flex items-center justify-center gap-1 py-2 disabled:opacity-30 disabled:pointer-events-none`}
+                  >
+                    <ChevronUp size={12} /> Move up
+                  </button>
+                  <button
+                    onClick={() => onMove(1)}
+                    disabled={index === total - 1}
+                    className={`${chip} ${chipHover} flex-1 inline-flex items-center justify-center gap-1 py-2 disabled:opacity-30 disabled:pointer-events-none`}
+                  >
+                    <ChevronDown size={12} /> Move down
+                  </button>
+                </div>
+              )}
             </div>
           </motion.div>
         )}
@@ -722,7 +718,7 @@ export const GoalDetailModal = ({ goal, isAdmin, adminKey, syncState, onOps, onR
           <div className="flex -mb-px">
             {(
               [
-                { key: "tasks", label: "Tasks", meta: subgoals.length ? `${subgoals.length}` : "" },
+                { key: "tasks", label: "To-dos", meta: subgoals.length ? `${subgoals.length}` : "" },
                 { key: "done", label: "Done", meta: done ? `${done}` : "" },
                 { key: "info", label: "Info", meta: "" },
               ] as const
@@ -772,7 +768,7 @@ export const GoalDetailModal = ({ goal, isAdmin, adminKey, syncState, onOps, onR
 
               {subgoals.length === 0 ? (
                 <div className="text-zinc-700 text-sm py-10 text-center border border-dashed border-zinc-800 uppercase">
-                  {done > 0 ? "All_Done" : "No_Sub-Tasks_Found"}
+                  {done > 0 ? "All_Done" : "No_To-Dos_Yet"}
                   {isAdmin && (
                     <div className="mt-2 text-[10px] text-zinc-800 normal-case">
                       {done > 0 ? "Nothing left to do here." : "Add the first one below."}
@@ -807,8 +803,8 @@ export const GoalDetailModal = ({ goal, isAdmin, adminKey, syncState, onOps, onR
 
               {isAdmin && subgoals.length > 1 && (
                 <div className="mt-3 text-[9px] text-zinc-800 uppercase tracking-wider">
-                  <span className="md:hidden">Hold the grip to drag, or tap the arrows</span>
-                  <span className="hidden md:inline">Drag the grip, or use the arrows, to reorder</span>
+                  <span className="md:hidden">Hold the grip to drag</span>
+                  <span className="hidden md:inline">Drag the grip to reorder</span>
                 </div>
               )}
             </div>
@@ -818,14 +814,14 @@ export const GoalDetailModal = ({ goal, isAdmin, adminKey, syncState, onOps, onR
                 <div className="text-zinc-700 text-sm py-10 text-center border border-dashed border-zinc-800 uppercase">
                   Nothing_Finished_Yet
                   <div className="mt-2 text-[10px] text-zinc-800 normal-case">
-                    Ticked sub-tasks rest here for a day before they clear.
+                    Ticked to-dos rest here for a day before they clear. Untick one to bring it back.
                   </div>
                 </div>
               ) : (
                 <>
                   <div className="flex items-center gap-2 mb-4 text-[10px] text-zinc-700 uppercase tracking-wider">
                     <CheckCheck size={12} className="text-emerald-700" />
-                    Clears itself a day after you tick it
+                    Clears a day after you tick it · untick to bring back
                   </div>
                   <ul className="space-y-1">
                     {finished.map((sg) => {
@@ -833,11 +829,19 @@ export const GoalDetailModal = ({ goal, isAdmin, adminKey, syncState, onOps, onR
                       return (
                         <li
                           key={sg.id}
-                          className="group flex items-start gap-3 p-2.5 pl-3 border border-zinc-800 bg-zinc-900/30"
+                          className="group flex items-start gap-2 p-2.5 pl-2 border border-zinc-800 bg-zinc-900/30"
                         >
-                          <span className="font-mono text-sm mt-0.5 text-emerald-500">
-                            [<span className="text-emerald-400">■</span>]
-                          </span>
+                          <button
+                            onClick={() => restoreSubgoal(sg)}
+                            disabled={!isAdmin}
+                            title="Untick to put it back on the list"
+                            aria-label="Mark as not done"
+                            className={`shrink-0 -my-1.5 -ml-1 h-9 w-9 grid place-items-center font-mono text-sm text-emerald-500 ${
+                              isAdmin ? "cursor-pointer hover:text-zinc-500" : "cursor-default"
+                            }`}
+                          >
+                            <span>[<span className="text-emerald-400">■</span>]</span>
+                          </button>
                           <span className="flex-1 min-w-0">
                             <span className="block text-sm font-mono text-zinc-600 line-through break-words leading-snug">
                               {sg.text}
@@ -848,14 +852,6 @@ export const GoalDetailModal = ({ goal, isAdmin, adminKey, syncState, onOps, onR
                           </span>
                           {isAdmin && (
                             <span className="flex items-center gap-0.5 shrink-0">
-                              <button
-                                onClick={() => restoreSubgoal(sg)}
-                                title="Put it back on the list"
-                                aria-label="Put it back on the list"
-                                className="p-1.5 text-zinc-700 hover:text-emerald-400 transition-colors"
-                              >
-                                <Undo2 size={14} />
-                              </button>
                               <button
                                 onClick={() => removeSubgoal(sg.id)}
                                 title="Clear it now"
@@ -1086,7 +1082,7 @@ export const GoalDetailModal = ({ goal, isAdmin, adminKey, syncState, onOps, onR
               <div className="flex gap-2">
                 <input
                   type="text"
-                  placeholder="$ add sub-task..."
+                  placeholder="$ add a to-do..."
                   value={newSubgoal}
                   onChange={(e) => setNewSubgoal(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && addSubgoal()}
@@ -1094,7 +1090,7 @@ export const GoalDetailModal = ({ goal, isAdmin, adminKey, syncState, onOps, onR
                 />
                 <button
                   onClick={addSubgoal}
-                  aria-label="Add sub-task"
+                  aria-label="Add to-do"
                   className="px-3 py-2 bg-zinc-900 border border-zinc-800 text-zinc-600 hover:text-emerald-400 hover:border-emerald-500/30 transition-colors font-mono text-sm"
                 >
                   [+]

@@ -289,12 +289,16 @@ export const formatClock = (seconds: number): string => {
   return `${h > 0 ? `${h}:` : ""}${mm}:${String(sec).padStart(2, "0")}`;
 };
 
-/** "25m", "1h 30m" -- short label for a duration. */
+/** "25m", "1h 30m", "2d 4h" -- short label for a duration. */
 export const formatDuration = (seconds: number): string => {
   const m = Math.round(seconds / 60);
   if (m < 60) return `${m}m`;
   const h = Math.floor(m / 60);
   const rest = m % 60;
+  if (h >= 24) {
+    const d = Math.floor(h / 24);
+    return h % 24 ? `${d}d ${h % 24}h` : `${d}d`;
+  }
   return rest ? `${h}h ${rest}m` : `${h}h`;
 };
 

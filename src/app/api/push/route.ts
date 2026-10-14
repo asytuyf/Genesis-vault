@@ -69,7 +69,7 @@ export async function POST(req: Request) {
         state,
         {
           title: 'Genesis Vault',
-          body: 'Reminders are on. Sub-task deadlines will show up here.',
+          body: 'Reminders are on. To-do due times will show up here.',
           tag: 'test',
           url: '/goals',
         },

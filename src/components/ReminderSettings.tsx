@@ -77,7 +77,7 @@ export function GoalReminders({ goal, onChange }: GoalRemindersProps) {
     <div>
       <Label>
         <span className="inline-flex items-center gap-1.5">
-          <Bell size={9} /> Sub-task reminders
+          <Bell size={9} /> To-do reminders
         </span>
       </Label>
 
@@ -107,7 +107,7 @@ export function GoalReminders({ goal, onChange }: GoalRemindersProps) {
       {settings.enabled && (
         <div className="mt-3 space-y-3">
           <div>
-            <div className="text-[10px] text-zinc-600 mb-1.5">Remind me before each sub-task is due:</div>
+            <div className="text-[10px] text-zinc-600 mb-1.5">Remind me before each to-do is due:</div>
             <div className="flex flex-wrap gap-1">
               {PRESETS.map((min) => (
                 <button
@@ -176,7 +176,7 @@ export function GoalReminders({ goal, onChange }: GoalRemindersProps) {
               <p className="text-[10px] text-zinc-600 leading-relaxed">
                 {withDeadline
                   ? "Nothing left to remind you of: every reminder time for these deadlines has passed."
-                  : "No open sub-task has a deadline yet. Give one a Due time from its options (the sliders button) and it will show up here."}
+                  : "No open to-do has a due time yet. Give one a Due time from its options (the sliders button) and it will show up here."}
               </p>
             )}
           </div>

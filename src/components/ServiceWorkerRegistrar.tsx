@@ -9,6 +9,12 @@ import { useEffect } from "react";
  *
  * Also follows a tapped notification while the app is already open: on the
  * goals page the goal opens in place, anywhere else the app goes there.
+ *
+ * And keeps the installed app current. A home-screen app is rarely closed:
+ * the phone just wakes the old page up, still running the code from the day it
+ * was opened. So each time the app comes back to the front it asks the server
+ * which build is live, and reloads itself when that is a newer one. Unsent
+ * changes are kept on the device, so a reload loses nothing.
  */
 export function ServiceWorkerRegistrar() {
   useEffect(() => {
@@ -33,7 +39,7 @@ export function ServiceWorkerRegistrar() {
     }
 
     const register = () => {
-      navigator.serviceWorker.register("/sw.js").catch(() => {
+      navigator.serviceWorker.register("/sw.js", { updateViaCache: "none" }).catch(() => {
         // An unavailable worker only costs the offline fallback.
       });
     };
@@ -41,9 +47,43 @@ export function ServiceWorkerRegistrar() {
     if (document.readyState === "complete") register();
     else window.addEventListener("load", register, { once: true });
 
+    let lastCheck = 0;
+    const checkForUpdate = async () => {
+      if (document.visibilityState !== "visible" || !navigator.onLine) return;
+      if (Date.now() - lastCheck < 30_000) return;
+      lastCheck = Date.now();
+      try {
+        const res = await fetch("/api/version", { cache: "no-store" });
+        if (!res.ok) return;
+        const { build } = (await res.json()) as { build?: string };
+        if (!build || build === process.env.NEXT_PUBLIC_BUILD_ID) return;
+        // Never pull the page out from under someone typing; the next return
+        // to the app tries again.
+        const tag = document.activeElement?.tagName;
+        if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") {
+          lastCheck = 0;
+          return;
+        }
+        await navigator.serviceWorker.getRegistration().then((reg) => reg?.update()).catch(() => {});
+        window.location.reload();
+      } catch {
+        // Offline or the server is busy: the app carries on as it is.
+      }
+    };
+    const onVisible = () => void checkForUpdate();
+    const onPageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) void checkForUpdate();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+    window.addEventListener("pageshow", onPageShow);
+
     return () => {
       navigator.serviceWorker.removeEventListener("message", onMessage);
       window.removeEventListener("load", register);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+      window.removeEventListener("pageshow", onPageShow);
     };
   }, []);
 

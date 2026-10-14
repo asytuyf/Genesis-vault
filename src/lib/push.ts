@@ -80,7 +80,7 @@ async function registration(): Promise<ServiceWorkerRegistration | null> {
   if (existing) return existing;
   // Only the production build registers the worker on load; in development
   // this is the one place that does, and only when you ask for reminders.
-  await navigator.serviceWorker.register("/sw.js");
+  await navigator.serviceWorker.register("/sw.js", { updateViaCache: "none" });
   return navigator.serviceWorker.ready;
 }
 
