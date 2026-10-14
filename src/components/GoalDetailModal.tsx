@@ -1056,12 +1056,12 @@ export const GoalDetailModal = ({ goal, isAdmin, adminKey, syncState, onOps, onR
               {lastDeleted && isAdmin && (
                 <motion.div
                   key={lastDeleted.sub.id}
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.9 }}
-                  transition={{ type: "spring", stiffness: 420, damping: 30 }}
+                  initial={{ opacity: 0, scale: 0.85, filter: "blur(4px)" }}
+                  animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
+                  exit={{ opacity: 0, scale: 0.9, filter: "blur(4px)", transition: { duration: 0.18, ease: "easeIn" } }}
+                  transition={{ type: "spring", stiffness: 380, damping: 26 }}
                   role="status"
-                  className="fixed left-1/2 -translate-x-1/2 top-4 md:top-auto md:bottom-14 z-[700] flex items-center gap-1 pl-4 pr-1 py-1 rounded-full bg-zinc-900/95 backdrop-blur border border-zinc-700 shadow-2xl shadow-black/70 text-xs font-mono overflow-hidden"
+                  className="fixed left-1/2 -translate-x-1/2 top-4 md:top-auto md:bottom-14 z-[700] flex items-center gap-1 pl-4 pr-1 py-1 rounded-full bg-zinc-900/95 backdrop-blur border border-emerald-500/50 shadow-[0_0_24px_rgba(16,185,129,0.15)] text-xs font-mono"
                 >
                   <Trash2 size={12} className="text-zinc-500" />
                   <span className="text-zinc-400 pl-1.5 pr-2 whitespace-nowrap">Deleted</span>
@@ -1071,13 +1071,6 @@ export const GoalDetailModal = ({ goal, isAdmin, adminKey, syncState, onOps, onR
                   >
                     Undo
                   </button>
-                  {/* the five seconds running out */}
-                  <motion.span
-                    initial={{ scaleX: 1 }}
-                    animate={{ scaleX: 0 }}
-                    transition={{ duration: 5, ease: "linear" }}
-                    className="absolute left-0 bottom-0 h-[2px] w-full origin-left bg-emerald-500/40"
-                  />
                 </motion.div>
               )}
             </AnimatePresence>,
