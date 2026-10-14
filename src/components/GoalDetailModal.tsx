@@ -1055,39 +1055,45 @@ export const GoalDetailModal = ({ goal, isAdmin, adminKey, syncState, onOps, onR
         {/* A small pill outside the window, so it never covers the list:
             centred in the strip above the sheet on a phone (the menu button
             steps aside while a sheet is open), under the window on a computer.
-            The line along its bottom runs down for as long as undo lasts. */}
+            It drops in from the edge it sits against and floats back out. */}
         {typeof document !== "undefined" &&
           createPortal(
             <AnimatePresence>
-              {lastDeleted && isAdmin && (
-                <motion.div
-                  key={lastDeleted.sub.id}
-                  initial={{ opacity: 0, scale: 0.85, filter: "blur(4px)" }}
-                  animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
-                  exit={{ opacity: 0, scale: 0.9, filter: "blur(4px)", transition: { duration: 0.18, ease: "easeIn" } }}
-                  transition={{ type: "spring", stiffness: 380, damping: 26 }}
-                  role="status"
-                  className="fixed left-1/2 -translate-x-1/2 top-[4dvh] -translate-y-1/2 md:top-auto md:bottom-14 md:translate-y-0 z-[700] flex items-center max-w-[calc(100vw-2rem)] h-9 pl-3.5 pr-1 rounded-full overflow-hidden bg-zinc-900/90 backdrop-blur-md border border-emerald-500/40 shadow-[0_8px_30px_rgba(0,0,0,0.5),0_0_20px_rgba(16,185,129,0.12)] text-xs font-mono"
-                >
-                  <Trash2 size={12} className="shrink-0 text-zinc-500" />
-                  <span className="pl-2 text-zinc-300 whitespace-nowrap">Deleted</span>
-                  <span className="pl-1.5 pr-1 min-w-0 max-w-[38vw] md:max-w-[220px] truncate text-zinc-500">{lastDeleted.sub.text}</span>
-                  <button
-                    onClick={undoDelete}
-                    className="shrink-0 ml-1 h-7 px-3 rounded-full text-emerald-400 font-bold uppercase tracking-wider hover:bg-emerald-500/10 active:bg-emerald-500/20 transition-colors"
+              {lastDeleted && isAdmin && (() => {
+                const from = window.matchMedia("(min-width: 768px)").matches ? 16 : -16;
+                return (
+                  <motion.div
+                    key={lastDeleted.sub.id}
+                    initial={{ opacity: 0, y: from, scale: 0.92, filter: "blur(6px)" }}
+                    animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
+                    exit={{
+                      opacity: 0,
+                      y: from * 0.6,
+                      scale: 0.96,
+                      filter: "blur(4px)",
+                      transition: { duration: 0.22, ease: [0.4, 0, 1, 1] },
+                    }}
+                    transition={{
+                      type: "spring",
+                      stiffness: 420,
+                      damping: 28,
+                      opacity: { duration: 0.2, ease: "easeOut" },
+                      filter: { duration: 0.25, ease: "easeOut" },
+                    }}
+                    role="status"
+                    className="fixed left-1/2 -translate-x-1/2 top-[4dvh] -translate-y-1/2 md:top-auto md:bottom-14 md:translate-y-0 z-[700] flex items-center h-9 pl-3.5 pr-1 rounded-full bg-zinc-900/90 backdrop-blur-md border border-emerald-500/50 shadow-[0_8px_30px_rgba(0,0,0,0.5),0_0_24px_rgba(16,185,129,0.15)] text-xs font-mono"
                   >
-                    Undo
-                  </button>
-                  <motion.span
-                    aria-hidden
-                    initial={{ scaleX: 1 }}
-                    animate={{ scaleX: 0 }}
-                    transition={{ duration: UNDO_MS / 1000, ease: "linear" }}
-                    style={{ originX: 0 }}
-                    className="absolute left-4 right-4 bottom-0 h-px bg-emerald-400/70"
-                  />
-                </motion.div>
-              )}
+                    <Trash2 size={12} className="shrink-0 text-zinc-500" />
+                    <span className="pl-2 pr-2 text-zinc-300 whitespace-nowrap">Deleted</span>
+                    <button
+                      onClick={undoDelete}
+                      className="shrink-0 h-7 px-3 rounded-full text-emerald-400 font-bold uppercase tracking-wider hover:bg-emerald-500/10 active:bg-emerald-500/20 transition-colors"
+                    >
+                      Undo
+                    </button>
+                  </motion.div>
+                );
+              })()}
             </AnimatePresence>,
             document.body
           )}
