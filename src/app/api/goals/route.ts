@@ -1,13 +1,14 @@
 import { NextResponse } from 'next/server';
-import { applyOps, isGoalOp, type Goal, type GoalOp } from '@/lib/goals';
+import { applyOps, isGoalOp, withoutPrivateSubs, type Goal, type GoalOp } from '@/lib/goals';
 import { readGoals, writeGoals, checkPassword } from '@/lib/goalStore';
 
 export const dynamic = 'force-dynamic';
 
 /**
- * Two things are held back from a request that does not carry the admin key:
- * goals marked private, which are left out of the response entirely, and
- * descriptions, which can hold private notes on an otherwise public goal.
+ * Three things are held back from a request that does not carry the admin key:
+ * goals marked private, which are left out of the response entirely, to-dos
+ * marked private, and descriptions, which can hold private notes on an
+ * otherwise public goal.
  * Everything else about a goal stays public, the same as it has always been.
  */
 export async function GET(req: Request) {
@@ -19,6 +20,7 @@ export async function GET(req: Request) {
       ? goals
       : goals
           .filter((goal) => !goal.private)
+          .map(withoutPrivateSubs)
           .map((goal) => {
             if (!goal.description) return goal;
             const stripped = { ...goal };

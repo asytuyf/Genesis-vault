@@ -7,7 +7,7 @@ import { GoalDetailModal } from "@/components/GoalDetailModal";
 import { GoalBoard } from "@/components/GoalBoard";
 import {
   type Goal, type GoalOp, type SubGoal,
-  DONE_TTL_MS, activeSubgoals, formatClock, formatCountdown, timerEndsAt, timerRemaining, timerRunning,
+  DONE_TTL_MS, activeSubgoals, withoutPrivateSubs, formatClock, formatCountdown, timerEndsAt, timerRemaining, timerRunning,
 } from "@/lib/goals";
 import { useGoalSync, type SyncState } from "@/lib/useGoalSync";
 import { playChime, sendNotification } from "@/lib/notify";
@@ -397,7 +397,7 @@ export default function DirectiveLog() {
 
   // Locking admin mode hides private goals at once, even though the browser
   // already holds them. Without the key the server never sends them at all.
-  const visible = isAdmin ? goals : goals.filter((g) => !g.private);
+  const visible = isAdmin ? goals : goals.filter((g) => !g.private).map(withoutPrivateSubs);
 
   // A goal deleted on another device simply stops rendering its window.
   const selectedGoal = selectedId ? visible.find((g) => g.id === selectedId) : undefined;
@@ -546,6 +546,7 @@ export default function DirectiveLog() {
         {selectedGoal && (
           <GoalDetailModal
             goal={selectedGoal}
+            goals={visible}
             isAdmin={isAdmin}
             adminKey={password}
             syncState={syncState}

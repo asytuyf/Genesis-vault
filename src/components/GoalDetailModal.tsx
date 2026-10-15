@@ -1,13 +1,14 @@
 "use client";
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { SortableList, useSortableItem } from "@/components/Sortable";
+import { DropZone, SortableList, useSortableItem } from "@/components/Sortable";
 import { SwipeToDelete } from "@/components/SwipeToDelete";
+import { AutoGrowText } from "@/components/AutoGrowText";
 import {
   X, Tag, Clock, Activity, Timer, AlertTriangle, Pencil, Check,
   SlidersHorizontal, Play, Pause, RotateCcw, Hourglass,
-  CalendarClock, Trash2, Lock, Eye, CheckCheck, Hammer, Snail,
+  CalendarClock, Trash2, Lock, Eye, CheckCheck, Hammer, Snail, ArrowRightLeft,
 } from "lucide-react";
 import {
   type Goal, type GoalOp, type GoalPatch, type SubGoal,
@@ -78,10 +79,12 @@ interface SubgoalItemProps {
   onToggleExpanded: () => void;
   onChange: (next: SubGoal) => void;
   onRemove: () => void;
+  /** Opens the list of goals to send this to-do to; absent with no other goal. */
+  onMoveRequest?: () => void;
 }
 
 const SubgoalItem = ({
-  sg, isAdmin, expanded, onToggleExpanded, onChange, onRemove,
+  sg, isAdmin, expanded, onToggleExpanded, onChange, onRemove, onMoveRequest,
 }: SubgoalItemProps) => {
   const { handle, setNodeRef, style, isDragging, enabled: canDrag } = useSortableItem(sg.id);
   const [editing, setEditing] = useState(false);
@@ -200,19 +203,17 @@ const SubgoalItem = ({
 
         <div className="flex-1 min-w-0 py-1.5 pl-1">
           {editing ? (
-            <input
-              type="text"
+            <AutoGrowText
               value={draft}
-              onChange={(e) => setDraft(e.target.value)}
+              onChange={setDraft}
+              onSubmit={commitText}
               onBlur={commitText}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") commitText();
-                if (e.key === "Escape") {
-                  setDraft(sg.text);
-                  setEditing(false);
-                }
+              onCancel={() => {
+                setDraft(sg.text);
+                setEditing(false);
               }}
               autoFocus
+              aria-label="To-do text"
               className="w-full bg-black border border-zinc-700 px-2 py-1 text-sm text-white font-mono outline-none focus:border-emerald-500/50"
             />
           ) : (
@@ -226,6 +227,9 @@ const SubgoalItem = ({
                 isAdmin ? "cursor-text hover:text-white" : ""
               } ${sg.completed ? "text-zinc-600 line-through" : isActive ? "text-zinc-200" : "text-zinc-400"}`}
             >
+              {sg.private && (
+                <Lock size={10} className="inline -mt-0.5 mr-1.5 text-zinc-600" aria-label="Only you can see this" />
+              )}
               {sg.text}
             </span>
           )}
@@ -373,10 +377,46 @@ const SubgoalItem = ({
                 </div>
               </div>
 
+              <div>
+                <Label>Who can see this to-do</Label>
+                <div className="flex gap-1.5">
+                  <button
+                    onClick={() => {
+                      const next = { ...sg };
+                      delete next.private;
+                      onChange(next);
+                    }}
+                    aria-pressed={!sg.private}
+                    className={`${chip} flex-1 inline-flex items-center justify-center gap-1.5 py-2 ${
+                      sg.private ? chipHover : "border-emerald-500/40 text-emerald-400 bg-emerald-500/10"
+                    }`}
+                  >
+                    <Eye size={12} /> Anyone
+                  </button>
+                  <button
+                    onClick={() => onChange({ ...sg, private: true })}
+                    aria-pressed={!!sg.private}
+                    className={`${chip} flex-1 inline-flex items-center justify-center gap-1.5 py-2 ${
+                      sg.private ? "border-zinc-400/50 text-zinc-100 bg-zinc-100/10" : chipHover
+                    }`}
+                  >
+                    <Lock size={12} /> Only me
+                  </button>
+                </div>
+              </div>
+
               <div className="flex gap-1.5">
+                {onMoveRequest && (
+                  <button
+                    onClick={onMoveRequest}
+                    className={`${chip} ${chipHover} flex-1 inline-flex items-center justify-center gap-1.5 py-2`}
+                  >
+                    <ArrowRightLeft size={12} /> Move to goal
+                  </button>
+                )}
                 <button
                   onClick={onRemove}
-                  className={`${chip} w-full inline-flex items-center justify-center gap-1 py-2 hover:border-rose-400/30 hover:text-rose-300`}
+                  className={`${chip} flex-1 inline-flex items-center justify-center gap-1 py-2 hover:border-rose-400/30 hover:text-rose-300`}
                 >
                   <Trash2 size={12} /> Delete
                 </button>
@@ -400,9 +440,24 @@ interface GoalDetailModalProps {
   onOps: (ops: GoalOp[]) => void;
   onRetrySync: () => void;
   onClose: () => void;
+  /** Every goal on the page, for moving a to-do from this one to another. */
+  goals?: Goal[];
 }
 
-export const GoalDetailModal = ({ goal, isAdmin, adminKey, syncState, onOps, onRetrySync, onClose }: GoalDetailModalProps) => {
+/** Where a dragged to-do is dropped to send it to another goal. */
+const MOVE_ZONE = "move-to-another-goal";
+
+/** The note that floats in after a delete or a move, with its way back. */
+interface Notice {
+  key: string;
+  icon: "deleted" | "moved";
+  text: string;
+  undo: GoalOp[];
+}
+
+export const GoalDetailModal = ({
+  goal, isAdmin, adminKey, syncState, onOps, onRetrySync, onClose, goals = [],
+}: GoalDetailModalProps) => {
   const [tab, setTab] = useState<"tasks" | "done" | "info">("tasks");
   const all = useMemo(() => goal.subgoals ?? [], [goal.subgoals]);
   // The working list holds what is still to do; finished ones move next door.
@@ -521,30 +576,67 @@ export const GoalDetailModal = ({ goal, isAdmin, adminKey, syncState, onOps, onR
     onOps([{ type: "sub", id: goal.id, sub: next }]);
   };
 
-  // The last deleted to-do, held for a few seconds so a swipe that went too
-  // far can be taken back.
-  const [lastDeleted, setLastDeleted] = useState<{ sub: SubGoal; order: string[] } | null>(null);
+  // The last delete or move, held for a few seconds so a swipe that went too
+  // far, or a goal picked by mistake, can be taken back.
+  const [notice, setNotice] = useState<Notice | null>(null);
+  const noticeSeq = useRef(0);
   useEffect(() => {
-    if (!lastDeleted) return;
-    const t = setTimeout(() => setLastDeleted(null), UNDO_MS);
+    if (!notice) return;
+    const t = setTimeout(() => setNotice(null), UNDO_MS);
     return () => clearTimeout(t);
-  }, [lastDeleted]);
+  }, [notice]);
 
   const removeSubgoal = (subId: string) => {
     if (!isAdmin) return;
     const sub = all.find((sg) => sg.id === subId);
     setExpandedId(null);
     onOps([{ type: "subRemove", id: goal.id, subId }]);
-    if (sub) setLastDeleted({ sub, order: all.map((sg) => sg.id) });
+    if (sub) {
+      setNotice({
+        key: `del-${sub.id}-${++noticeSeq.current}`,
+        icon: "deleted",
+        text: "Deleted",
+        undo: [
+          { type: "sub", id: goal.id, sub },
+          { type: "subOrder", id: goal.id, ids: all.map((sg) => sg.id) },
+        ],
+      });
+    }
   };
 
-  const undoDelete = () => {
-    if (!lastDeleted || !isAdmin) return;
+  const undoNotice = () => {
+    if (!notice || !isAdmin) return;
+    onOps(notice.undo);
+    setNotice(null);
+  };
+
+  // Moving a to-do to another goal: drop it on the strip that appears at the
+  // top while dragging, or use "Move to goal" in its options; either way a
+  // list of goals opens to pick from.
+  const otherGoals = useMemo(() => goals.filter((g) => g.id !== goal.id), [goals, goal.id]);
+  const [movingId, setMovingId] = useState<string | null>(null);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const moving = movingId ? all.find((sg) => sg.id === movingId) : undefined;
+
+  const moveSubgoal = (sub: SubGoal, target: Goal) => {
+    if (!isAdmin) return;
+    setMovingId(null);
+    setExpandedId(null);
+    // Added to the new goal before it leaves this one, in the same save.
     onOps([
-      { type: "sub", id: goal.id, sub: lastDeleted.sub },
-      { type: "subOrder", id: goal.id, ids: lastDeleted.order },
+      { type: "sub", id: target.id, sub },
+      { type: "subRemove", id: goal.id, subId: sub.id },
     ]);
-    setLastDeleted(null);
+    setNotice({
+      key: `move-${sub.id}-${++noticeSeq.current}`,
+      icon: "moved",
+      text: `Moved to ${target.task}`,
+      undo: [
+        { type: "sub", id: goal.id, sub },
+        { type: "subOrder", id: goal.id, ids: all.map((sg) => sg.id) },
+        { type: "subRemove", id: target.id, subId: sub.id },
+      ],
+    });
   };
 
   const done = finished.length;
@@ -736,7 +828,41 @@ export const GoalDetailModal = ({ goal, isAdmin, adminKey, syncState, onOps, onR
         {/* body */}
         <motion.div layoutScroll className="flex-1 overflow-y-auto overscroll-contain custom-scrollbar-mobile">
           {tab === "tasks" ? (
+            <SortableList
+              ids={subgoals.map((sg) => sg.id)}
+              onReorder={reorderSubgoals}
+              enabled={isAdmin && subgoals.length > 0}
+              layout="list"
+              swipeRows
+              dropZoneId={otherGoals.length ? MOVE_ZONE : undefined}
+              onDropZone={(id) => setMovingId(id)}
+              onDragStateChange={setDraggingId}
+            >
             <div className="p-5">
+              {isAdmin && otherGoals.length > 0 && (
+                // Pinned to the top of the list while it scrolls, taking no
+                // room until a drag begins.
+                <div className="sticky top-0 z-30 h-0 -mx-5 -mt-5 mb-5">
+                  <DropZone id={MOVE_ZONE} active={!!draggingId}>
+                    {(isOver, ref) => (
+                      <div
+                        ref={ref}
+                        className={`absolute inset-x-0 top-0 h-[72px] flex items-center justify-center gap-2 border-b-2 border-dashed text-[11px] font-black uppercase tracking-wider transition-all duration-150 ${
+                          draggingId ? "opacity-100" : "opacity-0 pointer-events-none"
+                        } ${
+                          isOver
+                            ? "bg-emerald-500/20 border-emerald-400 text-emerald-300"
+                            : "bg-[#0a0a0a]/95 border-emerald-500/30 text-emerald-500/70"
+                        }`}
+                      >
+                        <ArrowRightLeft size={14} />
+                        {isOver ? "Let go to pick a goal" : "Drop here to move to another goal"}
+                      </div>
+                    )}
+                  </DropZone>
+                </div>
+              )}
+
               {all.length > 0 && (
                 <div className="mb-5">
                   <div className="flex justify-between text-[10px] font-bold uppercase mb-2">
@@ -766,13 +892,6 @@ export const GoalDetailModal = ({ goal, isAdmin, adminKey, syncState, onOps, onR
                   )}
                 </div>
               ) : (
-                <SortableList
-                  ids={subgoals.map((sg) => sg.id)}
-                  onReorder={reorderSubgoals}
-                  enabled={isAdmin}
-                  layout="list"
-                  swipeRows
-                >
                   <ul className="space-y-1">
                     {subgoals.map((sg) => (
                       <SubgoalItem
@@ -783,19 +902,20 @@ export const GoalDetailModal = ({ goal, isAdmin, adminKey, syncState, onOps, onR
                         onToggleExpanded={() => setExpandedId((cur) => (cur === sg.id ? null : sg.id))}
                         onChange={changeSubgoal}
                         onRemove={() => removeSubgoal(sg.id)}
+                        onMoveRequest={otherGoals.length ? () => setMovingId(sg.id) : undefined}
                       />
                     ))}
                   </ul>
-                </SortableList>
               )}
 
               {isAdmin && subgoals.length > 1 && (
                 <div className="mt-3 text-[9px] text-zinc-800 uppercase tracking-wider">
-                  <span className="md:hidden">Hold a to-do, then drag to move it · swipe left to delete</span>
-                  <span className="hidden md:inline">Drag a to-do up or down to move it · drag it left to delete</span>
+                  <span className="md:hidden">Hold a to-do, then drag to move it (up to the top for another goal) · swipe left to delete</span>
+                  <span className="hidden md:inline">Drag a to-do up or down to move it, to the top for another goal · drag it left to delete</span>
                 </div>
               )}
             </div>
+            </SortableList>
           ) : tab === "done" ? (
             <div className="p-5">
               {finished.length === 0 ? (
@@ -1052,6 +1172,61 @@ export const GoalDetailModal = ({ goal, isAdmin, adminKey, syncState, onOps, onR
           )}
         </motion.div>
 
+        {/* Picking the goal a to-do moves to. */}
+        <AnimatePresence>
+          {moving && isAdmin && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 z-[640] flex flex-col bg-black/80 backdrop-blur-sm"
+              onClick={() => setMovingId(null)}
+            >
+              <motion.div
+                initial={{ y: 24, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                exit={{ y: 24, opacity: 0 }}
+                transition={{ type: "spring", stiffness: 420, damping: 34 }}
+                onClick={(e) => e.stopPropagation()}
+                className="mt-auto max-h-[75%] flex flex-col bg-[#0a0a0a] border-t border-emerald-500/30"
+              >
+                <div className="px-5 pt-4 pb-3 border-b border-zinc-800">
+                  <div className="text-[9px] font-black uppercase tracking-[0.2em] text-emerald-500/80 mb-1">Move to</div>
+                  <div className="text-sm font-mono text-zinc-300 line-clamp-2 break-words">{moving.text}</div>
+                </div>
+                <ul className="flex-1 overflow-y-auto overscroll-contain divide-y divide-zinc-900">
+                  {otherGoals.map((g) => {
+                    const open = (g.subgoals ?? []).filter((sg) => !sg.completed).length;
+                    return (
+                      <li key={g.id}>
+                        <button
+                          onClick={() => moveSubgoal(moving, g)}
+                          className="w-full flex items-center gap-3 px-5 py-3.5 text-left hover:bg-emerald-500/5 active:bg-emerald-500/10 transition-colors"
+                        >
+                          <span className="min-w-0 flex-1">
+                            <span className="block font-bold uppercase tracking-tight text-zinc-100 truncate">{g.task}</span>
+                            <span className="flex items-center gap-1.5 text-[10px] text-zinc-600 uppercase">
+                              <Tag size={9} /> {g.project}
+                              {g.private && <><Lock size={9} className="ml-1" /> Private</>}
+                            </span>
+                          </span>
+                          <span className="text-[10px] font-mono text-zinc-600 shrink-0">{open} open</span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+                <button
+                  onClick={() => setMovingId(null)}
+                  className="pwa-sheet-bottom shrink-0 px-5 py-3.5 border-t border-zinc-800 text-[11px] font-black uppercase tracking-wider text-zinc-500 hover:text-zinc-300"
+                >
+                  Cancel
+                </button>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* A small pill outside the window, so it never covers the list:
             centred in the strip above the sheet on a phone (the menu button
             steps aside while a sheet is open), under the window on a computer.
@@ -1059,11 +1234,11 @@ export const GoalDetailModal = ({ goal, isAdmin, adminKey, syncState, onOps, onR
         {typeof document !== "undefined" &&
           createPortal(
             <AnimatePresence>
-              {lastDeleted && isAdmin && (() => {
+              {notice && isAdmin && (() => {
                 const from = window.matchMedia("(min-width: 768px)").matches ? 16 : -16;
                 return (
                   <motion.div
-                    key={lastDeleted.sub.id}
+                    key={notice.key}
                     initial={{ opacity: 0, y: from, scale: 0.92, filter: "blur(6px)" }}
                     animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
                     exit={{
@@ -1083,10 +1258,14 @@ export const GoalDetailModal = ({ goal, isAdmin, adminKey, syncState, onOps, onR
                     role="status"
                     className="fixed left-1/2 -translate-x-1/2 top-[4dvh] -translate-y-1/2 md:top-auto md:bottom-14 md:translate-y-0 z-[700] flex items-center h-9 pl-3.5 pr-1 rounded-full bg-zinc-900/90 backdrop-blur-md border border-emerald-500/50 shadow-[0_8px_30px_rgba(0,0,0,0.5),0_0_24px_rgba(16,185,129,0.15)] text-xs font-mono"
                   >
-                    <Trash2 size={12} className="shrink-0 text-zinc-500" />
-                    <span className="pl-2 pr-2 text-zinc-300 whitespace-nowrap">Deleted</span>
+                    {notice.icon === "moved" ? (
+                      <ArrowRightLeft size={12} className="shrink-0 text-zinc-500" />
+                    ) : (
+                      <Trash2 size={12} className="shrink-0 text-zinc-500" />
+                    )}
+                    <span className="pl-2 pr-2 text-zinc-300 whitespace-nowrap truncate max-w-[52vw] md:max-w-xs">{notice.text}</span>
                     <button
-                      onClick={undoDelete}
+                      onClick={undoNotice}
                       className="shrink-0 h-7 px-3 rounded-full text-emerald-400 font-bold uppercase tracking-wider hover:bg-emerald-500/10 active:bg-emerald-500/20 transition-colors"
                     >
                       Undo
@@ -1103,18 +1282,20 @@ export const GoalDetailModal = ({ goal, isAdmin, adminKey, syncState, onOps, onR
           <div className="pwa-sheet-bottom p-4 md:p-5 border-t border-zinc-800 space-y-2.5 shrink-0 bg-[#0a0a0a]">
             {tab !== "info" && tab === "tasks" && (
               <div className="flex gap-2">
-                <input
-                  type="text"
+                <AutoGrowText
                   placeholder="$ add a to-do..."
                   value={newSubgoal}
-                  onChange={(e) => setNewSubgoal(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && addSubgoal()}
+                  onChange={setNewSubgoal}
+                  onSubmit={addSubgoal}
+                  maxLines={5}
+                  enterKeyHint="enter"
+                  aria-label="New to-do"
                   className="flex-1 min-w-0 bg-black border border-zinc-800 px-3 py-2 text-sm outline-none focus:border-emerald-500/50 text-zinc-300 placeholder:text-zinc-700 font-mono"
                 />
                 <button
                   onClick={addSubgoal}
                   aria-label="Add to-do"
-                  className="px-3 py-2 bg-zinc-900 border border-zinc-800 text-zinc-600 hover:text-emerald-400 hover:border-emerald-500/30 transition-colors font-mono text-sm"
+                  className="self-end px-3 py-2 bg-zinc-900 border border-zinc-800 text-zinc-600 hover:text-emerald-400 hover:border-emerald-500/30 transition-colors font-mono text-sm"
                 >
                   [+]
                 </button>

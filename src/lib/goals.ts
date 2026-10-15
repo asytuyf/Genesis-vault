@@ -27,6 +27,8 @@ export interface SubGoal {
   deadline?: string;
   /** Optional time-box countdown. */
   timer?: SubTimer;
+  /** Hidden, like a private goal, from anyone without the admin key. */
+  private?: boolean;
 }
 
 /** When to be reminded about this goal's sub-task deadlines. */
@@ -351,3 +353,13 @@ export const toggleSubDone = (sg: SubGoal): SubGoal => {
 
 /** "2d 3h late" -- a softer way to say a due time has passed. */
 export const lateText = (cd: Countdown): string => cd.text.replace("overdue", "late");
+
+/**
+ * The goal as someone without the admin key may see it: no private to-dos.
+ * The server strips them before they leave, and the page does the same the
+ * moment admin mode is locked.
+ */
+export const withoutPrivateSubs = (goal: Goal): Goal =>
+  goal.subgoals?.some((sg) => sg.private)
+    ? { ...goal, subgoals: goal.subgoals.filter((sg) => !sg.private) }
+    : goal;

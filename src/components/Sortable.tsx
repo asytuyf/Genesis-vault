@@ -17,11 +17,15 @@ import { createContext, useContext, useMemo, useSyncExternalStore, type ReactNod
 import {
   DndContext,
   KeyboardSensor,
+  MeasuringStrategy,
   MouseSensor,
   TouchSensor,
   closestCorners,
+  pointerWithin,
+  useDroppable,
   useSensor,
   useSensors,
+  type CollisionDetection,
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
@@ -79,6 +83,12 @@ interface SortableListProps {
   layout?: "list" | "grid";
   /** The rows also swipe left, so a sideways pull must not lift them. */
   swipeRows?: boolean;
+  /**
+   * An extra place to drop an item, outside the list (see DropZone). Dropped
+   * there, the item is handed to onDropZone instead of being reordered.
+   */
+  dropZoneId?: string;
+  onDropZone?: (id: string) => void;
   children: ReactNode;
   onDragStateChange?: (draggingId: string | null) => void;
 }
@@ -89,6 +99,8 @@ export function SortableList({
   enabled = true,
   layout = "list",
   swipeRows = false,
+  dropZoneId,
+  onDropZone,
   children,
   onDragStateChange,
 }: SortableListProps) {
@@ -113,9 +125,27 @@ export function SortableList({
     onDragStateChange?.(String(event.active.id));
   };
 
+  // The drop zone counts only while the finger (or pointer) is really inside
+  // it; everywhere else the list sorts as usual and ignores the zone.
+  const collision = useMemo<CollisionDetection>(() => {
+    if (!dropZoneId) return closestCorners;
+    return (args) => {
+      const inZone = pointerWithin(args).find((c) => c.id === dropZoneId);
+      if (inZone) return [inZone];
+      return closestCorners({
+        ...args,
+        droppableContainers: args.droppableContainers.filter((c) => c.id !== dropZoneId),
+      });
+    };
+  }, [dropZoneId]);
+
   const handleEnd = (event: DragEndEvent) => {
     onDragStateChange?.(null);
     const { active, over } = event;
+    if (over && dropZoneId && over.id === dropZoneId) {
+      onDropZone?.(String(active.id));
+      return;
+    }
     if (!over || active.id === over.id) return;
     const from = ids.indexOf(String(active.id));
     const to = ids.indexOf(String(over.id));
@@ -132,7 +162,10 @@ export function SortableList({
     <EnabledContext.Provider value={true}>
       <DndContext
         sensors={sensors}
-        collisionDetection={closestCorners}
+        collisionDetection={collision}
+        // The drop zone only appears once a drag has begun, so it has to be
+        // measured while dragging, not just at the start.
+        measuring={dropZoneId ? { droppable: { strategy: MeasuringStrategy.Always } } : undefined}
         modifiers={modifiers}
         onDragStart={handleStart}
         onDragEnd={handleEnd}
@@ -183,4 +216,23 @@ export function useSortableItem(id: string): SortableHandleProps {
       userSelect: "none",
     } as React.CSSProperties,
   };
+}
+
+/**
+ * A place to drop a dragged item that is not a slot in the list. Render it
+ * inside the SortableList whose dropZoneId it carries; it renders whatever it
+ * is given, told whether an item is hovering over it.
+ */
+export function DropZone({
+  id,
+  active,
+  children,
+}: {
+  id: string;
+  /** Only listens while something is being dragged. */
+  active: boolean;
+  children: (isOver: boolean, ref: (node: HTMLElement | null) => void) => ReactNode;
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id, disabled: !active });
+  return <>{children(isOver, setNodeRef)}</>;
 }
