@@ -1,8 +1,9 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Plus, X, Lock, Eye } from "lucide-react";
 import { type Goal, hoursFromNow } from "@/lib/goals";
+import { isSaveCombo } from "@/lib/keys";
 
 interface AddGoalFormProps {
   /** Hands the new goal to the page, which queues it for saving. */
@@ -18,6 +19,13 @@ export const AddGoalForm = ({ onAdd, onClose }: AddGoalFormProps) => {
   const [description, setDescription] = useState("");
   const [isPrivate, setIsPrivate] = useState(false);
   const [error, setError] = useState("");
+
+  // Escape closes the form; ⌘+Enter in any of its fields adds the goal.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
 
   const handleAddGoal = () => {
     if (!task.trim()) {
@@ -55,7 +63,14 @@ export const AddGoalForm = ({ onAdd, onClose }: AddGoalFormProps) => {
       <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose}></div>
 
       {/* Modal Content */}
-      <div className="relative bg-[#0a0a0a] border border-zinc-800 p-8 rounded-xl shadow-2xl w-full max-w-md font-mono z-[610] max-h-[90dvh] overflow-y-auto">
+      <div
+        onKeyDown={(e) => {
+          if (!isSaveCombo(e)) return;
+          e.preventDefault();
+          handleAddGoal();
+        }}
+        className="relative bg-[#0a0a0a] border border-zinc-800 p-8 rounded-xl shadow-2xl w-full max-w-md font-mono z-[610] max-h-[90dvh] overflow-y-auto"
+      >
         <button onClick={onClose} aria-label="Close" className="absolute top-4 right-4 text-zinc-600 hover:text-emerald-400 transition-colors">
             <X size={20} />
         </button>
@@ -68,7 +83,7 @@ export const AddGoalForm = ({ onAdd, onClose }: AddGoalFormProps) => {
                 className="bg-black border border-zinc-800 px-4 py-2.5 text-base outline-none focus:border-emerald-400 text-zinc-300 placeholder:text-zinc-600"
                 value={task}
                 onChange={(e) => { setTask(e.target.value); if (error) setError(""); }}
-                onKeyDown={(e) => e.key === "Enter" && handleAddGoal()}
+                onKeyDown={(e) => e.key === "Enter" && !isSaveCombo(e) && handleAddGoal()}
                 autoFocus
             />
             {error && <div className="text-red-400 text-xs font-bold -mt-2">{error}</div>}

@@ -1,5 +1,5 @@
 "use client";
-import { useLayoutEffect, useRef } from "react";
+import { useImperativeHandle, useLayoutEffect, useRef } from "react";
 
 // A one-line text box that wraps and grows as you type, so a long to-do stays
 // readable while you write it. Enter saves (as a single-line field would);
@@ -20,13 +20,16 @@ interface AutoGrowTextProps {
   enterKeyHint?: "done" | "enter" | "send" | "go";
   className?: string;
   "aria-label"?: string;
+  /** The text box itself, for focusing it from outside. */
+  inputRef?: React.Ref<HTMLTextAreaElement>;
 }
 
 export const AutoGrowText = ({
   value, onChange, onSubmit, onCancel, onBlur, placeholder, autoFocus, maxLines = 6,
-  enterKeyHint = "done", className = "", ...rest
+  enterKeyHint = "done", className = "", inputRef, ...rest
 }: AutoGrowTextProps) => {
   const ref = useRef<HTMLTextAreaElement>(null);
+  useImperativeHandle(inputRef, () => ref.current as HTMLTextAreaElement, []);
 
   // Fit the height to the text on every change.
   useLayoutEffect(() => {

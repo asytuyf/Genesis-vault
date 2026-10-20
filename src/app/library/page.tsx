@@ -5,6 +5,7 @@ import {
   Search, Plus, X, BookOpen, Tag, Clock, Trash2,
   Edit3, Eye, Save, Image, FileText, ChevronDown, ChevronRight, ImagePlus
 } from "lucide-react";
+import { isSaveCombo } from "@/lib/keys";
 
 interface Tutorial {
   id: string;
@@ -658,6 +659,12 @@ export default function LibraryPage() {
               animate={{ scale: 1 }}
               exit={{ scale: 0.95 }}
               onClick={(e) => e.stopPropagation()}
+              // ⌘+Enter in any field saves the tutorial.
+              onKeyDown={(e) => {
+                if (!isSaveCombo(e)) return;
+                e.preventDefault();
+                saveTutorial();
+              }}
               className="w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-[#0a0a0a] border border-zinc-800 p-6"
             >
               <div className="flex items-center justify-between mb-6">

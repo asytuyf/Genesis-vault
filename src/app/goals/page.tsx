@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Tag, Clock, Activity, Hash, Box, Trash2, Plus, Terminal, ListChecks, Timer, ArrowUpDown, Lock, Snail, Plane } from "lucide-react";
 import { AddGoalForm } from "@/components/AddGoalForm";
@@ -7,13 +7,14 @@ import { GoalDetailModal } from "@/components/GoalDetailModal";
 import { GoalBoard } from "@/components/GoalBoard";
 import {
   type Goal, type GoalOp, type SubGoal,
-  DONE_TTL_MS, activeSubgoals, withoutPrivateSubs, formatClock, formatCountdown, timerEndsAt, timerRemaining, timerRunning,
+  DONE_TTL_MS, activeSubgoals, withoutPrivateSubs, withoutSubLinks, formatClock, formatCountdown, timerEndsAt, timerRemaining, timerRunning,
 } from "@/lib/goals";
 import { useGoalSync, type SyncState } from "@/lib/useGoalSync";
 import { playChime, sendNotification } from "@/lib/notify";
 import { useLocalReminders } from "@/lib/useLocalReminders";
 import { SortableList, useSortableItem } from "@/components/Sortable";
 import { ensurePush } from "@/lib/push";
+import { isPageKey } from "@/lib/keys";
 
 const BASE_TITLE = "GOALS";
 
@@ -211,14 +212,15 @@ export default function DirectiveLog() {
   const [sortBy, setSortBy] = useState<"custom" | "newest">("custom");
   // Cards, or every goal's to-dos on one departures board. Remembered per device.
   const [view, setView] = useState<"cards" | "board">("cards");
-  const chooseView = (next: "cards" | "board") => {
+  const chooseView = useCallback((next: "cards" | "board") => {
     setView(next);
     try {
       window.localStorage.setItem("goals_view", next);
     } catch {}
-  };
+  }, []);
 
   const { goals, loading, loadFailed, syncState, queueOps, retrySync, refresh } = useGoalSync(password, isAdmin);
+  const searchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -397,10 +399,32 @@ export default function DirectiveLog() {
 
   // Locking admin mode hides private goals at once, even though the browser
   // already holds them. Without the key the server never sends them at all.
-  const visible = isAdmin ? goals : goals.filter((g) => !g.private).map(withoutPrivateSubs);
+  const visible = isAdmin ? goals : goals.filter((g) => !g.private).map(withoutPrivateSubs).map(withoutSubLinks);
 
   // A goal deleted on another device simply stops rendering its window.
   const selectedGoal = selectedId ? visible.find((g) => g.id === selectedId) : undefined;
+
+  // Keys for the page while no window is open: N for a new goal, / to search,
+  // B to switch between the cards and the board.
+  const windowOpen = !!selectedGoal || isAddGoalModalOpen;
+  useEffect(() => {
+    if (windowOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (!isPageKey(e)) return;
+      const key = e.key.toLowerCase();
+      if (key === "n" && isAdmin) {
+        e.preventDefault();
+        setIsAddGoalModalOpen(true);
+      } else if (key === "/") {
+        e.preventDefault();
+        searchRef.current?.focus();
+      } else if (key === "b") {
+        chooseView(view === "board" ? "cards" : "board");
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [windowOpen, isAdmin, view, chooseView]);
 
   const filtered = visible.filter(g =>
     g.task?.toLowerCase().includes(search.toLowerCase()) ||
@@ -476,6 +500,7 @@ export default function DirectiveLog() {
 
         <div className="relative max-w-md">
           <input
+            ref={searchRef}
             type="text"
             placeholder="grep -i 'goals log'..."
             className="w-full bg-transparent border-b-2 border-zinc-900 px-0 py-2 text-sm font-black outline-none focus:border-emerald-400 transition-all uppercase placeholder:text-zinc-800 text-emerald-400"

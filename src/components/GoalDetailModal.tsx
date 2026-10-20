@@ -8,14 +8,16 @@ import { AutoGrowText } from "@/components/AutoGrowText";
 import {
   X, Tag, Clock, Activity, Timer, AlertTriangle, Pencil, Check,
   SlidersHorizontal, Play, Pause, RotateCcw, Hourglass,
-  CalendarClock, Trash2, Lock, Eye, CheckCheck, Hammer, Snail, ArrowRightLeft,
+  CalendarClock, Trash2, Lock, Eye, CheckCheck, Hammer, Snail, ArrowRightLeft, ExternalLink, Link2,
 } from "lucide-react";
 import {
   type Goal, type GoalOp, type GoalPatch, type SubGoal,
   formatCountdown, formatClock, formatDuration, formatTimeLeft, hoursFromNow,
   subClearsAt, timerRemaining, timerRunning, timerFinished, toggleSubDone, lateText,
+  cleanLink, formatSlot, linkLabel, localDay, makeSlot, slotState,
 } from "@/lib/goals";
 import { requestNotifPermission } from "@/lib/notify";
+import { isPageKey, isSaveCombo } from "@/lib/keys";
 import type { SyncState } from "@/lib/useGoalSync";
 import { DeviceReminders, GoalReminders } from "@/components/ReminderSettings";
 
@@ -91,11 +93,18 @@ const SubgoalItem = ({
   const [draft, setDraft] = useState(sg.text);
   const [timeAmount, setTimeAmount] = useState(() => (sg.timer ? splitDuration(sg.timer.duration).amount : ""));
   const [timeUnit, setTimeUnit] = useState<TimeUnit>(() => (sg.timer ? splitDuration(sg.timer.duration).unit : "m"));
+  const [slotDay, setSlotDay] = useState("");
+  const [slotFrom, setSlotFrom] = useState("");
+  const [slotTo, setSlotTo] = useState("");
+  const [linkDraft, setLinkDraft] = useState("");
+  const [linkBad, setLinkBad] = useState(false);
 
   const running = timerRunning(sg.timer);
   const finished = timerFinished(sg.timer);
   const remaining = sg.timer ? timerRemaining(sg.timer) : 0;
   const cd = sg.deadline ? formatCountdown(sg.deadline) : null;
+  const slotNow = sg.slot ? slotState(sg.slot) : null;
+  const href = sg.link ? cleanLink(sg.link) : "";
   const isActive = !!sg.active && !sg.completed;
 
   const commitText = () => {
@@ -152,6 +161,57 @@ const SubgoalItem = ({
     const next = { ...sg };
     if (value) next.deadline = value;
     else delete next.deadline;
+    onChange(next);
+  };
+
+  // The options open on what is saved, not on what was typed in them last time.
+  const toggleOptions = () => {
+    if (!expanded) {
+      setSlotDay(sg.slot?.start.slice(0, 10) ?? localDay());
+      setSlotFrom(sg.slot?.start.slice(11, 16) ?? "");
+      setSlotTo(sg.slot?.end.slice(11, 16) ?? "");
+      setLinkDraft(sg.link ?? "");
+      setLinkBad(false);
+    }
+    onToggleExpanded();
+  };
+
+  /** Saved the moment both times are in. */
+  const changeSlot = (day: string, from: string, to: string) => {
+    setSlotDay(day);
+    setSlotFrom(from);
+    setSlotTo(to);
+    if (!day || !from || !to || from === to) return;
+    onChange({ ...sg, slot: makeSlot(day, from, to) });
+  };
+
+  const clearSlot = () => {
+    setSlotFrom("");
+    setSlotTo("");
+    const next = { ...sg };
+    delete next.slot;
+    onChange(next);
+  };
+
+  const commitLink = () => {
+    const clean = cleanLink(linkDraft);
+    if (linkDraft.trim() && !clean) {
+      setLinkBad(true);
+      return;
+    }
+    setLinkDraft(clean);
+    if (clean === (sg.link ?? "")) return;
+    const next = { ...sg };
+    if (clean) next.link = clean;
+    else delete next.link;
+    onChange(next);
+  };
+
+  const clearLink = () => {
+    setLinkDraft("");
+    setLinkBad(false);
+    const next = { ...sg };
+    delete next.link;
     onChange(next);
   };
 
@@ -234,8 +294,23 @@ const SubgoalItem = ({
             </span>
           )}
 
-          {(sg.timer || cd) && !editing && (
+          {(sg.timer || cd || sg.slot) && !editing && (
             <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+              {sg.slot && slotNow && (
+                <span
+                  title={`${fmtDateTime(sg.slot.start)} until ${sg.slot.end.slice(11, 16)}`}
+                  className={`inline-flex items-center gap-1 px-2 py-0.5 border text-[10px] font-bold font-mono ${
+                    sg.completed || slotNow === "over"
+                      ? "border-zinc-800 text-zinc-700"
+                      : slotNow === "now"
+                        ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
+                        : "bg-zinc-900/60 border-zinc-800 text-zinc-500"
+                  }`}
+                >
+                  <Clock size={9} />
+                  {formatSlot(sg.slot)}
+                </span>
+              )}
               {sg.timer && (
                 <button
                   onClick={startPause}
@@ -277,6 +352,20 @@ const SubgoalItem = ({
 
         {isAdmin && (
           <div className="flex items-center shrink-0 -mr-1">
+            {/* Only there when the to-do has a link, so the rest stay as they are. */}
+            {href && (
+              <a
+                href={href}
+                target="_blank"
+                rel="noopener noreferrer"
+                draggable={false}
+                title={`Open ${linkLabel(href)}`}
+                aria-label={`Open ${linkLabel(href)}`}
+                className="h-9 w-8 grid place-items-center text-zinc-500 hover:text-emerald-400 transition-colors [-webkit-touch-callout:none]"
+              >
+                <ExternalLink size={14} />
+              </a>
+            )}
             {/* Working on it: far from the tick box, so a thumb cannot hit the wrong one. */}
             <button
               onClick={toggleActive}
@@ -290,8 +379,8 @@ const SubgoalItem = ({
               <Hammer size={15} className={isActive ? "motion-safe:animate-pulse" : ""} />
             </button>
             <button
-              onClick={onToggleExpanded}
-              title="Timer, due date"
+              onClick={toggleOptions}
+              title="Timer, due date, time slot, link"
               aria-label="To-do options"
               aria-expanded={expanded}
               className={`h-9 w-8 grid place-items-center transition-colors ${expanded ? "text-emerald-400" : "text-zinc-700 hover:text-zinc-300"}`}
@@ -375,6 +464,72 @@ const SubgoalItem = ({
                     Clear
                   </button>
                 </div>
+              </div>
+
+              <div>
+                <Label>
+                  <span className="inline-flex items-center gap-1.5">
+                    <Clock size={9} /> Time slot
+                  </span>
+                </Label>
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="time"
+                    aria-label="From"
+                    value={slotFrom}
+                    onChange={(e) => changeSlot(slotDay, e.target.value, slotTo)}
+                    className={`${field} flex-1 min-w-0`}
+                  />
+                  <span className="text-xs text-zinc-600">–</span>
+                  <input
+                    type="time"
+                    aria-label="Until"
+                    value={slotTo}
+                    onChange={(e) => changeSlot(slotDay, slotFrom, e.target.value)}
+                    className={`${field} flex-1 min-w-0`}
+                  />
+                  <button onClick={clearSlot} disabled={!sg.slot && !slotFrom && !slotTo} className={clearBtn}>
+                    Clear
+                  </button>
+                </div>
+                <input
+                  type="date"
+                  aria-label="Day of the time slot"
+                  value={slotDay}
+                  onChange={(e) => changeSlot(e.target.value, slotFrom, slotTo)}
+                  className={`${field} w-full mt-1.5`}
+                />
+              </div>
+
+              <div>
+                <Label>
+                  <span className="inline-flex items-center gap-1.5">
+                    <Link2 size={9} /> Link
+                  </span>
+                </Label>
+                <div className="flex gap-1.5">
+                  <input
+                    type="url"
+                    inputMode="url"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    placeholder="https://..."
+                    aria-label="Link"
+                    value={linkDraft}
+                    onChange={(e) => {
+                      setLinkDraft(e.target.value);
+                      setLinkBad(false);
+                    }}
+                    onBlur={commitLink}
+                    onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+                    className={`${field} flex-1 min-w-0`}
+                  />
+                  <button onClick={clearLink} disabled={!sg.link && !linkDraft} className={clearBtn}>
+                    Clear
+                  </button>
+                </div>
+                {linkBad && <p className="mt-1.5 text-[10px] text-red-400">That does not look like a link.</p>}
               </div>
 
               <div>
@@ -477,7 +632,10 @@ export const GoalDetailModal = ({
   const [editingProject, setEditingProject] = useState(false);
   const [description, setDescription] = useState(goal.description ?? "");
   const [editingDescription, setEditingDescription] = useState(false);
+  // Escape leaves the description as it was: the blur that follows must not save it.
+  const descriptionCancelled = useRef(false);
   const [showDeadlineInput, setShowDeadlineInput] = useState(false);
+  const newTodoRef = useRef<HTMLTextAreaElement>(null);
 
   // Drafts are filled in when editing starts, so what is on screen the rest of
   // the time is always the saved value.
@@ -493,6 +651,7 @@ export const GoalDetailModal = ({
   };
   const startEditingDescription = () => {
     if (!isAdmin) return;
+    descriptionCancelled.current = false;
     setDescription(goal.description ?? "");
     setEditingDescription(true);
   };
@@ -524,6 +683,26 @@ export const GoalDetailModal = ({
       window.removeEventListener("keydown", onKey, true);
     };
   }, [onClose]);
+
+  // Keys while nothing is being typed: 1, 2 and 3 for the tabs, N to write a
+  // new to-do.
+  useEffect(() => {
+    const tabs = ["tasks", "done", "info"] as const;
+    const onKey = (e: KeyboardEvent) => {
+      if (!isPageKey(e)) return;
+      const t = tabs[Number(e.key) - 1];
+      if (t) {
+        setTab(t);
+      } else if (e.key.toLowerCase() === "n" && isAdmin) {
+        e.preventDefault();
+        setTab("tasks");
+        // The field is only there on the To-dos tab, so wait for it to show.
+        setTimeout(() => newTodoRef.current?.focus(), 0);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [isAdmin]);
 
   const patch = useCallback(
     (set: GoalPatch) => {
@@ -1046,7 +1225,19 @@ export const GoalDetailModal = ({
                       onChange={(e) => setDescription(e.target.value)}
                       placeholder="Add a description..."
                       autoFocus
+                      onKeyDown={(e) => {
+                        // ⌘+Enter saves, Escape puts back what was there.
+                        if (isSaveCombo(e)) {
+                          e.preventDefault();
+                          e.currentTarget.blur();
+                        } else if (e.key === "Escape") {
+                          descriptionCancelled.current = true;
+                          setDescription(goal.description ?? "");
+                          setEditingDescription(false);
+                        }
+                      }}
                       onBlur={() => {
+                        if (descriptionCancelled.current) return;
                         setEditingDescription(false);
                         patch({ description });
                       }}
@@ -1283,6 +1474,7 @@ export const GoalDetailModal = ({
             {tab !== "info" && tab === "tasks" && (
               <div className="flex gap-2">
                 <AutoGrowText
+                  inputRef={newTodoRef}
                   placeholder="$ add a to-do..."
                   value={newSubgoal}
                   onChange={setNewSubgoal}

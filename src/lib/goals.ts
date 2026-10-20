@@ -15,6 +15,14 @@ export interface SubTimer {
   startedAt?: string;
 }
 
+/** A stretch of time set aside for a sub-task, such as 14:00 to 18:00 on one day. */
+export interface SubSlot {
+  /** datetime-local string. */
+  start: string;
+  /** datetime-local string, after `start`: on the next day for a slot that runs past midnight. */
+  end: string;
+}
+
 export interface SubGoal {
   id: string;
   text: string;
@@ -29,6 +37,10 @@ export interface SubGoal {
   timer?: SubTimer;
   /** Hidden, like a private goal, from anyone without the admin key. */
   private?: boolean;
+  /** When it is planned to be worked on. */
+  slot?: SubSlot;
+  /** Where the work happens: a doc, a repo, an app link. Kept from anyone without the admin key. */
+  link?: string;
 }
 
 /** When to be reminded about this goal's sub-task deadlines. */
@@ -354,6 +366,72 @@ export const toggleSubDone = (sg: SubGoal): SubGoal => {
 /** "2d 3h late" -- a softer way to say a due time has passed. */
 export const lateText = (cd: Countdown): string => cd.text.replace("overdue", "late");
 
+// --- Time slots -------------------------------------------------------------
+
+const pad2 = (n: number) => String(n).padStart(2, "0");
+
+/** "2026-10-20" for the local day, not the UTC one. */
+export const localDay = (d: Date = new Date()): string =>
+  `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+
+/** A slot from two clock times on one day. An end at or before the start is read as the next day. */
+export const makeSlot = (day: string, from: string, to: string): SubSlot => {
+  if (to > from) return { start: `${day}T${from}`, end: `${day}T${to}` };
+  const next = new Date(`${day}T00:00`);
+  next.setDate(next.getDate() + 1);
+  return { start: `${day}T${from}`, end: `${localDay(next)}T${to}` };
+};
+
+/** Before the slot, inside it, or past it. */
+export const slotState = (slot: SubSlot, now: number = Date.now()): "later" | "now" | "over" => {
+  if (now < Date.parse(slot.start)) return "later";
+  return now < Date.parse(slot.end) ? "now" : "over";
+};
+
+/** "14:00–18:00", with the day in front when it is not today: "Tomorrow 14:00–18:00", "Fri 09:00–11:00", "3 Nov 14:00–18:00". */
+export const formatSlot = (slot: SubSlot, now: Date = new Date()): string => {
+  const range = `${slot.start.slice(11, 16)}–${slot.end.slice(11, 16)}`;
+  const day = new Date(`${slot.start.slice(0, 10)}T00:00`);
+  const days = Math.round((day.getTime() - new Date(`${localDay(now)}T00:00`).getTime()) / 86400000);
+  if (days === 0) return range;
+  if (days === 1) return `Tomorrow ${range}`;
+  if (days > 1 && days < 7) return `${day.toLocaleDateString([], { weekday: "short" })} ${range}`;
+  return `${day.toLocaleDateString([], { day: "numeric", month: "short" })} ${range}`;
+};
+
+// --- Links ------------------------------------------------------------------
+
+/**
+ * A typed link made ready to open, or "" when it is not one: "github.com/me"
+ * becomes "https://github.com/me". App links (vscode://, notion://, obsidian://)
+ * are kept as they are; javascript:, data: and file: links never are.
+ */
+export const cleanLink = (raw: string): string => {
+  const text = raw.trim();
+  if (!text) return "";
+  // A scheme is a word and a colon; "localhost:3000" is a host and a port.
+  const full = /^[a-z][a-z0-9+.-]*:(?!\d)/i.test(text) ? text : `https://${text}`;
+  try {
+    const url = new URL(full);
+    if (["javascript:", "data:", "vbscript:", "file:"].includes(url.protocol)) return "";
+    const web = url.protocol === "http:" || url.protocol === "https:";
+    if (web && !url.hostname.includes(".") && url.hostname !== "localhost") return "";
+    return url.href;
+  } catch {
+    return "";
+  }
+};
+
+/** "docs.google.com" for a web link, the scheme ("notion") for an app link. */
+export const linkLabel = (href: string): string => {
+  try {
+    const url = new URL(href);
+    return url.hostname.replace(/^www\./, "") || url.protocol.replace(":", "");
+  } catch {
+    return href;
+  }
+};
+
 /**
  * The goal as someone without the admin key may see it: no private to-dos.
  * The server strips them before they leave, and the page does the same the
@@ -362,4 +440,21 @@ export const lateText = (cd: Countdown): string => cd.text.replace("overdue", "l
 export const withoutPrivateSubs = (goal: Goal): Goal =>
   goal.subgoals?.some((sg) => sg.private)
     ? { ...goal, subgoals: goal.subgoals.filter((sg) => !sg.private) }
+    : goal;
+
+/**
+ * The goal with its to-dos' links taken out. A link can open a private doc,
+ * so, like a description, it only goes to someone with the admin key.
+ */
+export const withoutSubLinks = (goal: Goal): Goal =>
+  goal.subgoals?.some((sg) => sg.link)
+    ? {
+        ...goal,
+        subgoals: goal.subgoals.map((sg) => {
+          if (!sg.link) return sg;
+          const rest = { ...sg };
+          delete rest.link;
+          return rest;
+        }),
+      }
     : goal;

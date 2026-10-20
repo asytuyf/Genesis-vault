@@ -2,12 +2,13 @@
 
 // Add or change one recurring cost.
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { X, Check } from "lucide-react";
 import {
   CYCLES, DEFAULT_CURRENCY, type Cycle, type Expense, type PaymentCard, todayLocal,
 } from "@/lib/money";
+import { isSaveCombo } from "@/lib/keys";
 
 const CURRENCIES = ["EUR", "USD", "GBP"];
 
@@ -44,6 +45,13 @@ export function SpendForm({ expense, cards, onSave, onClose }: SpendFormProps) {
   const [trialEndsAt, setTrialEndsAt] = useState(expense?.trialEndsAt ?? "");
   const [notes, setNotes] = useState(expense?.notes ?? "");
   const [error, setError] = useState("");
+
+  // Escape closes the form; ⌘+Enter in any of its fields saves it.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
 
   const save = () => {
     const cents = toCents(amount);
@@ -85,6 +93,11 @@ export function SpendForm({ expense, cards, onSave, onClose }: SpendFormProps) {
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: 40 }}
         transition={{ type: "spring", stiffness: 380, damping: 34 }}
+        onKeyDown={(e) => {
+          if (!isSaveCombo(e)) return;
+          e.preventDefault();
+          save();
+        }}
         className="pwa-sheet pwa-sheet-bottom relative bg-[#0a0a0a] border border-zinc-800 w-full md:max-w-md max-h-[92dvh] overflow-y-auto font-mono z-[610] p-5 space-y-4"
       >
         <div className="flex items-center justify-between">
