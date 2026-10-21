@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Tag, Clock, Activity, Hash, Box, Trash2, Plus, Terminal, ListChecks, Timer, ArrowUpDown, Lock, Snail, Plane } from "lucide-react";
+import { Tag, Clock, Activity, Hash, Box, Trash2, Plus, Terminal, ListChecks, Timer, ArrowUpDown, Lock, Snail, Plane, Keyboard } from "lucide-react";
 import { AddGoalForm } from "@/components/AddGoalForm";
 import { GoalDetailModal } from "@/components/GoalDetailModal";
 import { GoalBoard } from "@/components/GoalBoard";
@@ -190,6 +190,33 @@ const GoalItem = ({ g, isAdmin, nukeGoal, setSelectedId }: GoalItemProps) => {
     </div>
   );
 };
+
+/** The keys the page answers to, listed under the goals. `admin` ones only work unlocked. */
+const SHORTCUTS: { title: string; keys: { keys: string[]; does: string; admin?: boolean }[] }[] = [
+  {
+    title: "Goals page",
+    keys: [
+      { keys: ["N"], does: "New goal", admin: true },
+      { keys: ["/"], does: "Search" },
+      { keys: ["B"], does: "Cards or board" },
+    ],
+  },
+  {
+    title: "Inside a goal",
+    keys: [
+      { keys: ["1", "2", "3"], does: "To-dos, Done, Info" },
+      { keys: ["N"], does: "Add a to-do", admin: true },
+      { keys: ["Esc"], does: "Close" },
+    ],
+  },
+  {
+    title: "While typing",
+    keys: [
+      { keys: ["⌘/Ctrl", "Enter"], does: "Save" },
+      { keys: ["Esc"], does: "Cancel or close the form" },
+    ],
+  },
+];
 
 const SYNC_CHIP: Record<SyncState, { text: string; cls: string }> = {
   synced: { text: "● SYNCED", cls: "text-emerald-600 border-emerald-500/20" },
@@ -629,6 +656,40 @@ export default function DirectiveLog() {
           </div>
         </SortableList>
       )}
+
+      {/* Shortcuts need a keyboard, so phones go without. */}
+      <section className="relative z-10 hidden md:block border-t border-zinc-900 pt-8 pb-10">
+        <div className="flex items-center gap-2 mb-5 text-[10px] font-black uppercase tracking-widest text-zinc-600">
+          <Keyboard size={12} /> Keyboard shortcuts
+        </div>
+        <div className="grid gap-8 md:grid-cols-3">
+          {SHORTCUTS.map((group) => (
+            <div key={group.title}>
+              <div className="text-[9px] font-black uppercase tracking-wider text-zinc-700 mb-3">{group.title}</div>
+              {/* Two columns, so every "does" in a group lines up after its widest keys. */}
+              <ul className="grid grid-cols-[auto_1fr] items-center gap-x-4 gap-y-2 text-xs text-zinc-500">
+                {group.keys
+                  .filter((k) => isAdmin || !k.admin)
+                  .map((k) => (
+                    <li key={k.does} className="contents">
+                      <span className="flex items-center gap-1">
+                        {k.keys.map((key) => (
+                          <kbd
+                            key={key}
+                            className="px-1.5 py-0.5 bg-zinc-900 border border-zinc-800 border-b-2 rounded text-[11px] font-bold text-zinc-300 font-mono"
+                          >
+                            {key}
+                          </kbd>
+                        ))}
+                      </span>
+                      <span>{k.does}</span>
+                    </li>
+                  ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      </section>
 
       <div className="fixed inset-0 z-0 opacity-[0.02] pointer-events-none flex items-center justify-center">
         <Box size={600} strokeWidth={0.5} />
