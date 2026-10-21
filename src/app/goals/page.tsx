@@ -657,8 +657,7 @@ export default function DirectiveLog() {
         </SortableList>
       )}
 
-      {/* Shortcuts need a keyboard, so phones go without. */}
-      <section className="relative z-10 hidden md:block border-t border-zinc-900 pt-8 pb-10">
+      <section className="relative z-10 border-t border-zinc-900 pt-8 pb-10">
         <div className="flex items-center gap-2 mb-5 text-[10px] font-black uppercase tracking-widest text-zinc-600">
           <Keyboard size={12} /> Keyboard shortcuts
         </div>
