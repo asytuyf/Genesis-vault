@@ -1,5 +1,6 @@
 // Recurring money: subscriptions and fixed bills, the cards they come out of,
-// and the arithmetic that turns "€8.99 a month" into "€108 a year".
+// and the arithmetic that turns "€8.99 a month" into "€108 a year". Below
+// that, the monthly budget and what is owed to Klarna.
 //
 // Amounts are whole cents. Money in floating point drifts, and a budget that
 // drifts is worse than no budget.
@@ -454,3 +455,307 @@ export function whenLabel(date: string, today: string = todayLocal()): string {
 
 export const cycleLabel = (e: Expense): string =>
   e.cycle === "custom" ? `every ${e.everyDays ?? 30} days` : CYCLES.find((c) => c.value === e.cycle)!.label.toLowerCase();
+
+/** "8.99" and "8,99" both mean 899 cents. */
+export const parseCents = (text: string): number | null => {
+  const clean = text.replace(/[^\d.,-]/g, "").replace(",", ".");
+  if (!clean) return null;
+  const value = Number(clean);
+  if (!Number.isFinite(value) || value < 0) return null;
+  return Math.round(value * 100);
+};
+
+/** "3 Nov". */
+export const shortDate = (date: string): string =>
+  new Date(`${date}T00:00:00`).toLocaleDateString([], { day: "numeric", month: "short" });
+
+// --- budget and Klarna ------------------------------------------------------
+//
+// The budget is what you live on each month. A budget month runs from one
+// payday to the day before the next, because that is the month the money
+// actually has to last, whatever the calendar says.
+//
+// Klarna is credit, so a purchase shows up twice, in two different months:
+// against your Klarna limit in the month you bought it, and against your
+// budget in each month a payment falls due. Both are in euro.
+
+export interface Budget {
+  id: string;
+  /** What comes in each month, in cents. */
+  income: number;
+  /** Day of the month it arrives. A short month uses its last day. */
+  payday: number;
+  /** The most new Klarna you allow yourself in one budget month, in cents. 0 means no limit. */
+  klarnaLimit: number;
+}
+
+export type BudgetOp = { type: "set"; set: Partial<Omit<Budget, "id">> };
+
+export function isBudgetOp(op: unknown): op is BudgetOp {
+  if (!op || typeof op !== "object") return false;
+  const o = op as Record<string, unknown>;
+  return o.type === "set" && !!o.set && typeof o.set === "object";
+}
+
+/** The budget is a list of at most one, so it syncs like everything else. */
+export function applyBudgetOps(list: Budget[], ops: BudgetOp[]): Budget[] {
+  const current = Array.isArray(list) ? list[0] : undefined;
+  const budget: Budget = current ? { ...current } : { id: "budget", income: 0, payday: 1, klarnaLimit: 0 };
+  let touched = !!current;
+
+  for (const op of ops) {
+    if (!isBudgetOp(op)) continue;
+    const set = op.set;
+    if (isCents(set.income)) budget.income = Math.round(set.income);
+    if (typeof set.payday === "number" && Number.isFinite(set.payday)) {
+      budget.payday = Math.min(31, Math.max(1, Math.round(set.payday)));
+    }
+    if (isCents(set.klarnaLimit)) budget.klarnaLimit = Math.round(set.klarnaLimit);
+    touched = true;
+  }
+
+  return touched ? [budget] : [];
+}
+
+export type KlarnaPlan = "30days" | "in3" | "in4" | "monthly";
+
+export const KLARNA_PLANS: { value: KlarnaPlan; label: string }[] = [
+  { value: "30days", label: "Pay in 30 days" },
+  { value: "in3", label: "Pay in 3, every 30 days" },
+  { value: "in4", label: "Pay in 4, every 2 weeks" },
+  { value: "monthly", label: "Monthly financing" },
+];
+
+export interface KlarnaPurchase {
+  id: string;
+  /** What you bought. */
+  name: string;
+  /** Everything you pay back, in cents. */
+  amount: number;
+  /** Counts against the Klarna limit of the budget month it falls in. */
+  boughtOn: string;
+  plan: KlarnaPlan;
+  /** Number of payments, for monthly financing. */
+  months?: number;
+  /** The first payment. The rest follow at the plan's interval. */
+  firstDue: string;
+  /** How many payments are made, oldest first. */
+  paid: number;
+}
+
+export interface KlarnaPatch {
+  name?: string;
+  amount?: number;
+  boughtOn?: string;
+  plan?: KlarnaPlan;
+  months?: number;
+  firstDue?: string;
+  paid?: number;
+}
+
+export type KlarnaOp =
+  | { type: "add"; purchase: KlarnaPurchase }
+  | { type: "remove"; id: string }
+  | { type: "patch"; id: string; set: KlarnaPatch };
+
+const isPlan = (v: unknown): v is KlarnaPlan => KLARNA_PLANS.some((p) => p.value === v);
+
+export function isKlarnaOp(op: unknown): op is KlarnaOp {
+  if (!op || typeof op !== "object") return false;
+  const o = op as Record<string, unknown>;
+  switch (o.type) {
+    case "add": {
+      const p = o.purchase as KlarnaPurchase | undefined;
+      return !!p && typeof p === "object" && isStr(p.id) && isCents(p.amount) && isDate(p.boughtOn);
+    }
+    case "remove":
+      return isStr(o.id);
+    case "patch":
+      return isStr(o.id) && !!o.set && typeof o.set === "object";
+    default:
+      return false;
+  }
+}
+
+export const klarnaPaymentCount = (p: Pick<KlarnaPurchase, "plan" | "months">): number =>
+  p.plan === "in3" ? 3 : p.plan === "in4" ? 4 : p.plan === "monthly" ? Math.min(60, Math.max(1, p.months ?? 12)) : 1;
+
+/** When the first payment falls if you say nothing: Pay in 3 and 4 take the first at checkout. */
+export function defaultFirstDue(plan: KlarnaPlan, boughtOn: string): string {
+  if (plan === "30days") return addDays(boughtOn, 30);
+  if (plan === "monthly") return addMonths(boughtOn, 1);
+  return boughtOn;
+}
+
+/** Every payment of a purchase, oldest first. Odd cents go on the first one. */
+export function klarnaPayments(p: KlarnaPurchase): { due: string; amount: number; paid: boolean }[] {
+  const count = klarnaPaymentCount(p);
+  const each = Math.floor(p.amount / count);
+  return Array.from({ length: count }, (_, i) => ({
+    due:
+      p.plan === "in3"
+        ? addDays(p.firstDue, 30 * i)
+        : p.plan === "in4"
+          ? addDays(p.firstDue, 14 * i)
+          : addMonths(p.firstDue, i),
+    amount: each + (i === 0 ? p.amount - each * count : 0),
+    paid: i < p.paid,
+  }));
+}
+
+function cleanKlarna(p: KlarnaPurchase): KlarnaPurchase {
+  const plan = isPlan(p.plan) ? p.plan : "30days";
+  const boughtOn = isDate(p.boughtOn) ? p.boughtOn : todayLocal();
+  const months = plan === "monthly" ? Math.min(60, Math.max(1, Math.round(Number(p.months) || 12))) : undefined;
+  const clean: KlarnaPurchase = {
+    id: p.id,
+    name: String(p.name ?? "").trim().slice(0, 80) || "Untitled",
+    amount: isCents(p.amount) ? Math.round(p.amount) : 0,
+    boughtOn,
+    plan,
+    ...(months ? { months } : {}),
+    firstDue: isDate(p.firstDue) ? p.firstDue : defaultFirstDue(plan, boughtOn),
+    paid: 0,
+  };
+  clean.paid = Math.min(klarnaPaymentCount(clean), Math.max(0, Math.round(Number(p.paid) || 0)));
+  return clean;
+}
+
+export function applyKlarnaOps(list: KlarnaPurchase[], ops: KlarnaOp[]): KlarnaPurchase[] {
+  let next = Array.isArray(list) ? [...list] : [];
+
+  for (const op of ops) {
+    if (!isKlarnaOp(op)) continue;
+
+    if (op.type === "add") {
+      const clean = cleanKlarna(op.purchase);
+      const i = next.findIndex((p) => p.id === clean.id);
+      if (i === -1) next.push(clean);
+      else next[i] = clean;
+      continue;
+    }
+
+    if (op.type === "remove") {
+      next = next.filter((p) => p.id !== op.id);
+      continue;
+    }
+
+    const i = next.findIndex((p) => p.id === op.id);
+    if (i === -1) continue;
+
+    const set = op.set;
+    const p: KlarnaPurchase = { ...next[i] };
+    if (isStr(set.name) && set.name.trim()) p.name = set.name;
+    if (isCents(set.amount)) p.amount = set.amount;
+    if (isDate(set.boughtOn)) p.boughtOn = set.boughtOn;
+    if (isPlan(set.plan)) p.plan = set.plan;
+    if (typeof set.months === "number") p.months = set.months;
+    if (isDate(set.firstDue)) p.firstDue = set.firstDue;
+    if (typeof set.paid === "number") p.paid = set.paid;
+    next[i] = cleanKlarna(p);
+  }
+
+  return next;
+}
+
+/** What is still to pay on everything bought with Klarna. */
+export const klarnaOwed = (purchases: KlarnaPurchase[]): number =>
+  purchases.reduce((sum, p) => sum + klarnaPayments(p).reduce((s, pay) => s + (pay.paid ? 0 : pay.amount), 0), 0);
+
+const monthsApart = (from: string, to: string): number => {
+  const [fy, fm] = from.split("-").map(Number);
+  const [ty, tm] = to.split("-").map(Number);
+  return (ty - fy) * 12 + (tm - fm);
+};
+
+/**
+ * Every charge from `from` to `to`, both included. Unlike chargesBetween this
+ * also counts back from the anchor: a cost entered by its next date was
+ * charged before that date too. Nothing counts before a free trial ends.
+ */
+export function chargesInPeriod(e: Expense, from: string, to: string): string[] {
+  if (e.status !== "active") return [];
+  const months = e.cycle === "monthly" ? 1 : e.cycle === "quarterly" ? 3 : e.cycle === "yearly" ? 12 : 0;
+  const days = e.cycle === "weekly" ? 7 : Math.max(1, e.everyDays ?? 30);
+  // Each date is worked out from the anchor itself, so the 31st stays the 31st.
+  const at = (k: number) => (months ? addMonths(e.anchor, k * months) : addDays(e.anchor, k * days));
+  let k = months
+    ? Math.floor(monthsApart(e.anchor, from) / months) - 1
+    : Math.floor(daysBetween(from, e.anchor) / days) - 1;
+
+  const out: string[] = [];
+  for (let guard = 0; guard < 400; guard++, k++) {
+    const date = at(k);
+    if (date > to) break;
+    if (date >= from && (!e.trialEndsAt || date >= e.trialEndsAt)) out.push(date);
+  }
+  return out;
+}
+
+/** Payday in a month (0-based, may run past December), held to the month's last day. */
+const paydayIn = (year: number, month: number, payday: number): string => {
+  const first = new Date(year, month, 1);
+  const last = new Date(first.getFullYear(), first.getMonth() + 1, 0).getDate();
+  return todayLocal(new Date(first.getFullYear(), first.getMonth(), Math.min(payday, last)));
+};
+
+/** The budget month holding `today`, or the one `offset` months on. */
+export function budgetPeriod(
+  payday: number,
+  today: string = todayLocal(),
+  offset = 0
+): { start: string; end: string; nextPayday: string } {
+  const [year, month] = today.split("-").map(Number);
+  let m = month - 1;
+  if (today < paydayIn(year, m, payday)) m -= 1;
+  m += offset;
+  const nextPayday = paydayIn(year, m + 1, payday);
+  return { start: paydayIn(year, m, payday), end: addDays(nextPayday, -1), nextPayday };
+}
+
+export interface MonthPlan {
+  start: string;
+  end: string;
+  nextPayday: string;
+  income: number;
+  /** Subscriptions and bills charged in the budget month. */
+  fixed: number;
+  /** Klarna payments falling in the budget month, plus any still unpaid from before it. */
+  klarnaDue: number;
+  /** What is left for everything else: food, going out, the unexpected. */
+  left: number;
+  /** New Klarna bought in the budget month, to hold against the limit. */
+  klarnaUsed: number;
+}
+
+/** One budget month, worked out from scratch. `offset` 1 is the month after this one. */
+export function monthPlan(
+  budget: Budget,
+  expenses: Expense[],
+  klarna: KlarnaPurchase[],
+  today: string = todayLocal(),
+  offset = 0
+): MonthPlan {
+  const { start, end, nextPayday } = budgetPeriod(budget.payday, today, offset);
+
+  let fixed = 0;
+  for (const e of expenses) {
+    if (e.currency === DEFAULT_CURRENCY) fixed += chargesInPeriod(e, start, end).length * e.amount;
+  }
+
+  let klarnaDue = 0;
+  let klarnaUsed = 0;
+  for (const p of klarna) {
+    if (p.boughtOn >= start && p.boughtOn <= end) klarnaUsed += p.amount;
+    for (const pay of klarnaPayments(p)) {
+      // Paid ahead of its date means paid already, out of the month you are in.
+      const when = pay.paid && pay.due > today ? today : pay.due;
+      const inMonth = when >= start && when <= end;
+      // A payment missed earlier still has to come out of this month.
+      const overdue = offset === 0 && !pay.paid && pay.due < start;
+      if (inMonth || overdue) klarnaDue += pay.amount;
+    }
+  }
+
+  return { start, end, nextPayday, income: budget.income, fixed, klarnaDue, left: budget.income - fixed - klarnaDue, klarnaUsed };
+}
