@@ -1,9 +1,9 @@
 "use client";
 
-// Set what you live on each month, the day it arrives, and your Klarna limit.
+// Set what you live on each month, the day it arrives, and your Klarna credit.
 
 import { useState } from "react";
-import { type Budget, parseCents } from "@/lib/money";
+import { type Budget, DEFAULT_KLARNA_LIMIT, centsText, parseCents } from "@/lib/money";
 import { MoneySheet, field, hint, label } from "@/components/MoneySheet";
 
 const DAYS = Array.from({ length: 31 }, (_, i) => i + 1);
@@ -15,16 +15,16 @@ interface BudgetFormProps {
 }
 
 export function BudgetForm({ budget, onSave, onClose }: BudgetFormProps) {
-  const [income, setIncome] = useState(budget ? (budget.income / 100).toFixed(2) : "");
+  const [income, setIncome] = useState(budget ? centsText(budget.income) : "");
   const [payday, setPayday] = useState(budget?.payday ?? 1);
-  const [limit, setLimit] = useState(budget?.klarnaLimit ? (budget.klarnaLimit / 100).toFixed(2) : "");
+  const [limit, setLimit] = useState(centsText(budget?.klarnaLimit ?? DEFAULT_KLARNA_LIMIT));
   const [error, setError] = useState("");
 
   const save = () => {
     const cents = parseCents(income);
     const limitCents = limit.trim() ? parseCents(limit) : 0;
     if (cents === null) return setError("The budget does not look like a number.");
-    if (limitCents === null) return setError("The Klarna limit does not look like a number.");
+    if (limitCents === null) return setError("The Klarna credit does not look like a number.");
     onSave({ income: cents, payday, klarnaLimit: limitCents });
     onClose();
   };
@@ -60,7 +60,7 @@ export function BudgetForm({ budget, onSave, onClose }: BudgetFormProps) {
       </div>
 
       <div>
-        <label className={label}>Klarna limit per month (optional)</label>
+        <label className={label}>Klarna credit per month</label>
         <input
           className={field}
           inputMode="decimal"
@@ -71,7 +71,7 @@ export function BudgetForm({ budget, onSave, onClose }: BudgetFormProps) {
             if (error) setError("");
           }}
         />
-        <p className={hint}>The most you allow yourself to buy with Klarna in one month.</p>
+        <p className={hint}>How much you allow yourself on Klarna each month. It is paid back out of the next month.</p>
       </div>
     </MoneySheet>
   );

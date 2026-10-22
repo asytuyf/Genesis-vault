@@ -544,7 +544,7 @@ export const FileExplorer = ({ mobileOpen, setMobileOpen, desktopOpen }: FileExp
           </div>
 
           {/* AUTH_CONSOLE - Show on pages that need admin protection */}
-          {["/goals", "/library", "/streaks", "/study"].includes(pathname) && (
+          {["/goals", "/library", "/streaks", "/study", "/spend"].includes(pathname) && (
             <div className="mt-6 border border-zinc-900 bg-black/40">
               <div className="flex items-center gap-2 px-3 py-2 border-b border-zinc-900 text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">
                 <Lock size={14} className={themeColorClass} />

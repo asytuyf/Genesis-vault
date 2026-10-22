@@ -1,6 +1,6 @@
 "use client";
 
-// Add or change one subscription or bill.
+// Add or change one subscription: anything charged again and again, rent included.
 
 import { useState } from "react";
 import {
@@ -10,7 +10,7 @@ import { MoneySheet, field, hint, label } from "@/components/MoneySheet";
 
 const CURRENCIES = ["EUR", "USD", "GBP"];
 
-interface SpendFormProps {
+interface SubscriptionFormProps {
   /** The one being changed, or nothing when adding. */
   expense?: Expense;
   cards: PaymentCard[];
@@ -18,7 +18,7 @@ interface SpendFormProps {
   onClose: () => void;
 }
 
-export function SpendForm({ expense, cards, onSave, onClose }: SpendFormProps) {
+export function SubscriptionForm({ expense, cards, onSave, onClose }: SubscriptionFormProps) {
   const [name, setName] = useState(expense?.name ?? "");
   const [amount, setAmount] = useState(expense ? (expense.amount / 100).toFixed(2) : "");
   const [currency, setCurrency] = useState(expense?.currency ?? DEFAULT_CURRENCY);
@@ -58,7 +58,7 @@ export function SpendForm({ expense, cards, onSave, onClose }: SpendFormProps) {
 
   return (
     <MoneySheet
-      title={expense ? "Edit cost" : "New subscription or bill"}
+      title={expense ? "Edit subscription" : "New subscription"}
       saveLabel={expense ? "Save" : "Add"}
       error={error}
       onSave={save}
