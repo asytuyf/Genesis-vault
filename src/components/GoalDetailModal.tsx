@@ -18,6 +18,7 @@ import {
 } from "@/lib/goals";
 import { requestNotifPermission } from "@/lib/notify";
 import { isPageKey, isSaveCombo } from "@/lib/keys";
+import { LinkifiedText } from "@/components/LinkifiedText";
 import type { SyncState } from "@/lib/useGoalSync";
 import { DeviceReminders, GoalReminders } from "@/components/ReminderSettings";
 
@@ -1260,7 +1261,7 @@ export const GoalDetailModal = ({
                       isAdmin ? "cursor-pointer hover:border-zinc-700 hover:text-zinc-400 transition-colors" : ""
                     }`}
                   >
-                    {goal.description}
+                    <LinkifiedText text={goal.description} />
                     {isAdmin && <Pencil size={10} className="inline ml-2 opacity-0 group-hover:opacity-100 text-emerald-400 transition-opacity" />}
                   </p>
                 ) : isAdmin ? (
