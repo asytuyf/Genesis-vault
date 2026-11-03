@@ -74,6 +74,7 @@ export const FileExplorer = ({ mobileOpen, setMobileOpen, desktopOpen }: FileExp
     if (pathname === "/study") return "text-purple-400";
     if (pathname === "/streaks") return "text-orange-400";
     if (pathname === "/library") return "text-red-400";
+    if (pathname === "/spend") return "text-cyan-400";
     return "text-yellow-400";
   };
 
@@ -83,6 +84,7 @@ export const FileExplorer = ({ mobileOpen, setMobileOpen, desktopOpen }: FileExp
     if (pathname === "/study") return "rgba(168, 85, 247, 0.22)";
     if (pathname === "/streaks") return "rgba(249, 115, 22, 0.22)";
     if (pathname === "/library") return "rgba(239, 68, 68, 0.22)";
+    if (pathname === "/spend") return "rgba(34, 211, 238, 0.22)";
     return "rgba(250, 204, 21, 0.22)";
   };
 
@@ -432,50 +434,52 @@ export const FileExplorer = ({ mobileOpen, setMobileOpen, desktopOpen }: FileExp
                           )}
                         </div>
 
-                        {/* SPEND FOLDER: open to all, the numbers inside stay locked */}
-                        <div>
-                          <div
-                            className="flex items-center gap-2 text-white cursor-pointer py-1.5 select-none transition-colors"
-                            onClick={() => toggleFolder("spend")}
-                          >
-                            <span className="text-cyan-400 transition-colors">
-                              {expandedFolders.includes("spend") ? (
-                                <ChevronDown size={20} />
-                              ) : (
-                                <ChevronRight size={20} />
-                              )}
-                            </span>
-                            <Folder
-                              size={20}
-                              className={expandedFolders.includes("spend") ? "text-cyan-400" : "text-zinc-600"}
-                            />
-                            <span className="text-sm font-bold tracking-wide">spend</span>
-                          </div>
-                          {expandedFolders.includes("spend") && (
-                            <div className="ml-2 pl-2 border-l border-zinc-900 mt-1">
-                              <Link
-                                href="/spend"
-                                className="flex items-center gap-2 group/file py-1"
-                                onClick={() => isMobileView && setMobileOpenValue(false)}
-                              >
-                                <File size={18} className="text-cyan-400 transition-colors" />
-                                <span
-                                  className={`text-sm font-medium transition-colors ${isMobileView
-                                    ? pathname === "/spend"
-                                      ? "text-cyan-400"
-                                      : "text-zinc-400"
-                                    : "text-white"
-                                    }`}
-                                >
-                                  page.tsx
-                                </span>
-                                <span className="ml-auto text-[9px] px-1.5 py-0.5 rounded bg-zinc-900/80 font-bold border transition-all text-cyan-400 border-cyan-400/30">
-                                  SPEND
-                                </span>
-                              </Link>
+                        {/* SPEND FOLDER: only there while unlocked. Locking takes it out of the menu. */}
+                        {adminMode && (
+                          <div>
+                            <div
+                              className="flex items-center gap-2 text-white cursor-pointer py-1.5 select-none transition-colors"
+                              onClick={() => toggleFolder("spend")}
+                            >
+                              <span className="text-cyan-400 transition-colors">
+                                {expandedFolders.includes("spend") ? (
+                                  <ChevronDown size={20} />
+                                ) : (
+                                  <ChevronRight size={20} />
+                                )}
+                              </span>
+                              <Folder
+                                size={20}
+                                className={expandedFolders.includes("spend") ? "text-cyan-400" : "text-zinc-600"}
+                              />
+                              <span className="text-sm font-bold tracking-wide">spend</span>
                             </div>
-                          )}
-                        </div>
+                            {expandedFolders.includes("spend") && (
+                              <div className="ml-2 pl-2 border-l border-zinc-900 mt-1">
+                                <Link
+                                  href="/spend"
+                                  className="flex items-center gap-2 group/file py-1"
+                                  onClick={() => isMobileView && setMobileOpenValue(false)}
+                                >
+                                  <File size={18} className="text-cyan-400 transition-colors" />
+                                  <span
+                                    className={`text-sm font-medium transition-colors ${isMobileView
+                                      ? pathname === "/spend"
+                                        ? "text-cyan-400"
+                                        : "text-zinc-400"
+                                      : "text-white"
+                                      }`}
+                                  >
+                                    page.tsx
+                                  </span>
+                                  <span className="ml-auto text-[9px] px-1.5 py-0.5 rounded bg-zinc-900/80 font-bold border transition-all text-cyan-400 border-cyan-400/30">
+                                    SPEND
+                                  </span>
+                                </Link>
+                              </div>
+                            )}
+                          </div>
+                        )}
 
                         {/* LIBRARY FOLDER */}
                         <div>

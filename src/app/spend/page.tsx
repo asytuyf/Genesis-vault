@@ -2,19 +2,17 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { Wallet, Plus, Pencil, Trash2, Lock, PiggyBank, Repeat, CalendarClock, ChevronDown, type LucideIcon } from "lucide-react";
 import {
-  Wallet, Plus, Pencil, Trash2, Lock, CreditCard, CalendarClock, Pause, Play, Scissors, PiggyBank, Repeat,
-  type LucideIcon,
-} from "lucide-react";
-import {
-  type Budget, type BudgetOp, type CardOp, type Expense, type ExpenseOp, type ExpensePatch, type PaymentCard,
-  type Spend, type SpendOp,
-  CARD_COLOURS, DEFAULT_CURRENCY, applyBudgetOps, applyCardOps, applyExpenseOps, applySpendOps, cycleLabel,
-  formatMoney, monthPlan, nextCharge, shortDate, spendingBetween, todayLocal, totalsByCurrency, whenLabel,
-  yearlyCost,
+  type Budget, type BudgetOp, type Expense, type ExpenseOp, type ExpensePatch, type Spend, type SpendOp,
+  DEFAULT_CURRENCY, applyBudgetOps, applyExpenseOps, applySpendOps, budgetPeriod, formatMoney, monthPlan,
+  nextPayment, shortDate, spendingBetween, todayLocal, totalsByCurrency, upcomingCharges, whenLabel, yearlyCost,
 } from "@/lib/money";
 import { useOpSync, type SyncState } from "@/lib/useOpSync";
 import { SubscriptionForm } from "@/components/SubscriptionForm";
+import { SubscriptionCard } from "@/components/SubscriptionCard";
+import { NextPayment, UpcomingList } from "@/components/UpcomingPayments";
+import { KlarnaPanel } from "@/components/KlarnaPanel";
 import { BudgetForm } from "@/components/BudgetForm";
 import { ExpenseForm } from "@/components/ExpenseForm";
 
@@ -26,28 +24,29 @@ const SYNC_LABEL: Record<SyncState, { text: string; cls: string }> = {
   rejected: { text: "! ADMIN_KEY_REJECTED · LOCK, RE-ENTER, UNLOCK", cls: "text-red-400" },
 };
 
-// Four lists sync side by side; the worst of their states is the one to show.
+// Three lists sync side by side; the worst of their states is the one to show.
 const SYNC_RANK: SyncState[] = ["synced", "unsaved", "syncing", "error", "rejected"];
 const worst = (...states: SyncState[]) =>
   states.reduce((a, b) => (SYNC_RANK.indexOf(b) > SYNC_RANK.indexOf(a) ? b : a));
 
-const COLOUR_DOT: Record<string, string> = {
-  cyan: "bg-cyan-400",
-  emerald: "bg-emerald-400",
-  purple: "bg-purple-400",
-  orange: "bg-orange-400",
-  pink: "bg-pink-400",
-  yellow: "bg-yellow-400",
-};
-
-const chip =
-  "px-2 py-0.5 border border-zinc-800 bg-zinc-900/50 text-zinc-500 text-[10px] font-bold uppercase tracking-wider";
+/** Expenses shown before "show all". */
+const RECENT = 6;
+/** How far ahead "to be paid" looks. */
+const AHEAD_DAYS = 30;
 
 const addButton =
   "w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2.5 border border-cyan-500/30 text-cyan-400 text-xs font-black uppercase tracking-wider hover:bg-cyan-500/10 transition-colors";
 
+/** A new record's id: the time it was made, like everywhere else on the site. */
+const newId = () => Date.now().toString();
+
 const eur = (cents: number) => formatMoney(cents, DEFAULT_CURRENCY);
 const money = (cents: number, currency: string) => formatMoney(cents, currency);
+const sumByCurrency = (rows: { amount: number; currency: string }[]) => {
+  const map = new Map<string, number>();
+  for (const r of rows) map.set(r.currency, (map.get(r.currency) ?? 0) + r.amount);
+  return [...map.entries()].map(([currency, amount]) => money(amount, currency)).join(" + ");
+};
 
 const Heading = ({
   icon: Icon,
@@ -60,26 +59,18 @@ const Heading = ({
   note?: React.ReactNode;
   children?: React.ReactNode;
 }) => (
-  <div className="flex items-center gap-3 mb-4 flex-wrap">
-    <Icon size={18} className="text-cyan-400" />
+  <div className="flex items-center gap-x-3 gap-y-1 mb-4 flex-wrap">
+    <Icon size={18} className="text-cyan-400 shrink-0" />
     <span className="text-xs font-black uppercase tracking-[0.2em] text-zinc-400">{title}</span>
-    {note && <span className="text-[10px] text-zinc-700 uppercase">{note}</span>}
+    {note && <span className="text-[10px] text-zinc-600 uppercase wrap-break-word min-w-0">{note}</span>}
     {children}
   </div>
 );
 
 const Line = ({ label, value }: { label: string; value: string }) => (
   <div className="flex items-baseline justify-between gap-4 py-1">
-    <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">{label}</span>
-    <span className="text-sm font-black text-zinc-300">{value}</span>
-  </div>
-);
-
-/** Stands in for anything private while the page is locked. */
-const Hidden = () => (
-  <div className="p-8 border border-dashed border-zinc-900 text-center">
-    <Lock size={18} className="mx-auto mb-3 text-zinc-800" />
-    <p className="text-zinc-700 text-[11px] uppercase tracking-wider">Hidden until unlocked</p>
+    <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-500 min-w-0">{label}</span>
+    <span className="text-sm font-black text-zinc-300 whitespace-nowrap">{value}</span>
   </div>
 );
 
@@ -91,26 +82,14 @@ export default function SpendPage() {
   const [budgetOpen, setBudgetOpen] = useState(false);
   const [spendEditing, setSpendEditing] = useState<Spend | null>(null);
   const [spendAdding, setSpendAdding] = useState(false);
-  const [showCards, setShowCards] = useState(false);
-  const [newCard, setNewCard] = useState("");
-  const [newLast4, setNewLast4] = useState("");
-  const [newColour, setNewColour] = useState<string>(CARD_COLOURS[0]);
   const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [showAllSpending, setShowAllSpending] = useState(false);
   const [showEnded, setShowEnded] = useState(false);
 
   const { items: expenses, syncState: expenseSync, queueOps } = useOpSync<Expense, ExpenseOp>({
     endpoint: "/api/money/subs",
     apply: applyExpenseOps,
     resultKey: "expenses",
-    password,
-    unlocked: adminMode,
-    authReads: true,
-  });
-
-  const { items: cards, syncState: cardSync, queueOps: queueCardOps } = useOpSync<PaymentCard, CardOp>({
-    endpoint: "/api/money/cards",
-    apply: applyCardOps,
-    resultKey: "cards",
     password,
     unlocked: adminMode,
     authReads: true,
@@ -134,7 +113,7 @@ export default function SpendPage() {
     authReads: true,
   });
 
-  const syncState = worst(expenseSync, cardSync, budgetSync, spendSync);
+  const syncState = worst(expenseSync, budgetSync, spendSync);
   const budget = budgets[0] as Budget | undefined;
 
   useEffect(() => {
@@ -156,28 +135,44 @@ export default function SpendPage() {
   }, []);
 
   const today = todayLocal();
-  const active = useMemo(() => expenses.filter((e) => e.status === "active"), [expenses]);
-  const paused = useMemo(() => expenses.filter((e) => e.status === "paused"), [expenses]);
+  // Paying now, soonest charge first.
+  const active = useMemo(
+    () =>
+      expenses
+        .filter((e) => e.status === "active")
+        .map((e) => ({ e, next: nextPayment(e, today) ?? "9999-12-31" }))
+        .sort((a, b) => a.next.localeCompare(b.next) || a.e.name.localeCompare(b.e.name))
+        .map((x) => x.e),
+    [expenses, today]
+  );
+  const inactive = useMemo(() => expenses.filter((e) => e.status === "paused"), [expenses]);
   const ended = useMemo(() => expenses.filter((e) => e.status === "cancelled"), [expenses]);
   const totals = useMemo(() => totalsByCurrency(active), [active]);
-  const trials = useMemo(() => active.filter((e) => e.trialEndsAt && e.trialEndsAt >= today), [active, today]);
+  const upcoming = useMemo(() => upcomingCharges(active, today, AHEAD_DAYS), [active, today]);
 
   const plan = useMemo(() => (budget ? monthPlan(budget, expenses, spending, today) : null), [budget, expenses, spending, today]);
-  // Without a budget there is no budget month yet, so the list shows the calendar month.
-  const monthSpending = useMemo(() => {
-    const from = plan?.start ?? `${today.slice(0, 7)}-01`;
-    const to = plan?.end ?? `${today.slice(0, 7)}-31`;
-    return spendingBetween(spending, from, to);
-  }, [plan, spending, today]);
+  // Without a budget there is no payday yet, so the month is the calendar month.
+  const period = useMemo(() => (plan ? { start: plan.start, end: plan.end } : budgetPeriod(1, today)), [plan, today]);
+  const monthSpending = useMemo(() => spendingBetween(spending, period.start, period.end), [period, spending]);
+  const shownSpending = showAllSpending ? monthSpending : monthSpending.slice(0, RECENT);
   const foreign = useMemo(() => active.some((e) => e.currency !== DEFAULT_CURRENCY), [active]);
+  // The last one-off payment this month for each subscription that is not paid regularly.
+  const paidOnce = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const s of monthSpending) if (s.sub && !map.has(s.sub)) map.set(s.sub, s.date);
+    return map;
+  }, [monthSpending]);
 
   const save = (expense: Expense) => queueOps([{ type: "add", expense }]);
   const patch = (id: string, set: ExpensePatch) => queueOps([{ type: "patch", id, set }]);
+  const saveSpending = (list: Spend[]) => queueSpendOps(list.map((spend) => ({ type: "add" as const, spend })));
+  const payOnce = (e: Expense) =>
+    saveSpending([{ id: newId(), amount: e.amount, where: e.name, date: today, sub: e.id }]);
 
-  // Locked, the page shows its layout and nothing else: every amount, name and
-  // date stays behind the admin key, and the API refuses to send any of it.
+  const used = plan && plan.income > 0 ? Math.min(100, Math.max(0, ((plan.income - plan.left) / plan.income) * 100)) : 0;
+
   return (
-    <main className="relative min-h-screen bg-[#0d0d0d] text-[#f4f4f5] font-mono overflow-x-hidden px-6 pb-6 pt-[86px] md:p-24">
+    <main className="relative min-h-screen bg-[#0d0d0d] text-[#f4f4f5] font-mono overflow-x-hidden px-4 sm:px-6 pt-[86px] pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:p-24">
       <div className="fixed inset-x-0 top-0 h-[28px] bg-cyan-500 z-[150] flex items-center overflow-hidden border-b-2 border-black">
         <motion.div animate={{ x: [0, -1000] }} transition={{ repeat: Infinity, duration: 20, ease: "linear" }} className="flex whitespace-nowrap text-[12px] font-black text-black tracking-[2em]">
           {[...Array(10)].map((_, i) => <span key={i}>UNDER CONSTRUCTION // MEN AT WORK //</span>)}
@@ -193,34 +188,31 @@ export default function SpendPage() {
         <Wallet size={700} strokeWidth={0.5} />
       </div>
 
-      <div className="relative z-10">
-        <header className="mb-10 md:mb-14">
+      <div className="relative z-10 max-w-5xl">
+        <header className="mb-8 md:mb-12">
           <div className="flex flex-col select-none">
             <h1 className="text-5xl md:text-8xl font-black tracking-tighter text-white uppercase leading-[0.8]">SPEND</h1>
             <h1 className="text-5xl md:text-8xl font-black tracking-tighter text-zinc-800 uppercase leading-[0.8]">_CONTROL.</h1>
           </div>
-          {adminMode ? (
-            <div className={`mt-6 text-[10px] font-bold ${SYNC_LABEL[syncState].cls}`}>{SYNC_LABEL[syncState].text}</div>
-          ) : (
-            <div className="flex items-center gap-2 mt-6 text-[10px] font-bold uppercase tracking-wider text-zinc-600">
-              <Lock size={11} /> Locked · unlock with your admin key in the menu
-            </div>
-          )}
+          {adminMode && <div className={`mt-6 text-[10px] font-bold ${SYNC_LABEL[syncState].cls}`}>{SYNC_LABEL[syncState].text}</div>}
         </header>
 
+        {/* Locked, nothing private is on the page at all, and the API refuses to send any of it. */}
         {!adminMode ? (
-          <>
-            <section className="mb-12">
-              <Heading icon={PiggyBank} title="Monthly budget" />
-              <Hidden />
-            </section>
-            <section className="mb-12">
-              <Heading icon={Repeat} title="Subscriptions" />
-              <Hidden />
-            </section>
-          </>
+          <div className="p-10 border border-dashed border-zinc-800 text-center max-w-md">
+            <Lock size={22} className="mx-auto mb-4 text-zinc-600" />
+            <p className="text-sm font-black uppercase tracking-wider text-zinc-400">Locked</p>
+            <p className="text-[11px] text-zinc-600 mt-2 leading-relaxed">Unlock with your admin key in the menu to see your money.</p>
+          </div>
         ) : (
           <>
+            {/* THE CLOSEST PAYMENT */}
+            {upcoming[0] && (
+              <section className="mb-10">
+                <NextPayment charge={upcoming[0]} today={today} />
+              </section>
+            )}
+
             {/* MONTHLY BUDGET */}
             <section className="mb-12">
               <Heading
@@ -231,8 +223,8 @@ export default function SpendPage() {
                 {budget && (
                   <button
                     onClick={() => setBudgetOpen(true)}
-                    title="Edit budget"
-                    className="ml-auto p-1.5 text-zinc-700 hover:text-cyan-400 transition-colors"
+                    aria-label="Edit budget"
+                    className="ml-auto p-1.5 text-zinc-600 hover:text-cyan-400 transition-colors"
                   >
                     <Pencil size={14} />
                   </button>
@@ -248,27 +240,34 @@ export default function SpendPage() {
                   <p className="text-zinc-500 text-xs font-black uppercase tracking-wider">Set your monthly budget</p>
                 </button>
               ) : (
-                <div className="p-5 border border-zinc-800 bg-[#0a0a0a]">
+                <div className="p-4 sm:p-5 border border-zinc-800 bg-[#0a0a0a]">
                   <Line label="Budget" value={eur(plan.income)} />
                   <Line label="Subscriptions" value={`− ${eur(plan.subscriptions)}`} />
                   {plan.klarnaBack > 0 && <Line label="Klarna from last month" value={`− ${eur(plan.klarnaBack)}`} />}
                   <Line label="Spent" value={`− ${eur(plan.spent)}`} />
                   <div className="flex items-baseline justify-between gap-4 border-t border-zinc-800 mt-3 pt-3">
                     <span className="text-xs font-black uppercase tracking-wider text-zinc-300">Left</span>
-                    <span className={`text-3xl font-black ${plan.left < 0 ? "text-red-400" : "text-cyan-400"}`}>{eur(plan.left)}</span>
+                    <span className={`text-3xl font-black whitespace-nowrap ${plan.left < 0 ? "text-red-400" : "text-cyan-400"}`}>
+                      {eur(plan.left)}
+                    </span>
                   </div>
-                  <p
-                    className={`text-[11px] mt-3 ${
-                      plan.klarnaUsed > budget.klarnaLimit ? "text-red-400" : "text-zinc-600"
-                    }`}
-                  >
-                    Klarna: {eur(plan.klarnaUsed)} of {eur(budget.klarnaLimit)} used this month, paid back out of next month.
-                  </p>
-                  {foreign && <p className="text-[10px] text-zinc-700 mt-1">Subscriptions not in euro are left out of this.</p>}
+                  <div className="h-1.5 mt-3 bg-zinc-900 overflow-hidden" title={`${Math.round(used)}% of the budget gone`}>
+                    <div className={`h-full ${plan.left < 0 ? "bg-red-400" : "bg-cyan-400"}`} style={{ width: `${used}%` }} />
+                  </div>
+                  {foreign && <p className="text-[10px] text-zinc-700 mt-2">Subscriptions not in euro are left out of this.</p>}
                 </div>
               )}
 
-              <div className="mt-4">
+              <KlarnaPanel
+                spending={spending}
+                start={period.start}
+                end={period.end}
+                limit={budget ? budget.klarnaLimit : null}
+                today={today}
+                onSave={saveSpending}
+              />
+
+              <div className="mt-6">
                 <button onClick={() => setSpendAdding(true)} className={addButton}>
                   <Plus size={14} /> Add expense
                 </button>
@@ -278,36 +277,59 @@ export default function SpendPage() {
                 <p className="mt-4 text-[11px] text-zinc-700 uppercase tracking-wider">No expenses yet this month</p>
               ) : (
                 <div className="mt-4 space-y-1">
-                  {monthSpending.map((s) => (
+                  {shownSpending.map((s) => (
                     <div key={s.id} className="flex items-center gap-3 p-3 border border-zinc-900 bg-black/40">
-                      <span className="text-[10px] text-zinc-600 w-14 shrink-0">{shortDate(s.date)}</span>
                       <button
                         onClick={() => setSpendEditing(s)}
-                        title="Edit"
-                        className="text-sm text-zinc-300 hover:text-white flex-1 min-w-0 truncate text-left transition-colors"
+                        aria-label={`Edit ${s.where}`}
+                        className="min-w-0 flex-1 text-left group"
                       >
-                        {s.where}
-                      </button>
-                      {s.klarna && (
-                        <span className="px-1.5 py-0.5 border border-pink-500/30 text-pink-400 text-[9px] font-black uppercase tracking-wider">
-                          Klarna
+                        <span className="block text-sm text-zinc-300 group-hover:text-white leading-snug wrap-break-word transition-colors">
+                          {s.where}
                         </span>
-                      )}
-                      <span className="text-sm font-black text-zinc-200 shrink-0">{eur(s.amount)}</span>
+                        <span className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-0.5 text-[10px] uppercase tracking-wider text-zinc-600">
+                          {shortDate(s.date)}
+                          {s.klarna && (
+                            <span className="px-1.5 border border-pink-500/30 text-pink-400 font-black">
+                              Klarna{s.paid ? " · paid back" : ""}
+                            </span>
+                          )}
+                        </span>
+                      </button>
+                      <span className="text-sm font-black text-zinc-200 whitespace-nowrap">{eur(s.amount)}</span>
                       <button
                         onClick={() =>
                           confirmId === `s${s.id}` ? queueSpendOps([{ type: "remove", id: s.id }]) : setConfirmId(`s${s.id}`)
                         }
                         onBlur={() => setConfirmId((id) => (id === `s${s.id}` ? null : id))}
-                        title={confirmId === `s${s.id}` ? "Click again to delete" : "Delete"}
-                        className={`p-1 transition-colors ${confirmId === `s${s.id}` ? "text-red-400" : "text-zinc-800 hover:text-red-400"}`}
+                        aria-label={confirmId === `s${s.id}` ? "Tap again to delete" : "Delete"}
+                        className={`shrink-0 p-1.5 transition-colors ${confirmId === `s${s.id}` ? "text-red-400" : "text-zinc-700 hover:text-red-400"}`}
                       >
                         <Trash2 size={13} />
                       </button>
                     </div>
                   ))}
+                  {monthSpending.length > RECENT && (
+                    <button
+                      onClick={() => setShowAllSpending(!showAllSpending)}
+                      className="inline-flex items-center gap-1.5 pt-2 text-[10px] font-black uppercase tracking-wider text-zinc-600 hover:text-zinc-400 transition-colors"
+                    >
+                      <ChevronDown size={12} className={`transition-transform ${showAllSpending ? "rotate-180" : ""}`} />
+                      {showAllSpending ? "Show fewer" : `Show all ${monthSpending.length}`}
+                    </button>
+                  )}
                 </div>
               )}
+            </section>
+
+            {/* TO BE PAID */}
+            <section className="mb-12">
+              <Heading
+                icon={CalendarClock}
+                title="To be paid"
+                note={upcoming.length > 0 && `${sumByCurrency(upcoming.map((c) => c.expense))} in the next ${AHEAD_DAYS} days`}
+              />
+              <UpcomingList charges={upcoming} today={today} payday={plan?.nextPayday ?? null} />
             </section>
 
             {/* SUBSCRIPTIONS */}
@@ -319,90 +341,7 @@ export default function SpendPage() {
                   totals.length > 0 &&
                   totals.map((t) => `${money(t.monthly, t.currency)} a month · ${money(t.yearly, t.currency)} a year`).join(" + ")
                 }
-              >
-                <button
-                  onClick={() => setShowCards(!showCards)}
-                  className="ml-auto flex items-center gap-1.5 px-2.5 py-1 border border-zinc-800 text-zinc-500 text-[10px] font-black uppercase tracking-wider hover:border-zinc-700 transition-colors"
-                >
-                  <CreditCard size={12} /> Cards
-                </button>
-              </Heading>
-
-              {/* CARDS */}
-              <AnimatePresence>
-                {showCards && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: "auto" }}
-                    exit={{ opacity: 0, height: 0 }}
-                    className="mb-4 overflow-hidden"
-                  >
-                    <div className="p-4 border border-zinc-800 bg-black/60 space-y-3">
-                      <div className="text-[10px] font-black uppercase tracking-wider text-zinc-600">Cards and accounts</div>
-
-                      {cards.map((c) => (
-                        <div key={c.id} className="flex items-center gap-3 p-2.5 border border-zinc-900 bg-black/40">
-                          <span className={`h-2.5 w-2.5 rounded-full ${COLOUR_DOT[c.colour] ?? "bg-zinc-600"}`} />
-                          <span className="text-sm text-zinc-300 flex-1 truncate">{c.label}</span>
-                          {c.last4 && <span className="text-[10px] text-zinc-600 font-mono">·{c.last4}</span>}
-                          <button
-                            onClick={() => queueCardOps([{ type: "remove", id: c.id }])}
-                            title="Remove card"
-                            className="p-1 text-zinc-800 hover:text-red-400 transition-colors"
-                          >
-                            <Trash2 size={12} />
-                          </button>
-                        </div>
-                      ))}
-
-                      <div className="flex flex-wrap gap-2 items-center">
-                        <input
-                          placeholder="Card or account name"
-                          value={newCard}
-                          onChange={(e) => setNewCard(e.target.value)}
-                          className="flex-1 min-w-[10rem] bg-black border border-zinc-800 px-3 py-2 text-sm text-zinc-200 outline-none focus:border-cyan-500/60 placeholder:text-zinc-700"
-                        />
-                        <input
-                          placeholder="Last 4"
-                          inputMode="numeric"
-                          maxLength={4}
-                          value={newLast4}
-                          onChange={(e) => setNewLast4(e.target.value.replace(/\D/g, ""))}
-                          className="w-20 bg-black border border-zinc-800 px-3 py-2 text-sm text-zinc-200 outline-none focus:border-cyan-500/60 placeholder:text-zinc-700 font-mono"
-                        />
-                        <div className="flex gap-1.5">
-                          {CARD_COLOURS.map((colour) => (
-                            <button
-                              key={colour}
-                              onClick={() => setNewColour(colour)}
-                              aria-label={colour}
-                              className={`h-6 w-6 rounded-full ${COLOUR_DOT[colour]} transition-all ${
-                                newColour === colour ? "ring-2 ring-white ring-offset-2 ring-offset-black" : "opacity-50 hover:opacity-100"
-                              }`}
-                            />
-                          ))}
-                        </div>
-                        <button
-                          onClick={() => {
-                            if (!newCard.trim()) return;
-                            queueCardOps([
-                              {
-                                type: "add",
-                                card: { id: Date.now().toString(), label: newCard.trim(), last4: newLast4 || undefined, colour: newColour },
-                              },
-                            ]);
-                            setNewCard("");
-                            setNewLast4("");
-                          }}
-                          className="px-4 py-2 border border-cyan-500/30 text-cyan-400 text-[10px] font-black uppercase tracking-wider hover:bg-cyan-500/10 transition-colors"
-                        >
-                          Add card
-                        </button>
-                      </div>
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
+              />
 
               <div className="mb-4">
                 <button onClick={() => setAdding(true)} className={addButton}>
@@ -410,113 +349,78 @@ export default function SpendPage() {
                 </button>
               </div>
 
-              {/* TRIALS ABOUT TO BITE */}
-              {trials.length > 0 && (
-                <div className="space-y-2 mb-4">
-                  {trials.map((e) => (
-                    <div key={e.id} className="flex items-center gap-3 p-3 border border-yellow-500/30 bg-yellow-500/5">
-                      <CalendarClock size={14} className="text-yellow-400 shrink-0" />
-                      <span className="text-sm font-bold text-white flex-1 truncate">{e.name}</span>
-                      <span className="text-[11px] text-yellow-400 font-bold">starts charging {whenLabel(e.trialEndsAt!, today)}</span>
-                      <span className="text-xs font-black text-zinc-300">{money(e.amount, e.currency)}</span>
-                    </div>
+              {active.length === 0 && inactive.length === 0 ? (
+                <p className="text-[11px] text-zinc-700 uppercase tracking-wider">No subscriptions yet</p>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+                  {active.map((e) => (
+                    <SubscriptionCard
+                      key={e.id}
+                      expense={e}
+                      today={today}
+                      onEdit={() => setEditing(e)}
+                      onPaying={(p) => patch(e.id, { status: p ? "active" : "paused" })}
+                      onCancelled={() => patch(e.id, { status: "cancelled" })}
+                      onDelete={() => queueOps([{ type: "remove", id: e.id }])}
+                      onPayOnce={() => payOnce(e)}
+                    />
                   ))}
                 </div>
               )}
 
-              {active.length === 0 && paused.length === 0 ? (
-                <p className="text-[11px] text-zinc-700 uppercase tracking-wider">No subscriptions yet</p>
-              ) : (
-                <div className="space-y-2">
-                  {[...active, ...paused].map((e) => {
-                    const card = cards.find((c) => c.id === e.cardId);
-                    const due = nextCharge(e, today);
-                    return (
-                      <div
+              {inactive.length > 0 && (
+                <>
+                  <div className="mt-8 mb-3 text-[10px] font-black uppercase tracking-[0.2em] text-zinc-600">
+                    Not paying right now · {inactive.length}
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+                    {inactive.map((e) => (
+                      <SubscriptionCard
                         key={e.id}
-                        className={`p-4 border bg-[#0a0a0a] ${e.status === "paused" ? "border-zinc-900 opacity-60" : "border-zinc-800"}`}
-                      >
-                        <div className="flex flex-wrap items-center gap-3">
-                          <span className="text-base font-bold text-white flex-1 min-w-[8rem] truncate">{e.name}</span>
-                          <span className="text-base font-black text-cyan-400">{money(e.amount, e.currency)}</span>
-                          <span className="text-[10px] text-zinc-600 uppercase">{cycleLabel(e)}</span>
-                        </div>
-
-                        <div className="flex flex-wrap items-center gap-2 mt-3">
-                          <span className={chip}>{money(yearlyCost(e), e.currency)} a year</span>
-                          {e.status === "active" && <span className={chip}>due {whenLabel(due, today)}</span>}
-                          {e.status === "paused" && <span className={chip}>paused</span>}
-                          {card && (
-                            <span className={`${chip} inline-flex items-center gap-1.5`}>
-                              <span className={`h-2 w-2 rounded-full ${COLOUR_DOT[card.colour] ?? "bg-zinc-600"}`} />
-                              {card.label}
-                            </span>
-                          )}
-                          {e.category && <span className={chip}>{e.category}</span>}
-
-                          <span className="ml-auto flex items-center gap-1">
-                            <button onClick={() => setEditing(e)} title="Edit" className="p-1.5 text-zinc-700 hover:text-cyan-400 transition-colors">
-                              <Pencil size={14} />
-                            </button>
-                            <button
-                              onClick={() => patch(e.id, { status: e.status === "paused" ? "active" : "paused" })}
-                              title={e.status === "paused" ? "Resume" : "Pause"}
-                              className="p-1.5 text-zinc-700 hover:text-yellow-400 transition-colors"
-                            >
-                              {e.status === "paused" ? <Play size={14} /> : <Pause size={14} />}
-                            </button>
-                            <button
-                              onClick={() => patch(e.id, { status: "cancelled" })}
-                              title="Cancelled it"
-                              className="p-1.5 text-zinc-700 hover:text-emerald-400 transition-colors"
-                            >
-                              <Scissors size={14} />
-                            </button>
-                            <button
-                              onClick={() => (confirmId === e.id ? queueOps([{ type: "remove", id: e.id }]) : setConfirmId(e.id))}
-                              onBlur={() => setConfirmId((id) => (id === e.id ? null : id))}
-                              title={confirmId === e.id ? "Click again to delete" : "Delete"}
-                              className={`p-1.5 transition-colors ${confirmId === e.id ? "text-red-400" : "text-zinc-800 hover:text-red-400"}`}
-                            >
-                              <Trash2 size={13} />
-                            </button>
-                          </span>
-                        </div>
-
-                        {e.notes && <p className="text-[11px] text-zinc-600 mt-2">{e.notes}</p>}
-                      </div>
-                    );
-                  })}
-                </div>
+                        expense={e}
+                        today={today}
+                        paidOnce={paidOnce.get(e.id)}
+                        onEdit={() => setEditing(e)}
+                        onPaying={(p) => patch(e.id, { status: p ? "active" : "paused" })}
+                        onCancelled={() => patch(e.id, { status: "cancelled" })}
+                        onDelete={() => queueOps([{ type: "remove", id: e.id }])}
+                        onPayOnce={() => payOnce(e)}
+                      />
+                    ))}
+                  </div>
+                </>
               )}
 
               {ended.length > 0 && (
-                <div className="mt-4">
+                <div className="mt-8">
                   <button
                     onClick={() => setShowEnded(!showEnded)}
-                    className="text-[10px] font-black uppercase tracking-wider text-zinc-700 hover:text-zinc-500 transition-colors"
+                    className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-zinc-600 hover:text-zinc-400 transition-colors"
                   >
-                    {showEnded ? "Hide" : "Show"} {ended.length} cancelled
+                    <ChevronDown size={12} className={`transition-transform ${showEnded ? "rotate-180" : ""}`} />
+                    {ended.length} cancelled
                   </button>
                   {showEnded && (
                     <div className="mt-3 space-y-1">
                       {ended.map((e) => (
-                        <div key={e.id} className="flex items-center gap-3 p-2.5 border border-zinc-900 bg-black/30">
-                          <span className="text-sm text-zinc-600 line-through flex-1 truncate">{e.name}</span>
-                          <span className="text-[11px] text-emerald-600">saved {money(yearlyCost(e), e.currency)} a year</span>
-                          <button
-                            onClick={() => patch(e.id, { status: "active" })}
-                            className={`${chip} hover:border-cyan-500/40 hover:text-cyan-400`}
-                          >
-                            Restore
-                          </button>
-                          <button
-                            onClick={() => queueOps([{ type: "remove", id: e.id }])}
-                            title="Forget it entirely"
-                            className="p-1 text-zinc-800 hover:text-red-400 transition-colors"
-                          >
-                            <Trash2 size={12} />
-                          </button>
+                        <div key={e.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 p-2.5 border border-zinc-900 bg-black/30">
+                          <span className="text-sm text-zinc-500 line-through flex-1 min-w-0 wrap-break-word">{e.name}</span>
+                          <span className="text-[11px] text-emerald-600 whitespace-nowrap">saved {money(yearlyCost(e), e.currency)} a year</span>
+                          <span className="flex items-center gap-1 ml-auto">
+                            <button
+                              onClick={() => patch(e.id, { status: "active" })}
+                              className="px-2 py-1 border border-zinc-800 text-zinc-500 text-[10px] font-black uppercase tracking-wider hover:border-cyan-500/40 hover:text-cyan-400 transition-colors"
+                            >
+                              Restore
+                            </button>
+                            <button
+                              onClick={() => queueOps([{ type: "remove", id: e.id }])}
+                              aria-label="Forget it entirely"
+                              className="p-1.5 text-zinc-700 hover:text-red-400 transition-colors"
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          </span>
                         </div>
                       ))}
                     </div>
@@ -532,7 +436,6 @@ export default function SpendPage() {
         {adminMode && (adding || editing) && (
           <SubscriptionForm
             expense={editing ?? undefined}
-            cards={cards}
             onSave={save}
             onClose={() => {
               setAdding(false);

@@ -481,7 +481,9 @@ export const shortDate = (date: string): string =>
 // Subscriptions come off it by themselves. Everything else is logged as an
 // expense, so what is left goes down as you spend. An expense put on Klarna
 // leaves this month alone: it uses up the month's Klarna credit and is paid
-// back out of the next month's budget. All of it is in euro.
+// back out of the next month's budget. Ticking it off as paid back only keeps
+// track of the Klarna side; the budget already set that money aside. All of
+// it is in euro.
 
 export interface Budget {
   id: string;
@@ -536,6 +538,10 @@ export interface Spend {
   date: string;
   /** Put on Klarna: paid back out of next month's budget instead of this one. */
   klarna?: boolean;
+  /** Klarna only: the day you paid it back to Klarna. */
+  paid?: string;
+  /** The subscription this was a one-off payment for ("Pay once"). */
+  sub?: string;
 }
 
 /** Changing an expense sends it again whole, so "add" also replaces. */
@@ -566,7 +572,8 @@ export function applySpendOps(list: Spend[], ops: SpendOp[]): Spend[] {
       amount: Math.round(op.spend.amount),
       where: String(op.spend.where ?? "").trim().slice(0, 80) || "Something",
       date: op.spend.date,
-      ...(op.spend.klarna === true ? { klarna: true } : {}),
+      ...(op.spend.klarna === true ? { klarna: true, ...(isDate(op.spend.paid) ? { paid: op.spend.paid } : {}) } : {}),
+      ...(isStr(op.spend.sub) && op.spend.sub ? { sub: op.spend.sub.slice(0, 40) } : {}),
     };
     const i = next.findIndex((s) => s.id === clean.id);
     if (i === -1) next.push(clean);
@@ -648,6 +655,36 @@ export interface MonthPlan {
   left: number;
   /** Put on Klarna this month, paid back out of the next. */
   klarnaUsed: number;
+  /** Klarna from before this month not yet paid back: to pay now. */
+  klarnaDue: number;
+  /** Klarna from this month not yet paid back: to pay next month. */
+  klarnaNext: number;
+  /** Paid back to Klarna during this month. */
+  klarnaPaid: number;
+}
+
+/** Klarna seen from one budget month: what is owed, what was paid back, what credit is used. */
+export function klarnaTotals(
+  spending: Spend[],
+  start: string,
+  end: string
+): { used: number; due: number; next: number; paid: number } {
+  let used = 0;
+  let due = 0;
+  let next = 0;
+  let paid = 0;
+  for (const s of spending) {
+    if (!s.klarna) continue;
+    if (s.date >= start && s.date <= end) used += s.amount;
+    if (s.paid) {
+      if (s.paid >= start && s.paid <= end) paid += s.amount;
+    } else if (s.date < start) {
+      due += s.amount;
+    } else {
+      next += s.amount;
+    }
+  }
+  return { used, due, next, paid };
 }
 
 /** The budget month holding `today`, worked out from scratch. */
@@ -666,18 +703,15 @@ export function monthPlan(
   }
 
   let spent = 0;
-  let klarnaUsed = 0;
   let klarnaBack = 0;
   for (const s of spending) {
-    const thisMonth = s.date >= start && s.date <= end;
     if (!s.klarna) {
-      if (thisMonth) spent += s.amount;
-    } else if (thisMonth) {
-      klarnaUsed += s.amount;
+      if (s.date >= start && s.date <= end) spent += s.amount;
     } else if (s.date >= last.start && s.date <= last.end) {
       klarnaBack += s.amount;
     }
   }
+  const klarna = klarnaTotals(spending, start, end);
 
   return {
     start,
@@ -688,6 +722,59 @@ export function monthPlan(
     klarnaBack,
     spent,
     left: budget.income - subs - klarnaBack - spent,
-    klarnaUsed,
+    klarnaUsed: klarna.used,
+    klarnaDue: klarna.due,
+    klarnaNext: klarna.next,
+    klarnaPaid: klarna.paid,
   };
 }
+
+// --- what is coming up ------------------------------------------------------
+
+/**
+ * The next real charge on or after `from`: after a free trial ends, and worked
+ * out for a subscription that is switched off too (the day it would be).
+ */
+export function nextPayment(e: Expense, from: string = todayLocal()): string | null {
+  const start = e.trialEndsAt && e.trialEndsAt > from ? e.trialEndsAt : from;
+  return chargesInPeriod({ ...e, status: "active" }, start, addDays(start, 800))[0] ?? null;
+}
+
+/** Every charge in the next `days` days, soonest first. */
+export function upcomingCharges(
+  subscriptions: Expense[],
+  today: string = todayLocal(),
+  days = 30
+): { expense: Expense; date: string }[] {
+  const to = addDays(today, days);
+  const out: { expense: Expense; date: string }[] = [];
+  for (const e of subscriptions) for (const date of chargesInPeriod(e, today, to)) out.push({ expense: e, date });
+  return out.sort((a, b) => a.date.localeCompare(b.date) || a.expense.name.localeCompare(b.expense.name));
+}
+
+const ordinal = (n: number): string => {
+  const tens = n % 100;
+  if (tens >= 11 && tens <= 13) return `${n}th`;
+  return `${n}${["th", "st", "nd", "rd"][n % 10] ?? "th"}`;
+};
+
+/** When it is charged, in words: "monthly on the 7th", "yearly on 3 Mar", "weekly on Fridays". */
+export function scheduleLabel(e: Expense): string {
+  const d = new Date(`${e.anchor}T00:00:00`);
+  switch (e.cycle) {
+    case "monthly":
+      return `monthly on the ${ordinal(d.getDate())}`;
+    case "yearly":
+      return `yearly on ${shortDate(e.anchor)}`;
+    case "weekly":
+      return `weekly on ${d.toLocaleDateString([], { weekday: "long" })}s`;
+    case "quarterly":
+      return "every 3 months";
+    default:
+      return `every ${e.everyDays ?? 30} days`;
+  }
+}
+
+/** "Fri 7 Nov". */
+export const dayDate = (date: string): string =>
+  new Date(`${date}T00:00:00`).toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" });

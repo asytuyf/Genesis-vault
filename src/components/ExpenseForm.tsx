@@ -31,7 +31,14 @@ export function ExpenseForm({ spend, klarnaLeft, onSave, onClose }: ExpenseFormP
     const cents = parseCents(amount);
     if (!cents) return setError("How much was it?");
     if (!where.trim()) return setError("Say where you spent it.");
-    onSave({ id, amount: cents, where: where.trim(), date, ...(klarna ? { klarna: true } : {}) });
+    onSave({
+      id,
+      amount: cents,
+      where: where.trim(),
+      date,
+      ...(klarna ? { klarna: true, ...(spend?.paid ? { paid: spend.paid } : {}) } : {}),
+      ...(spend?.sub ? { sub: spend.sub } : {}),
+    });
     onClose();
   };
 
@@ -44,7 +51,7 @@ export function ExpenseForm({ spend, klarnaLeft, onSave, onClose }: ExpenseFormP
       onClose={onClose}
     >
       <div className="grid grid-cols-2 gap-2">
-        <div>
+        <div className="min-w-0">
           <label className={label}>Amount</label>
           <input
             className={field}
@@ -58,7 +65,7 @@ export function ExpenseForm({ spend, klarnaLeft, onSave, onClose }: ExpenseFormP
             autoFocus
           />
         </div>
-        <div>
+        <div className="min-w-0">
           <label className={label}>Date</label>
           <input className={field} type="date" value={date} onChange={(e) => e.target.value && setDate(e.target.value)} />
         </div>

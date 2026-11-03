@@ -8,8 +8,10 @@ import { motion } from "framer-motion";
 import { X, Check } from "lucide-react";
 import { isSaveCombo } from "@/lib/keys";
 
+// min-w-0, the left-aligned value and the minimum height keep iPhone date
+// fields inside their column, and stop an empty one from collapsing.
 export const field =
-  "w-full bg-black border border-zinc-800 px-3 py-2.5 text-sm text-zinc-200 outline-none focus:border-cyan-500/60 placeholder:text-zinc-700 font-mono";
+  "w-full min-w-0 min-h-[42px] bg-black border border-zinc-800 px-3 py-2.5 text-sm text-zinc-200 outline-none focus:border-cyan-500/60 placeholder:text-zinc-700 font-mono [&[type=date]]:appearance-none [&::-webkit-date-and-time-value]:text-left";
 export const label = "block text-[9px] font-black uppercase tracking-wider text-zinc-600 mb-1.5";
 export const hint = "text-[10px] text-zinc-700 mt-1.5 leading-relaxed";
 
