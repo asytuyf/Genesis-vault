@@ -640,6 +640,117 @@ export function budgetPeriod(
   return { start: paydayIn(year, m, payday), end: addDays(nextPayday, -1), nextPayday };
 }
 
+// --- Klarna payments ----------------------------------------------------------
+//
+// Klarna is kept like an account, one budget month at a time: what you put on
+// it that month, and the payments that pay it back. Payments come in as many
+// separate sums as you like, whenever each pay-later falls due, and each one
+// says which month it pays back.
+
+export interface KlarnaPayment {
+  id: string;
+  /** Whole cents. */
+  amount: number;
+  /** The day you paid, YYYY-MM-DD. */
+  date: string;
+  /** Any day inside the budget month whose Klarna this pays back. */
+  for: string;
+}
+
+export type KlarnaPaymentOp = { type: "add"; payment: KlarnaPayment } | { type: "remove"; id: string };
+
+export function isKlarnaPaymentOp(op: unknown): op is KlarnaPaymentOp {
+  if (!op || typeof op !== "object") return false;
+  const o = op as Record<string, unknown>;
+  if (o.type === "remove") return isStr(o.id);
+  if (o.type !== "add") return false;
+  const p = o.payment as KlarnaPayment | undefined;
+  return !!p && typeof p === "object" && isStr(p.id) && isCents(p.amount) && isDate(p.date) && isDate(p.for);
+}
+
+export function applyKlarnaPaymentOps(list: KlarnaPayment[], ops: KlarnaPaymentOp[]): KlarnaPayment[] {
+  let next = Array.isArray(list) ? [...list] : [];
+  for (const op of ops) {
+    if (!isKlarnaPaymentOp(op)) continue;
+    if (op.type === "remove") {
+      next = next.filter((p) => p.id !== op.id);
+      continue;
+    }
+    const clean: KlarnaPayment = {
+      id: op.payment.id,
+      amount: Math.round(op.payment.amount),
+      date: op.payment.date,
+      for: op.payment.for,
+    };
+    const i = next.findIndex((p) => p.id === clean.id);
+    if (i === -1) next.push(clean);
+    else next[i] = clean;
+  }
+  return next;
+}
+
+/**
+ * Every payment, plus Klarna expenses ticked off as paid back before payments
+ * existed: each of those counts as one payment of its full amount.
+ */
+export const withTicked = (spending: Spend[], payments: KlarnaPayment[]): KlarnaPayment[] => [
+  ...payments,
+  ...spending
+    .filter((s) => s.klarna && s.paid)
+    .map((s) => ({ id: `ticked:${s.id}`, amount: s.amount, date: s.paid!, for: s.date })),
+];
+
+export interface KlarnaMonth {
+  start: string;
+  end: string;
+  /** Put on Klarna in this budget month. */
+  used: number;
+  /** Paid back towards it so far. */
+  paid: number;
+  /** Still to pay back. Below zero if more was paid than used. */
+  left: number;
+  /** What was bought with it, newest first. */
+  purchases: Spend[];
+}
+
+/** Klarna month by month: this month, last month, and any older month still not paid off. */
+export function klarnaMonths(
+  spending: Spend[],
+  payments: KlarnaPayment[],
+  payday: number,
+  today: string = todayLocal()
+): { current: KlarnaMonth; last: KlarnaMonth; earlier: KlarnaMonth[] } {
+  const months = new Map<string, KlarnaMonth>();
+  const month = (date: string): KlarnaMonth => {
+    const { start, end } = budgetPeriod(payday, date);
+    let m = months.get(start);
+    if (!m) {
+      m = { start, end, used: 0, paid: 0, left: 0, purchases: [] };
+      months.set(start, m);
+    }
+    return m;
+  };
+
+  const current = month(today);
+  const last = month(budgetPeriod(payday, today, -1).start);
+  for (const s of spending) {
+    if (!s.klarna) continue;
+    const m = month(s.date);
+    m.used += s.amount;
+    m.purchases.push(s);
+  }
+  for (const p of withTicked(spending, payments)) month(p.for).paid += p.amount;
+
+  for (const m of months.values()) {
+    m.left = m.used - m.paid;
+    m.purchases.sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
+  }
+  const earlier = [...months.values()].filter((m) => m.start < last.start && m.left > 0).sort((a, b) => a.start.localeCompare(b.start));
+  return { current, last, earlier };
+}
+
+// --- the month's plan ---------------------------------------------------------
+
 export interface MonthPlan {
   start: string;
   end: string;
@@ -647,44 +758,16 @@ export interface MonthPlan {
   income: number;
   /** Subscriptions charged in the budget month. */
   subscriptions: number;
-  /** Last month's Klarna, paid back out of this one. */
+  /** Last month's Klarna still unpaid when this month began: it comes out of this one. */
   klarnaBack: number;
+  /** This month's own Klarna, already paid back this month. */
+  klarnaEarly: number;
   /** Expenses paid with your own money this month. */
   spent: number;
   /** What is left, going down with every expense. */
   left: number;
-  /** Put on Klarna this month, paid back out of the next. */
+  /** Put on Klarna this month. */
   klarnaUsed: number;
-  /** Klarna from before this month not yet paid back: to pay now. */
-  klarnaDue: number;
-  /** Klarna from this month not yet paid back: to pay next month. */
-  klarnaNext: number;
-  /** Paid back to Klarna during this month. */
-  klarnaPaid: number;
-}
-
-/** Klarna seen from one budget month: what is owed, what was paid back, what credit is used. */
-export function klarnaTotals(
-  spending: Spend[],
-  start: string,
-  end: string
-): { used: number; due: number; next: number; paid: number } {
-  let used = 0;
-  let due = 0;
-  let next = 0;
-  let paid = 0;
-  for (const s of spending) {
-    if (!s.klarna) continue;
-    if (s.date >= start && s.date <= end) used += s.amount;
-    if (s.paid) {
-      if (s.paid >= start && s.paid <= end) paid += s.amount;
-    } else if (s.date < start) {
-      due += s.amount;
-    } else {
-      next += s.amount;
-    }
-  }
-  return { used, due, next, paid };
 }
 
 /** The budget month holding `today`, worked out from scratch. */
@@ -692,10 +775,13 @@ export function monthPlan(
   budget: Budget,
   subscriptions: Expense[],
   spending: Spend[],
-  today: string = todayLocal()
+  today: string = todayLocal(),
+  payments: KlarnaPayment[] = []
 ): MonthPlan {
   const { start, end, nextPayday } = budgetPeriod(budget.payday, today);
   const last = budgetPeriod(budget.payday, today, -1);
+  const inThis = (date: string) => date >= start && date <= end;
+  const inLast = (date: string) => date >= last.start && date <= last.end;
 
   let subs = 0;
   for (const e of subscriptions) {
@@ -703,15 +789,27 @@ export function monthPlan(
   }
 
   let spent = 0;
-  let klarnaBack = 0;
+  let klarnaUsed = 0;
+  let lastUsed = 0;
   for (const s of spending) {
     if (!s.klarna) {
-      if (s.date >= start && s.date <= end) spent += s.amount;
-    } else if (s.date >= last.start && s.date <= last.end) {
-      klarnaBack += s.amount;
+      if (inThis(s.date)) spent += s.amount;
+    } else if (inThis(s.date)) {
+      klarnaUsed += s.amount;
+    } else if (inLast(s.date)) {
+      lastUsed += s.amount;
     }
   }
-  const klarna = klarnaTotals(spending, start, end);
+
+  // Paid towards last month before this month began came out of last month's
+  // money. Paid towards this month already, out of this one's.
+  let paidBefore = 0;
+  let klarnaEarly = 0;
+  for (const p of withTicked(spending, payments)) {
+    if (inLast(p.for) && p.date < start) paidBefore += p.amount;
+    else if (inThis(p.for) && inThis(p.date)) klarnaEarly += p.amount;
+  }
+  const klarnaBack = Math.max(0, lastUsed - paidBefore);
 
   return {
     start,
@@ -720,12 +818,10 @@ export function monthPlan(
     income: budget.income,
     subscriptions: subs,
     klarnaBack,
+    klarnaEarly,
     spent,
-    left: budget.income - subs - klarnaBack - spent,
-    klarnaUsed: klarna.used,
-    klarnaDue: klarna.due,
-    klarnaNext: klarna.next,
-    klarnaPaid: klarna.paid,
+    left: budget.income - subs - klarnaBack - klarnaEarly - spent,
+    klarnaUsed,
   };
 }
 

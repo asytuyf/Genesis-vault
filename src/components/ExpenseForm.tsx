@@ -11,16 +11,18 @@ interface ExpenseFormProps {
   spend?: Spend;
   /** Klarna credit still free this month, in cents; null before a budget is set. */
   klarnaLeft: number | null;
+  /** Starting values for a new one, e.g. Klarna on and a date last month. */
+  defaults?: { klarna?: boolean; date?: string; where?: string };
   onSave: (spend: Spend) => void;
   onClose: () => void;
 }
 
-export function ExpenseForm({ spend, klarnaLeft, onSave, onClose }: ExpenseFormProps) {
+export function ExpenseForm({ spend, klarnaLeft, defaults, onSave, onClose }: ExpenseFormProps) {
   const [id] = useState(() => spend?.id ?? Date.now().toString());
   const [amount, setAmount] = useState(spend ? centsText(spend.amount) : "");
-  const [where, setWhere] = useState(spend?.where ?? "");
-  const [date, setDate] = useState(spend?.date ?? todayLocal());
-  const [klarna, setKlarna] = useState(spend?.klarna ?? false);
+  const [where, setWhere] = useState(spend?.where ?? defaults?.where ?? "");
+  const [date, setDate] = useState(spend?.date ?? defaults?.date ?? todayLocal());
+  const [klarna, setKlarna] = useState(spend?.klarna ?? defaults?.klarna ?? false);
   const [error, setError] = useState("");
 
   // Editing a Klarna expense frees its own amount first.

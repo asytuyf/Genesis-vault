@@ -4,15 +4,18 @@ import { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Wallet, Plus, Pencil, Trash2, Lock, PiggyBank, Repeat, CalendarClock, ChevronDown, type LucideIcon } from "lucide-react";
 import {
-  type Budget, type BudgetOp, type Expense, type ExpenseOp, type ExpensePatch, type Spend, type SpendOp,
-  DEFAULT_CURRENCY, applyBudgetOps, applyExpenseOps, applySpendOps, budgetPeriod, formatMoney, monthPlan,
-  nextPayment, shortDate, spendingBetween, todayLocal, totalsByCurrency, upcomingCharges, whenLabel, yearlyCost,
+  type Budget, type BudgetOp, type Expense, type ExpenseOp, type ExpensePatch, type KlarnaPayment, type KlarnaPaymentOp,
+  type Spend, type SpendOp,
+  DEFAULT_CURRENCY, applyBudgetOps, applyExpenseOps, applyKlarnaPaymentOps, applySpendOps, budgetPeriod, formatMoney,
+  klarnaMonths, monthPlan, nextPayment, shortDate, spendingBetween, todayLocal, totalsByCurrency, upcomingCharges,
+  whenLabel, withTicked, yearlyCost,
 } from "@/lib/money";
 import { useOpSync, type SyncState } from "@/lib/useOpSync";
 import { SubscriptionForm } from "@/components/SubscriptionForm";
 import { SubscriptionCard } from "@/components/SubscriptionCard";
 import { NextPayment, UpcomingList } from "@/components/UpcomingPayments";
 import { KlarnaPanel } from "@/components/KlarnaPanel";
+import { KlarnaPaymentForm, type MonthChoice } from "@/components/KlarnaPaymentForm";
 import { BudgetForm } from "@/components/BudgetForm";
 import { ExpenseForm } from "@/components/ExpenseForm";
 
@@ -24,7 +27,7 @@ const SYNC_LABEL: Record<SyncState, { text: string; cls: string }> = {
   rejected: { text: "! ADMIN_KEY_REJECTED · LOCK, RE-ENTER, UNLOCK", cls: "text-red-400" },
 };
 
-// Three lists sync side by side; the worst of their states is the one to show.
+// Four lists sync side by side; the worst of their states is the one to show.
 const SYNC_RANK: SyncState[] = ["synced", "unsaved", "syncing", "error", "rejected"];
 const worst = (...states: SyncState[]) =>
   states.reduce((a, b) => (SYNC_RANK.indexOf(b) > SYNC_RANK.indexOf(a) ? b : a));
@@ -82,6 +85,9 @@ export default function SpendPage() {
   const [budgetOpen, setBudgetOpen] = useState(false);
   const [spendEditing, setSpendEditing] = useState<Spend | null>(null);
   const [spendAdding, setSpendAdding] = useState(false);
+  const [spendDefaults, setSpendDefaults] = useState<{ klarna?: boolean; date?: string; where?: string } | undefined>();
+  const [paymentEditing, setPaymentEditing] = useState<KlarnaPayment | null>(null);
+  const [paymentAdding, setPaymentAdding] = useState(false);
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [showAllSpending, setShowAllSpending] = useState(false);
   const [showEnded, setShowEnded] = useState(false);
@@ -113,7 +119,16 @@ export default function SpendPage() {
     authReads: true,
   });
 
-  const syncState = worst(expenseSync, budgetSync, spendSync);
+  const { items: payments, syncState: paymentSync, queueOps: queuePaymentOps } = useOpSync<KlarnaPayment, KlarnaPaymentOp>({
+    endpoint: "/api/money/klarna",
+    apply: applyKlarnaPaymentOps,
+    resultKey: "payments",
+    password,
+    unlocked: adminMode,
+    authReads: true,
+  });
+
+  const syncState = worst(expenseSync, budgetSync, spendSync, paymentSync);
   const budget = budgets[0] as Budget | undefined;
 
   useEffect(() => {
@@ -150,8 +165,32 @@ export default function SpendPage() {
   const totals = useMemo(() => totalsByCurrency(active), [active]);
   const upcoming = useMemo(() => upcomingCharges(active, today, AHEAD_DAYS), [active, today]);
 
-  const plan = useMemo(() => (budget ? monthPlan(budget, expenses, spending, today) : null), [budget, expenses, spending, today]);
-  // Without a budget there is no payday yet, so the month is the calendar month.
+  const plan = useMemo(
+    () => (budget ? monthPlan(budget, expenses, spending, today, payments) : null),
+    [budget, expenses, spending, today, payments]
+  );
+  // Without a budget there is no payday yet, so a month is a calendar month.
+  const payday = budget?.payday ?? 1;
+  const klarna = useMemo(() => klarnaMonths(spending, payments, payday, today), [spending, payments, payday, today]);
+  const klarnaPayments = useMemo(
+    () => withTicked(spending, payments).sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id)),
+    [spending, payments]
+  );
+  // Months a payment can pay back, oldest first, with what is left on each.
+  const monthChoices: MonthChoice[] = [
+    ...klarna.earlier.map((m) => ({ start: m.start, label: `${shortDate(m.start)} – ${shortDate(m.end)}`, left: m.left })),
+    { start: klarna.last.start, label: "Last month", left: klarna.last.left },
+    { start: klarna.current.start, label: "This month", left: klarna.current.left },
+  ];
+  const monthOf = (date: string) => budgetPeriod(payday, date).start;
+  const forLabel = (p: KlarnaPayment) => {
+    const start = monthOf(p.for);
+    if (start === klarna.current.start) return "this month";
+    if (start === klarna.last.start) return "last month";
+    return `${shortDate(start)} – ${shortDate(budgetPeriod(payday, p.for).end)}`;
+  };
+  // A new payment goes to the oldest month still owing, else this month.
+  const firstOwing = monthChoices.find((m) => m.left > 0)?.start ?? klarna.current.start;
   const period = useMemo(() => (plan ? { start: plan.start, end: plan.end } : budgetPeriod(1, today)), [plan, today]);
   const monthSpending = useMemo(() => spendingBetween(spending, period.start, period.end), [period, spending]);
   const shownSpending = showAllSpending ? monthSpending : monthSpending.slice(0, RECENT);
@@ -166,6 +205,32 @@ export default function SpendPage() {
   const save = (expense: Expense) => queueOps([{ type: "add", expense }]);
   const patch = (id: string, set: ExpensePatch) => queueOps([{ type: "patch", id, set }]);
   const saveSpending = (list: Spend[]) => queueSpendOps(list.map((spend) => ({ type: "add" as const, spend })));
+  const savePayment = (payment: KlarnaPayment) => {
+    // A Klarna expense once ticked off as paid becomes a payment of its own.
+    if (payment.id.startsWith("ticked:")) {
+      const ticked = spending.find((s) => `ticked:${s.id}` === payment.id);
+      if (ticked) {
+        const rest = { ...ticked };
+        delete rest.paid;
+        saveSpending([rest]);
+      }
+      queuePaymentOps([{ type: "add", payment: { ...payment, id: newId() } }]);
+      return;
+    }
+    queuePaymentOps([{ type: "add", payment }]);
+  };
+  const deletePayment = (payment: KlarnaPayment) => {
+    if (payment.id.startsWith("ticked:")) {
+      const ticked = spending.find((s) => `ticked:${s.id}` === payment.id);
+      if (ticked) {
+        const rest = { ...ticked };
+        delete rest.paid;
+        saveSpending([rest]);
+      }
+      return;
+    }
+    queuePaymentOps([{ type: "remove", id: payment.id }]);
+  };
   const payOnce = (e: Expense) =>
     saveSpending([{ id: newId(), amount: e.amount, where: e.name, date: today, sub: e.id }]);
 
@@ -202,7 +267,7 @@ export default function SpendPage() {
           <div className="p-10 border border-dashed border-zinc-800 text-center max-w-md">
             <Lock size={22} className="mx-auto mb-4 text-zinc-600" />
             <p className="text-sm font-black uppercase tracking-wider text-zinc-400">Locked</p>
-            <p className="text-[11px] text-zinc-600 mt-2 leading-relaxed">Unlock with your admin key in the menu to see your money.</p>
+            <p className="text-[11px] text-zinc-600 mt-2 leading-relaxed">Unlock with your admin key in the menu to see your expenses.</p>
           </div>
         ) : (
           <>
@@ -244,6 +309,7 @@ export default function SpendPage() {
                   <Line label="Budget" value={eur(plan.income)} />
                   <Line label="Subscriptions" value={`− ${eur(plan.subscriptions)}`} />
                   {plan.klarnaBack > 0 && <Line label="Klarna from last month" value={`− ${eur(plan.klarnaBack)}`} />}
+                  {plan.klarnaEarly > 0 && <Line label="Klarna paid early" value={`− ${eur(plan.klarnaEarly)}`} />}
                   <Line label="Spent" value={`− ${eur(plan.spent)}`} />
                   <div className="flex items-baseline justify-between gap-4 border-t border-zinc-800 mt-3 pt-3">
                     <span className="text-xs font-black uppercase tracking-wider text-zinc-300">Left</span>
@@ -259,12 +325,21 @@ export default function SpendPage() {
               )}
 
               <KlarnaPanel
-                spending={spending}
-                start={period.start}
-                end={period.end}
+                current={klarna.current}
+                last={klarna.last}
+                earlier={klarna.earlier}
+                payments={klarnaPayments}
+                forLabel={forLabel}
                 limit={budget ? budget.klarnaLimit : null}
                 today={today}
-                onSave={saveSpending}
+                onAddPayment={() => setPaymentAdding(true)}
+                onEditPayment={setPaymentEditing}
+                onDeletePayment={deletePayment}
+                onAddPurchase={(date) => {
+                  setSpendDefaults({ klarna: true, date, where: "Klarna" });
+                  setSpendAdding(true);
+                }}
+                onEditPurchase={setSpendEditing}
               />
 
               <div className="mt-6">
@@ -291,7 +366,7 @@ export default function SpendPage() {
                           {shortDate(s.date)}
                           {s.klarna && (
                             <span className="px-1.5 border border-pink-500/30 text-pink-400 font-black">
-                              Klarna{s.paid ? " · paid back" : ""}
+                              Klarna
                             </span>
                           )}
                         </span>
@@ -459,11 +534,28 @@ export default function SpendPage() {
         {adminMode && (spendAdding || spendEditing) && (
           <ExpenseForm
             spend={spendEditing ?? undefined}
+            defaults={spendDefaults}
             klarnaLeft={plan && budget ? budget.klarnaLimit - plan.klarnaUsed : null}
             onSave={(spend) => queueSpendOps([{ type: "add", spend }])}
             onClose={() => {
               setSpendAdding(false);
               setSpendEditing(null);
+              setSpendDefaults(undefined);
+            }}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {adminMode && (paymentAdding || paymentEditing) && (
+          <KlarnaPaymentForm
+            payment={paymentEditing ?? undefined}
+            months={monthChoices}
+            initialFor={paymentEditing ? monthOf(paymentEditing.for) : firstOwing}
+            onSave={savePayment}
+            onClose={() => {
+              setPaymentAdding(false);
+              setPaymentEditing(null);
             }}
           />
         )}
