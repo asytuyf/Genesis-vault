@@ -4,10 +4,10 @@ import { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Wallet, Plus, Pencil, Trash2, Lock, PiggyBank, Repeat, CalendarClock, ChevronDown, type LucideIcon } from "lucide-react";
 import {
-  type Budget, type BudgetOp, type Expense, type ExpenseOp, type ExpensePatch, type KlarnaPayment, type KlarnaPaymentOp,
-  type Spend, type SpendOp,
-  DEFAULT_CURRENCY, applyBudgetOps, applyExpenseOps, applyKlarnaPaymentOps, applySpendOps, budgetPeriod, formatMoney,
-  klarnaMonths, monthPlan, nextPayment, shortDate, spendingBetween, todayLocal, totalsByCurrency, upcomingCharges,
+  type Budget, type BudgetOp, type Expense, type ExpenseOp, type ExpensePatch, type KlarnaMonth, type KlarnaPayment,
+  type KlarnaPaymentOp, type Spend, type SpendOp,
+  DEFAULT_CURRENCY, DEFAULT_KLARNA_LIMIT, applyBudgetOps, applyExpenseOps, applyKlarnaPaymentOps, applySpendOps, budgetPeriod, formatMoney,
+  klarnaMonths, klarnaTotalId, monthPlan, nextPayment, shortDate, spendingBetween, todayLocal, totalsByCurrency, upcomingCharges,
   whenLabel, withTicked, yearlyCost,
 } from "@/lib/money";
 import { useOpSync, type SyncState } from "@/lib/useOpSync";
@@ -16,6 +16,7 @@ import { SubscriptionCard } from "@/components/SubscriptionCard";
 import { NextPayment, UpcomingList } from "@/components/UpcomingPayments";
 import { KlarnaPanel } from "@/components/KlarnaPanel";
 import { KlarnaPaymentForm, type MonthChoice } from "@/components/KlarnaPaymentForm";
+import { KlarnaTotalForm } from "@/components/KlarnaTotalForm";
 import { BudgetForm } from "@/components/BudgetForm";
 import { ExpenseForm } from "@/components/ExpenseForm";
 
@@ -85,7 +86,7 @@ export default function SpendPage() {
   const [budgetOpen, setBudgetOpen] = useState(false);
   const [spendEditing, setSpendEditing] = useState<Spend | null>(null);
   const [spendAdding, setSpendAdding] = useState(false);
-  const [spendDefaults, setSpendDefaults] = useState<{ klarna?: boolean; date?: string; where?: string } | undefined>();
+  const [totalEditing, setTotalEditing] = useState<{ month: KlarnaMonth; title: string } | null>(null);
   const [paymentEditing, setPaymentEditing] = useState<KlarnaPayment | null>(null);
   const [paymentAdding, setPaymentAdding] = useState(false);
   const [confirmId, setConfirmId] = useState<string | null>(null);
@@ -178,22 +179,24 @@ export default function SpendPage() {
   );
   // Months a payment can pay back, oldest first, with what is left on each.
   const monthChoices: MonthChoice[] = [
-    ...klarna.earlier.map((m) => ({ start: m.start, label: `${shortDate(m.start)} – ${shortDate(m.end)}`, left: m.left })),
-    { start: klarna.last.start, label: "Last month", left: klarna.last.left },
-    { start: klarna.current.start, label: "This month", left: klarna.current.left },
+    ...klarna.earlier.map((m) => ({ start: m.start, label: "Older credit", left: m.left })),
+    { start: klarna.last.start, label: "Last month's credit", left: klarna.last.left },
+    { start: klarna.current.start, label: "This month's credit", left: klarna.current.left },
   ];
   const monthOf = (date: string) => budgetPeriod(payday, date).start;
   const forLabel = (p: KlarnaPayment) => {
     const start = monthOf(p.for);
-    if (start === klarna.current.start) return "this month";
-    if (start === klarna.last.start) return "last month";
-    return `${shortDate(start)} – ${shortDate(budgetPeriod(payday, p.for).end)}`;
+    if (start === klarna.current.start) return "this month's";
+    if (start === klarna.last.start) return "last month's";
+    return "older";
   };
   // A new payment goes to the oldest month still owing, else this month.
   const firstOwing = monthChoices.find((m) => m.left > 0)?.start ?? klarna.current.start;
   const period = useMemo(() => (plan ? { start: plan.start, end: plan.end } : budgetPeriod(1, today)), [plan, today]);
   const monthSpending = useMemo(() => spendingBetween(spending, period.start, period.end), [period, spending]);
-  const shownSpending = showAllSpending ? monthSpending : monthSpending.slice(0, RECENT);
+  // A month's Klarna entered as one total lives in the Klarna box, not in this list.
+  const listedSpending = useMemo(() => monthSpending.filter((s) => !s.total), [monthSpending]);
+  const shownSpending = showAllSpending ? listedSpending : listedSpending.slice(0, RECENT);
   const foreign = useMemo(() => active.some((e) => e.currency !== DEFAULT_CURRENCY), [active]);
   // The last one-off payment this month for each subscription that is not paid regularly.
   const paidOnce = useMemo(() => {
@@ -218,6 +221,18 @@ export default function SpendPage() {
       return;
     }
     queuePaymentOps([{ type: "add", payment }]);
+  };
+  // A month's Klarna as one amount: whatever its logged purchases do not cover.
+  const setKlarnaTotal = (month: KlarnaMonth, total: number) => {
+    const logged = month.purchases.reduce((sum, s) => sum + s.amount, 0);
+    const rest = total - logged;
+    if (rest > 0) {
+      saveSpending([
+        { id: month.lump?.id ?? klarnaTotalId(month.start), amount: rest, where: "Klarna", date: month.start, klarna: true, total: true },
+      ]);
+    } else if (month.lump) {
+      queueSpendOps([{ type: "remove", id: month.lump.id }]);
+    }
   };
   const deletePayment = (payment: KlarnaPayment) => {
     if (payment.id.startsWith("ticked:")) {
@@ -330,15 +345,12 @@ export default function SpendPage() {
                 earlier={klarna.earlier}
                 payments={klarnaPayments}
                 forLabel={forLabel}
-                limit={budget ? budget.klarnaLimit : null}
-                today={today}
+                limit={budget ? budget.klarnaLimit : DEFAULT_KLARNA_LIMIT}
+                onEditCredit={() => setBudgetOpen(true)}
+                onSetTotal={(month, title) => setTotalEditing({ month, title })}
                 onAddPayment={() => setPaymentAdding(true)}
                 onEditPayment={setPaymentEditing}
                 onDeletePayment={deletePayment}
-                onAddPurchase={(date) => {
-                  setSpendDefaults({ klarna: true, date, where: "Klarna" });
-                  setSpendAdding(true);
-                }}
                 onEditPurchase={setSpendEditing}
               />
 
@@ -348,7 +360,7 @@ export default function SpendPage() {
                 </button>
               </div>
 
-              {monthSpending.length === 0 ? (
+              {listedSpending.length === 0 ? (
                 <p className="mt-4 text-[11px] text-zinc-700 uppercase tracking-wider">No expenses yet this month</p>
               ) : (
                 <div className="mt-4 space-y-1">
@@ -384,13 +396,13 @@ export default function SpendPage() {
                       </button>
                     </div>
                   ))}
-                  {monthSpending.length > RECENT && (
+                  {listedSpending.length > RECENT && (
                     <button
                       onClick={() => setShowAllSpending(!showAllSpending)}
                       className="inline-flex items-center gap-1.5 pt-2 text-[10px] font-black uppercase tracking-wider text-zinc-600 hover:text-zinc-400 transition-colors"
                     >
                       <ChevronDown size={12} className={`transition-transform ${showAllSpending ? "rotate-180" : ""}`} />
-                      {showAllSpending ? "Show fewer" : `Show all ${monthSpending.length}`}
+                      {showAllSpending ? "Show fewer" : `Show all ${listedSpending.length}`}
                     </button>
                   )}
                 </div>
@@ -534,14 +546,24 @@ export default function SpendPage() {
         {adminMode && (spendAdding || spendEditing) && (
           <ExpenseForm
             spend={spendEditing ?? undefined}
-            defaults={spendDefaults}
             klarnaLeft={plan && budget ? budget.klarnaLimit - plan.klarnaUsed : null}
             onSave={(spend) => queueSpendOps([{ type: "add", spend }])}
             onClose={() => {
               setSpendAdding(false);
               setSpendEditing(null);
-              setSpendDefaults(undefined);
             }}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {adminMode && totalEditing && (
+          <KlarnaTotalForm
+            title={totalEditing.title}
+            owed={totalEditing.month.used}
+            logged={totalEditing.month.purchases.reduce((sum, s) => sum + s.amount, 0)}
+            onSave={(total) => setKlarnaTotal(totalEditing.month, total)}
+            onClose={() => setTotalEditing(null)}
           />
         )}
       </AnimatePresence>

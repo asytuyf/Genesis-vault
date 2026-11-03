@@ -1,7 +1,8 @@
 "use client";
 
-// Log one payment to Klarna: how much, when, and which month it pays back.
-// Pay in as many parts as you like; each comes off that month's balance.
+// Log one payment to Klarna: how much, and whose credit it pays back. It is
+// dated today by itself. Pay in as many parts as you like; each comes off what
+// is left.
 
 import { useState } from "react";
 import { DEFAULT_CURRENCY, type KlarnaPayment, centsText, formatMoney, parseCents, todayLocal } from "@/lib/money";
@@ -29,7 +30,7 @@ interface KlarnaPaymentFormProps {
 export function KlarnaPaymentForm({ payment, months, initialFor, onSave, onClose }: KlarnaPaymentFormProps) {
   const [id] = useState(() => payment?.id ?? Date.now().toString());
   const [amount, setAmount] = useState(payment ? centsText(payment.amount) : "");
-  const [date, setDate] = useState(payment?.date ?? todayLocal());
+  const [date] = useState(() => payment?.date ?? todayLocal());
   const [forMonth, setForMonth] = useState(initialFor);
   const [error, setError] = useState("");
 
@@ -46,14 +47,14 @@ export function KlarnaPaymentForm({ payment, months, initialFor, onSave, onClose
 
   return (
     <MoneySheet
-      title={payment ? "Edit Klarna payment" : "Klarna payment"}
+      title={payment ? "Edit payment" : "Pay Klarna"}
       saveLabel={payment ? "Save" : "Add"}
       error={error}
       onSave={save}
       onClose={onClose}
     >
-      <div className="grid grid-cols-2 gap-2">
-        <div className="min-w-0">
+      <div>
+        <div>
           <label className={label}>Amount paid</label>
           <input
             className={field}
@@ -67,14 +68,10 @@ export function KlarnaPaymentForm({ payment, months, initialFor, onSave, onClose
             autoFocus
           />
         </div>
-        <div className="min-w-0">
-          <label className={label}>Paid on</label>
-          <input className={field} type="date" value={date} onChange={(e) => e.target.value && setDate(e.target.value)} />
-        </div>
       </div>
 
       <div>
-        <label className={label}>Pays back</label>
+        <label className={label}>It pays back</label>
         <div className="grid grid-cols-2 gap-2">
           {months.map((m) => (
             <button
@@ -93,8 +90,8 @@ export function KlarnaPaymentForm({ payment, months, initialFor, onSave, onClose
           ))}
         </div>
         <p className={hint}>
-          Pay in as many parts as you like. Each one comes off what is left on that month.
-          {left !== null && ` ${formatMoney(Math.max(0, left), DEFAULT_CURRENCY)} left on it before this one.`}
+          Pay in as many parts as you like. Each one comes off what is left.
+          {left !== null && ` ${formatMoney(Math.max(0, left), DEFAULT_CURRENCY)} left before this one.`}
         </p>
       </div>
     </MoneySheet>

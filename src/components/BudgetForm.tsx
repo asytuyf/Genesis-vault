@@ -64,7 +64,7 @@ export function BudgetForm({ budget, onSave, onClose }: BudgetFormProps) {
         <input
           className={field}
           inputMode="decimal"
-          placeholder="200"
+          placeholder="250"
           value={limit}
           onChange={(e) => {
             setLimit(e.target.value);

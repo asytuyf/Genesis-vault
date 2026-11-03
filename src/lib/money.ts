@@ -491,11 +491,11 @@ export interface Budget {
   income: number;
   /** Day of the month it arrives. A short month uses its last day. */
   payday: number;
-  /** Klarna credit you allow yourself per budget month, in cents. */
+  /** Klarna credit you allow yourself per budget month, in cents. €250 unless changed. */
   klarnaLimit: number;
 }
 
-export const DEFAULT_KLARNA_LIMIT = 20000;
+export const DEFAULT_KLARNA_LIMIT = 25000;
 
 export type BudgetOp = { type: "set"; set: Partial<Omit<Budget, "id">> };
 
@@ -542,6 +542,8 @@ export interface Spend {
   paid?: string;
   /** The subscription this was a one-off payment for ("Pay once"). */
   sub?: string;
+  /** Klarna only: a whole month's Klarna entered as one amount, not a single purchase. */
+  total?: boolean;
 }
 
 /** Changing an expense sends it again whole, so "add" also replaces. */
@@ -572,7 +574,13 @@ export function applySpendOps(list: Spend[], ops: SpendOp[]): Spend[] {
       amount: Math.round(op.spend.amount),
       where: String(op.spend.where ?? "").trim().slice(0, 80) || "Something",
       date: op.spend.date,
-      ...(op.spend.klarna === true ? { klarna: true, ...(isDate(op.spend.paid) ? { paid: op.spend.paid } : {}) } : {}),
+      ...(op.spend.klarna === true
+        ? {
+            klarna: true,
+            ...(isDate(op.spend.paid) ? { paid: op.spend.paid } : {}),
+            ...(op.spend.total === true ? { total: true } : {}),
+          }
+        : {}),
       ...(isStr(op.spend.sub) && op.spend.sub ? { sub: op.spend.sub.slice(0, 40) } : {}),
     };
     const i = next.findIndex((s) => s.id === clean.id);
@@ -709,9 +717,14 @@ export interface KlarnaMonth {
   paid: number;
   /** Still to pay back. Below zero if more was paid than used. */
   left: number;
-  /** What was bought with it, newest first. */
+  /** Purchases logged one by one, newest first. */
   purchases: Spend[];
+  /** The month's Klarna entered as one amount, on top of the purchases. */
+  lump?: Spend;
 }
+
+/** The one record holding a month's Klarna total, so setting it again replaces it. */
+export const klarnaTotalId = (monthStart: string): string => `klarna-total-${monthStart}`;
 
 /** Klarna month by month: this month, last month, and any older month still not paid off. */
 export function klarnaMonths(
@@ -737,7 +750,8 @@ export function klarnaMonths(
     if (!s.klarna) continue;
     const m = month(s.date);
     m.used += s.amount;
-    m.purchases.push(s);
+    if (s.total) m.lump = s;
+    else m.purchases.push(s);
   }
   for (const p of withTicked(spending, payments)) month(p.for).paid += p.amount;
 
