@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { PWA_APPS, type PwaApp, type PwaKey } from "@/lib/pwa";
+import { PWA_APPS, type PwaApp } from "@/lib/pwa";
 
 /** The web app manifest for one page: Android and desktop read it to install that page. */
 export async function GET(_req: Request, { params }: { params: Promise<{ app: string }> }) {
@@ -23,7 +23,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ app: st
     {
       // The id tells one installed page apart from another.
       id: entry.path,
-      name: app === ("home" satisfies PwaKey) ? "Genesis Vault" : `Genesis · ${entry.short}`,
+      name: entry.full,
       short_name: entry.short,
       description: entry.description,
       start_url: entry.path,

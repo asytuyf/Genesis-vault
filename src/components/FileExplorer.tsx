@@ -251,7 +251,7 @@ export const FileExplorer = ({ mobileOpen, setMobileOpen, desktopOpen }: FileExp
                               size={20}
                               className={expandedFolders.includes("archive") ? "text-cyan-400" : "text-zinc-600"}
                             />
-                            <span className="text-sm font-bold tracking-wide">archive</span>
+                            <span className="text-sm font-bold tracking-wide">COMMAND_ARCHIVE</span>
                           </div>
                           {expandedFolders.includes("archive") && (
                             <div className="ml-2 pl-2 border-l border-zinc-900 mt-1">
@@ -301,7 +301,7 @@ export const FileExplorer = ({ mobileOpen, setMobileOpen, desktopOpen }: FileExp
                               size={20}
                               className={expandedFolders.includes("goals") ? "text-emerald-400" : "text-zinc-600"}
                             />
-                            <span className="text-sm font-bold tracking-wide">goals</span>
+                            <span className="text-sm font-bold tracking-wide">TASK_FORGE</span>
                           </div>
                           {expandedFolders.includes("goals") && (
                             <div className="ml-2 pl-2 border-l border-zinc-900 mt-1">
@@ -351,7 +351,7 @@ export const FileExplorer = ({ mobileOpen, setMobileOpen, desktopOpen }: FileExp
                               size={20}
                               className={expandedFolders.includes("study") ? "text-purple-400" : "text-zinc-600"}
                             />
-                            <span className="text-sm font-bold tracking-wide">study</span>
+                            <span className="text-sm font-bold tracking-wide">FOCUS_LAB</span>
                           </div>
                           {expandedFolders.includes("study") && (
                             <div className="ml-2 pl-2 border-l border-zinc-900 mt-1">
@@ -401,7 +401,7 @@ export const FileExplorer = ({ mobileOpen, setMobileOpen, desktopOpen }: FileExp
                               size={20}
                               className={expandedFolders.includes("track") ? "text-orange-400" : "text-zinc-600"}
                             />
-                            <span className="text-sm font-bold tracking-wide">track</span>
+                            <span className="text-sm font-bold tracking-wide">GEMINI_TRACKER</span>
                           </div>
                           {expandedFolders.includes("track") && (
                             <div className="ml-2 pl-2 border-l border-zinc-900 mt-1">
@@ -452,7 +452,7 @@ export const FileExplorer = ({ mobileOpen, setMobileOpen, desktopOpen }: FileExp
                                 size={20}
                                 className={expandedFolders.includes("spend") ? "text-cyan-400" : "text-zinc-600"}
                               />
-                              <span className="text-sm font-bold tracking-wide">spend</span>
+                              <span className="text-sm font-bold tracking-wide">SPEND_CONTROL</span>
                             </div>
                             {expandedFolders.includes("spend") && (
                               <div className="ml-2 pl-2 border-l border-zinc-900 mt-1">
@@ -498,7 +498,7 @@ export const FileExplorer = ({ mobileOpen, setMobileOpen, desktopOpen }: FileExp
                               size={20}
                               className={expandedFolders.includes("library") ? "text-red-400" : "text-zinc-600"}
                             />
-                            <span className="text-sm font-bold tracking-wide">library</span>
+                            <span className="text-sm font-bold tracking-wide">KNOWLEDGE_VAULT</span>
                           </div>
                           {expandedFolders.includes("library") && (
                             <div className="ml-2 pl-2 border-l border-zinc-900 mt-1">
