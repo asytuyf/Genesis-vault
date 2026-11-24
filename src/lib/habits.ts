@@ -10,8 +10,10 @@ export interface Habit {
   color: string;
   /** Dates the habit was completed, as YYYY-MM-DD in local time. */
   history: string[];
-  /** Do it every X days: 1 is daily, 2 is every other day, 7 is weekly. */
+  /** Older habits: do it every X days. Read through targetPerWeek(); new habits set perWeek. */
   frequency: number;
+  /** Times a week, Monday to Sunday. 7 means every day. */
+  perWeek?: number;
 }
 
 export type HabitOp =
@@ -19,7 +21,7 @@ export type HabitOp =
   | { type: "remove"; id: string }
   /** Mark one date done or not done. Stated outright rather than flipped, so a resend cannot undo itself. */
   | { type: "set"; id: string; date: string; done: boolean }
-  | { type: "update"; id: string; set: { name?: string; color?: string; frequency?: number } }
+  | { type: "update"; id: string; set: { name?: string; color?: string; frequency?: number; perWeek?: number } }
   | { type: "order"; ids: string[] };
 
 const isStr = (v: unknown): v is string => typeof v === "string";
@@ -44,15 +46,22 @@ export function isHabitOp(op: unknown): op is HabitOp {
   }
 }
 
+const cleanPerWeek = (v: unknown): number | undefined =>
+  typeof v === "number" && Number.isFinite(v) ? Math.min(7, Math.max(1, Math.round(v))) : undefined;
+
 /** A habit with only the fields the app understands, so stored data stays clean. */
 function sanitize(habit: Habit): Habit {
-  return {
+  const out: Habit = {
     ...habit,
     name: String(habit.name ?? "").slice(0, 200),
     color: isStr(habit.color) ? habit.color : "orange",
     frequency: Number.isFinite(habit.frequency) ? Math.max(1, Math.round(habit.frequency)) : 1,
     history: Array.isArray(habit.history) ? habit.history.filter((d) => isStr(d) && DATE_RE.test(d)) : [],
   };
+  const perWeek = cleanPerWeek(habit.perWeek);
+  if (perWeek) out.perWeek = perWeek;
+  else delete out.perWeek;
+  return out;
 }
 
 /** Apply operations to the stored habit list. Pure, total, and shared by browser and server. */
@@ -108,6 +117,8 @@ export function applyHabitOps(list: Habit[], ops: HabitOp[]): Habit[] {
       if (isStr(patch.name) && patch.name.trim()) h.name = patch.name.trim().slice(0, 200);
       if (isStr(patch.color)) h.color = patch.color;
       if (Number.isFinite(patch.frequency)) h.frequency = Math.max(1, Math.round(patch.frequency as number));
+      const perWeek = cleanPerWeek(patch.perWeek);
+      if (perWeek) h.perWeek = perWeek;
       next[i] = h;
     }
   }
@@ -127,41 +138,114 @@ export const todayLocal = (now: Date = new Date()): string => {
 export const daysBetween = (to: string, from: string): number =>
   Math.round((Date.parse(`${to}T00:00:00`) - Date.parse(`${from}T00:00:00`)) / 86400000);
 
+/** A YYYY-MM-DD date as a local Date at midnight. */
+export const parseLocal = (date: string): Date => {
+  const [y, m, d] = date.split("-").map(Number);
+  return new Date(y, m - 1, d);
+};
+
+/** The date `n` days after `date` (negative goes back). */
+export const addDays = (date: string, n: number): string => {
+  const d = parseLocal(date);
+  d.setDate(d.getDate() + n);
+  return todayLocal(d);
+};
+
+/** The Monday that starts the week holding `date`. */
+export const mondayOf = (date: string): string => {
+  const d = parseLocal(date);
+  return addDays(date, -((d.getDay() + 6) % 7));
+};
+
 /**
- * How many completions in a row are still on schedule.
+ * How many times a week the habit asks for. Older habits stored "every X
+ * days", which becomes the whole number of times that fits in a week: every
+ * 2 days is 3 times, every 3 days is twice, weekly is once.
+ */
+export const targetPerWeek = (habit: Habit): number => {
+  if (habit.perWeek && habit.perWeek >= 1) return Math.min(7, Math.round(habit.perWeek));
+  const every = Math.max(1, habit.frequency || 1);
+  return every === 1 ? 7 : Math.max(1, Math.floor(7 / every));
+};
+
+/** Daily habits count their streak in days, everything else in weeks. */
+export const streakUnit = (habit: Habit): "day" | "week" => (targetPerWeek(habit) === 7 ? "day" : "week");
+
+/** Completions in the Monday-to-Sunday week starting `monday`. */
+export const doneInWeek = (habit: Habit, monday: string): number => {
+  const sunday = addDays(monday, 6);
+  return [...new Set(habit.history ?? [])].filter((d) => d >= monday && d <= sunday).length;
+};
+
+/**
+ * The current streak.
  *
- * A streak is only alive while the habit is up to date: for a habit done every
- * X days, the last completion has to be within X days of today. Miss that
- * window and the streak is 0, however long it once was. Counting backwards then
- * continues while each gap is within the same window.
+ * Daily habits: days in a row. Today still being open never breaks it, so a
+ * run that reached yesterday is alive until today is over.
+ *
+ * Weekly targets: Monday-to-Sunday weeks in a row that hit the target. The
+ * week in progress counts once it hits the target and never breaks the streak
+ * while it is still going, so the gym on Wednesday, Thursday and Friday keeps
+ * a "3 a week" streak alive through the following Monday and Tuesday.
  */
 export const getStreak = (habit: Habit, today: string = todayLocal()): number => {
-  const frequency = Math.max(1, habit.frequency || 1);
-  const days = [...new Set(habit.history ?? [])].filter((d) => DATE_RE.test(d)).sort().reverse();
-  if (days.length === 0) return 0;
+  const done = new Set((habit.history ?? []).filter((d) => DATE_RE.test(d) && d <= today));
+  if (done.size === 0) return 0;
 
-  // Completions dated in the future should not prop a streak up.
-  const past = days.filter((d) => daysBetween(today, d) >= 0);
-  if (past.length === 0) return 0;
+  if (streakUnit(habit) === "day") {
+    let day = done.has(today) ? today : addDays(today, -1);
+    let streak = 0;
+    while (done.has(day)) {
+      streak++;
+      day = addDays(day, -1);
+    }
+    return streak;
+  }
 
-  if (daysBetween(today, past[0]) > frequency) return 0;
-
-  let streak = 1;
-  for (let i = 1; i < past.length; i++) {
-    if (daysBetween(past[i - 1], past[i]) <= frequency) streak++;
-    else break;
+  const target = targetPerWeek(habit);
+  let monday = mondayOf(today);
+  let streak = 0;
+  if (doneInWeek(habit, monday) >= target) streak++;
+  monday = addDays(monday, -7);
+  while (doneInWeek(habit, monday) >= target) {
+    streak++;
+    monday = addDays(monday, -7);
   }
   return streak;
 };
 
-/** The last seven days, oldest first, in local time. */
-export const weekDays = (now: Date = new Date()) => {
-  const out: { date: string; dayName: string; dayNum: number; isToday: boolean }[] = [];
-  const names = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-  for (let i = 6; i >= 0; i--) {
-    const d = new Date(now);
-    d.setDate(d.getDate() - i);
-    out.push({ date: todayLocal(d), dayName: names[d.getDay()], dayNum: d.getDate(), isToday: i === 0 });
+/** The longest streak ever reached, in the same unit as getStreak. */
+export const getBestStreak = (habit: Habit, today: string = todayLocal()): number => {
+  const days = [...new Set((habit.history ?? []).filter((d) => DATE_RE.test(d) && d <= today))].sort();
+  if (days.length === 0) return 0;
+
+  if (streakUnit(habit) === "day") {
+    let best = 1;
+    let run = 1;
+    for (let i = 1; i < days.length; i++) {
+      run = daysBetween(days[i], days[i - 1]) === 1 ? run + 1 : 1;
+      best = Math.max(best, run);
+    }
+    return best;
   }
-  return out;
+
+  const target = targetPerWeek(habit);
+  let best = 0;
+  let run = 0;
+  for (let monday = mondayOf(days[0]); monday <= today; monday = addDays(monday, 7)) {
+    run = doneInWeek(habit, monday) >= target ? run + 1 : 0;
+    best = Math.max(best, run);
+  }
+  return best;
+};
+
+/** The seven days of a Monday-to-Sunday week: `offset` 0 is this week, -1 last week. */
+export const weekDays = (offset = 0, now: Date = new Date()) => {
+  const names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  const today = todayLocal(now);
+  const monday = addDays(mondayOf(today), offset * 7);
+  return names.map((dayName, i) => {
+    const date = addDays(monday, i);
+    return { date, dayName, dayNum: parseLocal(date).getDate(), isToday: date === today, isFuture: date > today };
+  });
 };

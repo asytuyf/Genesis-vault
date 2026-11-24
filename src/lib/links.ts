@@ -122,6 +122,43 @@ export function applyLinkOps(list: TrackerLink[], ops: LinkOp[]): TrackerLink[] 
 }
 
 export const DEFAULT_LINKS: TrackerLink[] = [
-  { id: "seed-arena", title: "Arena", url: "https://arena.ai/leaderboard/code", note: "Coding model rankings" },
+  { id: "seed-arena", title: "Arena", url: "https://arena.ai/leaderboard/agent/code", note: "Coding agent rankings" },
   { id: "seed-github", title: "GitHub", url: "https://github.com/asytuyf", note: "Your profile and activity" },
+  { id: "seed-yes-trips", title: "Yes Trips", url: "https://yes-trips.com/", note: "Student trips · ESN" },
 ];
+
+/**
+ * Changes to links already stored, each run once and remembered by its id, so
+ * a link removed afterwards stays removed instead of coming back.
+ */
+export const LINK_UPGRADES: { id: string; run: (list: TrackerLink[]) => TrackerLink[] }[] = [
+  {
+    // Arena moved its coding board under /leaderboard/agent/code.
+    id: "2026-11-arena-agent-code",
+    run: (list) =>
+      list.map((l) =>
+        hostOf(l.url) === "arena.ai" && new URL(l.url).pathname.replace(/\/$/, "") === "/leaderboard/code"
+          ? { ...l, url: "https://arena.ai/leaderboard/agent/code", note: l.note === "Coding model rankings" ? "Coding agent rankings" : l.note }
+          : l
+      ),
+  },
+  {
+    id: "2026-11-yes-trips",
+    run: (list) =>
+      list.some((l) => hostOf(l.url) === "yes-trips.com")
+        ? list
+        : [...list, DEFAULT_LINKS.find((l) => l.id === "seed-yes-trips")!],
+  },
+];
+
+/** Run the upgrades not yet applied. Returns the list and every upgrade id now applied. */
+export function upgradeLinks(list: TrackerLink[], applied: string[]): { links: TrackerLink[]; applied: string[] } {
+  let links = list;
+  const done = new Set(applied);
+  for (const u of LINK_UPGRADES) {
+    if (done.has(u.id)) continue;
+    links = u.run(links);
+    done.add(u.id);
+  }
+  return { links, applied: [...done] };
+}

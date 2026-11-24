@@ -2,51 +2,53 @@
 import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Flame, GitCommit, Plus, X, Check, Target, TrendingUp, RefreshCw, ExternalLink, Bookmark, Globe
+  Flame, GitCommit, Plus, X, Target, TrendingUp, RefreshCw, ExternalLink, Bookmark, Globe,
+  ChevronLeft, ChevronRight,
 } from "lucide-react";
 import {
   type Habit, type HabitOp,
-  applyHabitOps, getStreak, todayLocal, weekDays as buildWeekDays,
+  applyHabitOps, getStreak, todayLocal, weekDays as buildWeekDays, parseLocal,
 } from "@/lib/habits";
 import { type TrackerLink, type LinkOp, applyLinkOps, hostOf, safeUrl } from "@/lib/links";
+import { type TrackerTip, type TipOp, applyTipOps } from "@/lib/tips";
 import { useOpSync, type SyncState } from "@/lib/useOpSync";
+import ContributionCalendar from "@/components/ContributionCalendar";
+import HabitCard, { ColorPicker, TargetPicker } from "@/components/HabitCard";
+import TipsBoard from "@/components/TipsBoard";
 
-const FREQUENCIES = [
-  { value: 1, label: "Daily" },
-  { value: 2, label: "Every 2 days" },
-  { value: 3, label: "Every 3 days" },
-  { value: 7, label: "Weekly" },
+const MONTH_NAMES = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
 ];
-
-const HABIT_COLORS = [
-  { name: "Orange", value: "orange", bg: "bg-orange-500", text: "text-orange-400", border: "border-orange-500" },
-  { name: "Emerald", value: "emerald", bg: "bg-emerald-500", text: "text-emerald-400", border: "border-emerald-500" },
-  { name: "Cyan", value: "cyan", bg: "bg-cyan-500", text: "text-cyan-400", border: "border-cyan-500" },
-  { name: "Purple", value: "purple", bg: "bg-purple-500", text: "text-purple-400", border: "border-purple-500" },
-  { name: "Pink", value: "pink", bg: "bg-pink-500", text: "text-pink-400", border: "border-pink-500" },
-  { name: "Yellow", value: "yellow", bg: "bg-yellow-500", text: "text-yellow-400", border: "border-yellow-500" },
-];
-
-const getHabitColor = (color: string, type: "bg" | "text" | "border") => {
-  const found = HABIT_COLORS.find(c => c.value === color);
-  if (!found) return HABIT_COLORS[0][type];
-  return found[type];
-};
 
 const LinkIcon = ({ url }: { url: string }) => {
   const [failed, setFailed] = useState(false);
   const host = hostOf(url);
-  if (failed || !host) return <Globe size={16} className="text-zinc-600" />;
+  if (failed || !host) return <Globe size={28} className="text-zinc-600" />;
   return (
     <img
-      src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=64`}
+      src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=128`}
       alt=""
-      className="w-5 h-5 object-contain"
+      className="w-9 h-9 md:w-10 md:h-10 object-contain"
       onError={() => setFailed(true)}
       draggable="false"
     />
   );
 };
+
+/** The parts of a public GitHub event the day list reads. */
+interface GhEvent {
+  type: string;
+  created_at?: string;
+  repo?: { name?: string };
+  payload?: {
+    head?: string;
+    commits?: { sha: string; message: string }[];
+    pull_request?: { html_url?: string };
+    issue?: { html_url?: string };
+    release?: { html_url?: string };
+  };
+}
 
 const SYNC_LABEL: Record<SyncState, { text: string; cls: string }> = {
   synced: { text: "● SYNCED", cls: "text-emerald-600" },
@@ -79,14 +81,22 @@ export default function TrackerPage() {
   const [showAddHabit, setShowAddHabit] = useState(false);
   const [newHabitName, setNewHabitName] = useState("");
   const [newHabitColor, setNewHabitColor] = useState("orange");
-  const [newHabitFrequency, setNewHabitFrequency] = useState(1);
+  const [newHabitTarget, setNewHabitTarget] = useState(7);
+  const [weekOffset, setWeekOffset] = useState(0);
+
+  const now = new Date();
   const [githubUsername, setGithubUsername] = useState("asytuyf");
-  const [githubData, setGithubData] = useState<Record<string, number>>({});
-  const [githubEvents, setGithubEvents] = useState<any[]>([]);
+  // Contribution counts per calendar year, fetched as each year is viewed.
+  const [githubYears, setGithubYears] = useState<Record<number, Record<string, number>>>({});
+  const [githubEvents, setGithubEvents] = useState<GhEvent[]>([]);
+  const [ghView, setGhView] = useState<"month" | "year">("month");
+  const [ghYear, setGhYear] = useState(now.getFullYear());
+  const [ghMonth, setGhMonth] = useState(now.getMonth());
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [loadingGithub, setLoadingGithub] = useState(false);
   const [showGithubInput, setShowGithubInput] = useState(false);
   const [githubFetchedAt, setGithubFetchedAt] = useState("");
+
   const [showAddLink, setShowAddLink] = useState(false);
   const [newLinkTitle, setNewLinkTitle] = useState("");
   const [newLinkUrl, setNewLinkUrl] = useState("");
@@ -99,6 +109,15 @@ export default function TrackerPage() {
     endpoint: "/api/links",
     apply: applyLinkOps,
     resultKey: "links",
+    password,
+    unlocked: adminMode,
+  });
+
+  // Things to remember, synced the same way.
+  const { items: tips, syncState: tipSync, queueOps: queueTipOps } = useOpSync<TrackerTip, TipOp>({
+    endpoint: "/api/tips",
+    apply: applyTipOps,
+    resultKey: "tips",
     password,
     unlocked: adminMode,
   });
@@ -133,17 +152,16 @@ export default function TrackerPage() {
   }, []);
 
   // Daily contribution counts come from our own route, which reads the same
-  // calendar as a GitHub profile, so private work counts too. The public events
-  // feed is kept only to list what happened on a day you tap.
-  const loadGithub = useCallback(async (username: string, closeInput = false) => {
+  // calendar as a GitHub profile, so private work counts too.
+  const loadYear = useCallback(async (username: string, year: number) => {
     if (!username) return;
     setLoadingGithub(true);
     try {
-      const res = await fetch(`/api/github?user=${encodeURIComponent(username)}`, { cache: "no-store" });
+      const res = await fetch(`/api/github?user=${encodeURIComponent(username)}&year=${year}`, { cache: "no-store" });
       if (res.ok) {
         const data = await res.json();
         if (data && typeof data.days === "object") {
-          setGithubData(data.days as Record<string, number>);
+          setGithubYears((prev) => ({ ...prev, [year]: data.days as Record<string, number> }));
           setGithubFetchedAt(typeof data.fetchedAt === "string" ? data.fetchedAt : "");
         }
       }
@@ -151,6 +169,11 @@ export default function TrackerPage() {
     } catch (e) {
       console.error("Failed to load contributions:", e);
     }
+    setLoadingGithub(false);
+  }, []);
+
+  // The public events feed is kept only to list what happened on a day you tap.
+  const loadEvents = useCallback(async (username: string) => {
     try {
       const res = await fetch(`https://api.github.com/users/${encodeURIComponent(username)}/events/public?per_page=100`);
       const events = await res.json();
@@ -158,15 +181,27 @@ export default function TrackerPage() {
     } catch {
       // The detail list is a nice extra, not worth failing the page over.
     }
-    setLoadingGithub(false);
-    if (closeInput) setShowGithubInput(false);
   }, []);
+
+  const syncUsername = (username: string) => {
+    setGithubYears({});
+    loadYear(username, ghYear);
+    loadEvents(username);
+    setShowGithubInput(false);
+  };
 
   useEffect(() => {
     const saved = localStorage.getItem("streaks_github_username") || "asytuyf";
     setGithubUsername(saved);
-    loadGithub(saved);
-  }, [loadGithub]);
+    loadEvents(saved);
+  }, [loadEvents]);
+
+  // Fetch a year the first time it is shown.
+  useEffect(() => {
+    const user = localStorage.getItem("streaks_github_username") || githubUsername;
+    if (user && !githubYears[ghYear]) loadYear(user, ghYear);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ghYear, loadYear]);
 
   const addHabit = () => {
     if (!newHabitName.trim()) return;
@@ -175,25 +210,23 @@ export default function TrackerPage() {
       name: newHabitName.trim(),
       color: newHabitColor,
       history: [],
-      frequency: newHabitFrequency,
+      perWeek: newHabitTarget,
+      // Kept for older copies of the app that still read "every X days".
+      frequency: newHabitTarget === 7 ? 1 : Math.max(1, Math.round(7 / newHabitTarget)),
     };
     queueOps([{ type: "add", habit: newHabit }]);
     setNewHabitName("");
     setNewHabitColor("orange");
-    setNewHabitFrequency(1);
+    setNewHabitTarget(7);
     setShowAddHabit(false);
   };
 
   const getEventsForDay = (date: string) => {
-    return githubEvents.filter((e: any) => e.created_at?.startsWith(date));
+    return githubEvents.filter((e) => e.created_at?.startsWith(date));
   };
 
   const formatEventType = (type: string) => {
     return type.replace(/Event$/, "").replace(/([A-Z])/g, " $1").trim();
-  };
-
-  const removeHabit = (id: string) => {
-    queueOps([{ type: "remove", id }]);
   };
 
   const toggleHabitForDate = (habitId: string, date: string) => {
@@ -234,12 +267,48 @@ export default function TrackerPage() {
     setConfirmLinkId(null);
   };
 
-  const weekDays = buildWeekDays();
   const today = todayLocal();
-  const githubThisWeek = weekDays.reduce((acc, day) => acc + (githubData[day.date] || 0), 0);
+  const thisWeek = buildWeekDays(0);
+  const shownWeek = buildWeekDays(weekOffset);
+  const allContribs: Record<string, number> = Object.assign({}, ...Object.values(githubYears));
+  const githubThisWeek = thisWeek.reduce((acc, day) => acc + (allContribs[day.date] || 0), 0);
+
+  // What the heatmap is showing, and its totals.
+  const yearDays = githubYears[ghYear] || {};
+  const monthPrefix = `${ghYear}-${String(ghMonth + 1).padStart(2, "0")}-`;
+  const viewDays = ghView === "month"
+    ? Object.entries(yearDays).filter(([d]) => d.startsWith(monthPrefix))
+    : Object.entries(yearDays).filter(([d]) => d.startsWith(`${ghYear}-`));
+  const viewTotal = viewDays.reduce((a, [, n]) => a + n, 0);
+  const viewActive = viewDays.filter(([, n]) => n > 0).length;
+  const atLatest = ghView === "month"
+    ? ghYear === now.getFullYear() && ghMonth === now.getMonth()
+    : ghYear === now.getFullYear();
+
+  const stepGithub = (dir: -1 | 1) => {
+    setSelectedDay(null);
+    if (ghView === "year") {
+      setGhYear((y) => Math.min(now.getFullYear(), Math.max(2008, y + dir)));
+      return;
+    }
+    let m = ghMonth + dir;
+    let y = ghYear;
+    if (m < 0) { m = 11; y--; }
+    if (m > 11) { m = 0; y++; }
+    if (y < 2008 || (y === now.getFullYear() && m > now.getMonth()) || y > now.getFullYear()) return;
+    setGhMonth(m);
+    setGhYear(y);
+  };
+
+  const weekLabel = (() => {
+    const first = parseLocal(shownWeek[0].date);
+    const last = parseLocal(shownWeek[6].date);
+    const fmt = (d: Date) => d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+    return `${fmt(first)} – ${fmt(last)}`;
+  })();
 
   return (
-    <main className="relative min-h-screen bg-[#0d0d0d] text-[#f4f4f5] font-mono overflow-x-hidden px-6 pb-6 pt-[56px] md:p-24">
+    <main className="relative min-h-screen bg-[#0d0d0d] text-[#f4f4f5] font-mono overflow-x-hidden px-4 sm:px-6 pb-6 pt-[56px] md:p-24">
       {/* HAZARD BARS */}
       <div className="fixed inset-x-0 top-0 h-[28px] bg-orange-500 z-[150] flex items-center overflow-hidden border-b-2 border-black">
         <motion.div animate={{ x: [0, -1000] }} transition={{ repeat: Infinity, duration: 20, ease: "linear" }} className="flex whitespace-nowrap text-[12px] font-black text-black tracking-[2em]">
@@ -259,7 +328,7 @@ export default function TrackerPage() {
 
       {/* MAIN CONTENT */}
       <div className="relative z-10">
-        
+
         {/* HEADER */}
         <header className="mb-12">
           <div className="flex flex-col">
@@ -268,15 +337,13 @@ export default function TrackerPage() {
           </div>
         </header>
 
-        {/* GITHUB WEEKLY */}
+        {/* GITHUB CONTRIBUTIONS */}
         <section className="mb-12">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+            <div className="flex items-center gap-3 flex-wrap">
               <GitCommit size={20} className="text-orange-400" />
-              <span className="text-xs font-black uppercase tracking-[0.2em] text-zinc-400">Commits This Week</span>
-              {githubUsername && (
-                <span className="text-[10px] text-zinc-600">@{githubUsername}</span>
-              )}
+              <span className="text-xs font-black uppercase tracking-[0.2em] text-zinc-400">Contributions</span>
+              {githubUsername && <span className="text-[10px] text-zinc-500">@{githubUsername}</span>}
               {githubFetchedAt && (
                 <span className="text-[9px] text-zinc-700 uppercase tracking-wider hidden sm:inline">
                   read {new Date(githubFetchedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })}
@@ -284,14 +351,26 @@ export default function TrackerPage() {
               )}
             </div>
             <div className="flex items-center gap-2">
-              {/* Always visible refresh button */}
+              <div className="flex border border-zinc-800">
+                {(["month", "year"] as const).map((v) => (
+                  <button
+                    key={v}
+                    onClick={() => { setGhView(v); setSelectedDay(null); }}
+                    className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-wider transition-colors ${
+                      ghView === v ? "bg-orange-500 text-black" : "text-zinc-500 hover:text-orange-400"
+                    }`}
+                  >
+                    {v}
+                  </button>
+                ))}
+              </div>
               <button
-                onClick={() => loadGithub(githubUsername)}
+                onClick={() => { loadYear(githubUsername, ghYear); loadEvents(githubUsername); }}
                 disabled={loadingGithub}
-                className={`flex items-center gap-2 px-3 py-1.5 border border-zinc-800 text-zinc-500 text-[10px] font-bold uppercase hover:border-orange-500/30 hover:text-orange-400 transition-colors ${loadingGithub ? "opacity-50" : ""}`}
+                title="Refresh"
+                className={`p-2 border border-zinc-800 text-zinc-500 hover:border-orange-500/30 hover:text-orange-400 transition-colors ${loadingGithub ? "opacity-50" : ""}`}
               >
                 <RefreshCw size={12} className={loadingGithub ? "animate-spin" : ""} />
-                {loadingGithub ? "..." : "Refresh"}
               </button>
               {adminMode && (
                 <button
@@ -320,11 +399,11 @@ export default function TrackerPage() {
                     placeholder="GitHub username"
                     value={githubUsername}
                     onChange={(e) => setGithubUsername(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && loadGithub(githubUsername, true)}
-                    className="flex-1 bg-black border border-zinc-800 px-4 py-2 text-sm text-white outline-none focus:border-orange-500"
+                    onKeyDown={(e) => e.key === "Enter" && syncUsername(githubUsername)}
+                    className="flex-1 min-w-0 bg-black border border-zinc-800 px-4 py-2 text-sm text-white outline-none focus:border-orange-500"
                   />
                   <button
-                    onClick={() => loadGithub(githubUsername, true)}
+                    onClick={() => syncUsername(githubUsername)}
                     disabled={loadingGithub}
                     className="px-6 py-2 bg-orange-500/10 border border-orange-500/30 text-orange-400 text-xs font-black uppercase hover:bg-orange-500/20 disabled:opacity-50"
                   >
@@ -335,101 +414,83 @@ export default function TrackerPage() {
             )}
           </AnimatePresence>
 
-          {/* Week Grid - GitHub */}
-          {githubUsername ? (
-            <>
-              <div className="grid grid-cols-7 gap-2 md:gap-4 mb-4">
-                {weekDays.map((day) => {
-                  const githubCount = githubData[day.date] || 0;
-                  const isSelected = selectedDay === day.date;
-
-                  return (
-                    <button
-                      key={day.date}
-                      onClick={() => setSelectedDay(isSelected ? null : day.date)}
-                      className={`p-3 md:p-6 border text-center transition-all ${
-                        isSelected
-                          ? "border-orange-500 bg-orange-500/20"
-                          : day.isToday
-                            ? "border-zinc-700 bg-zinc-900"
-                            : githubCount > 0
-                              ? "border-zinc-800 bg-zinc-900/50"
-                              : "border-zinc-900 bg-black/40"
-                      }`}
-                    >
-                      <div className={`text-[10px] md:text-xs font-black uppercase tracking-wider mb-2 ${
-                        day.isToday ? "text-orange-400" : "text-zinc-600"
-                      }`}>
-                        {day.dayName}
-                      </div>
-                      <div className={`text-xl md:text-3xl font-black ${
-                        githubCount > 0 ? "text-orange-400" : "text-zinc-700"
-                      }`}>
-                        {githubCount}
-                      </div>
-                      <div className="text-[8px] text-zinc-600 uppercase mt-1">contribs</div>
-                    </button>
-                  );
-                })}
+          <div className="p-4 md:p-6 border border-zinc-800 bg-black/50">
+            {/* Period picker */}
+            <div className="flex items-center justify-between gap-3 mb-4">
+              <button
+                onClick={() => stepGithub(-1)}
+                className="p-2 border border-zinc-800 text-zinc-400 hover:text-orange-400 hover:border-orange-500/40 transition-colors"
+                aria-label="Previous"
+              >
+                <ChevronLeft size={16} />
+              </button>
+              <div className="text-center min-w-0">
+                <div className="text-sm md:text-base font-black uppercase tracking-wider text-white">
+                  {ghView === "month" ? `${MONTH_NAMES[ghMonth]} ${ghYear}` : ghYear}
+                </div>
+                <div className="text-[10px] uppercase tracking-wider text-zinc-500 mt-0.5">
+                  <span className="text-orange-400 font-bold">{viewTotal}</span> contributions · {viewActive} active days
+                </div>
               </div>
+              <button
+                onClick={() => stepGithub(1)}
+                disabled={atLatest}
+                className="p-2 border border-zinc-800 text-zinc-400 hover:text-orange-400 hover:border-orange-500/40 transition-colors disabled:opacity-20 disabled:pointer-events-none"
+                aria-label="Next"
+              >
+                <ChevronRight size={16} />
+              </button>
+            </div>
 
-              {/* Selected Day Details */}
-              {selectedDay && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: "auto" }}
-                  className="p-4 border border-zinc-800 bg-black/60 mb-4"
-                >
-                  <div className="flex items-center justify-between mb-4">
-                    <span className="text-sm font-bold text-white">{selectedDay}</span>
-                    <button onClick={() => setSelectedDay(null)} className="text-zinc-600 hover:text-white">
-                      <X size={16} />
-                    </button>
-                  </div>
-                  <div className="space-y-2 max-h-48 overflow-y-auto">
-                    {getEventsForDay(selectedDay).length > 0 ? (
-                      getEventsForDay(selectedDay).map((event: any, i: number) => {
-                        const repoName = event.repo?.name;
-                        const baseUrl = repoName ? `https://github.com/${repoName}` : "#";
+            {githubYears[ghYear] || !loadingGithub ? (
+              <ContributionCalendar
+                days={yearDays}
+                view={ghView}
+                year={ghYear}
+                month={ghMonth}
+                today={today}
+                selectedDay={selectedDay}
+                onSelectDay={setSelectedDay}
+                onOpenMonth={(m) => { setGhMonth(m); setGhView("month"); setSelectedDay(null); }}
+              />
+            ) : (
+              <div className="py-16 text-center text-[10px] uppercase tracking-widest text-zinc-600 animate-pulse">Reading calendar…</div>
+            )}
+          </div>
 
-                        // Handle PushEvent to show individual commits
-                        if (event.type === "PushEvent" && event.payload && event.payload.commits && event.payload.commits.length > 0) {
-                          return event.payload.commits.map((commit: any, commitIndex: number) => {
-                            const commitUrl = repoName ? `https://github.com/${repoName}/commit/${commit.sha}` : "#";
-                            return (
-                              <a
-                                key={`${i}-commit-${commitIndex}`}
-                                href={commitUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="flex items-center gap-3 p-2 border border-zinc-900 bg-black/40 hover:bg-zinc-800 transition-colors cursor-pointer group"
-                              >
-                                <GitCommit size={14} className="text-orange-400 shrink-0" />
-                                <div className="flex-1 min-w-0">
-                                  <div className="text-xs font-bold text-zinc-300 truncate group-hover:text-white">{repoName}</div>
-                                  <div className="text-[10px] text-zinc-600 truncate">{commit.message}</div>
-                                </div>
-                                <ExternalLink size={12} className="text-zinc-500 group-hover:text-orange-400" />
-                              </a>
-                            );
-                          });
-                        } else {
-                          // Handle other event types
-                          let eventUrl = baseUrl;
-                          if (event.type === "PushEvent" && event.payload?.head) {
-                             eventUrl = repoName ? `https://github.com/${repoName}/commit/${event.payload.head}` : baseUrl;
-                          } else if (event.payload?.pull_request?.html_url) {
-                              eventUrl = event.payload.pull_request.html_url;
-                          } else if (event.payload?.issue?.html_url) {
-                              eventUrl = event.payload.issue.html_url;
-                          } else if (event.payload?.release?.html_url) {
-                               eventUrl = event.payload.release.html_url;
-                          }
+          {/* Selected Day Details */}
+          <AnimatePresence>
+            {selectedDay && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                className="p-4 border border-t-0 border-zinc-800 bg-black/60 overflow-hidden"
+              >
+                <div className="flex items-center justify-between mb-4">
+                  <span className="text-sm font-bold text-white">
+                    {parseLocal(selectedDay).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}
+                    <span className="ml-3 text-orange-400">{allContribs[selectedDay] || 0}</span>
+                    <span className="ml-1 text-[10px] text-zinc-500 uppercase">contribs</span>
+                  </span>
+                  <button onClick={() => setSelectedDay(null)} className="text-zinc-600 hover:text-white">
+                    <X size={16} />
+                  </button>
+                </div>
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {getEventsForDay(selectedDay).length > 0 ? (
+                    getEventsForDay(selectedDay).map((event, i) => {
+                      const repoName = event.repo?.name;
+                      const baseUrl = repoName ? `https://github.com/${repoName}` : "#";
 
+                      // Handle PushEvent to show individual commits
+                      if (event.type === "PushEvent" && event.payload && event.payload.commits && event.payload.commits.length > 0) {
+                        return event.payload.commits.map((commit, commitIndex) => {
+                          const commitUrl = repoName ? `https://github.com/${repoName}/commit/${commit.sha}` : "#";
                           return (
                             <a
-                              key={i}
-                              href={eventUrl}
+                              key={`${i}-commit-${commitIndex}`}
+                              href={commitUrl}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="flex items-center gap-3 p-2 border border-zinc-900 bg-black/40 hover:bg-zinc-800 transition-colors cursor-pointer group"
@@ -437,37 +498,59 @@ export default function TrackerPage() {
                               <GitCommit size={14} className="text-orange-400 shrink-0" />
                               <div className="flex-1 min-w-0">
                                 <div className="text-xs font-bold text-zinc-300 truncate group-hover:text-white">{repoName}</div>
-                                <div className="text-[10px] text-zinc-600">{formatEventType(event.type)}</div>
+                                <div className="text-[10px] text-zinc-600 truncate">{commit.message}</div>
                               </div>
-                              {eventUrl && <ExternalLink size={12} className="text-zinc-500 group-hover:text-orange-400" />}
+                              <ExternalLink size={12} className="text-zinc-500 group-hover:text-orange-400" />
                             </a>
                           );
+                        });
+                      } else {
+                        // Handle other event types
+                        let eventUrl = baseUrl;
+                        if (event.type === "PushEvent" && event.payload?.head) {
+                          eventUrl = repoName ? `https://github.com/${repoName}/commit/${event.payload.head}` : baseUrl;
+                        } else if (event.payload?.pull_request?.html_url) {
+                          eventUrl = event.payload.pull_request.html_url;
+                        } else if (event.payload?.issue?.html_url) {
+                          eventUrl = event.payload.issue.html_url;
+                        } else if (event.payload?.release?.html_url) {
+                          eventUrl = event.payload.release.html_url;
                         }
-                      })
-                    ) : (
-                      <div className="text-center py-4 text-zinc-600 text-xs">No activity this day</div>
-                    )}
-                  </div>
-                </motion.div>
-              )}
-            </>
-          ) : (
-            <div className="p-8 border border-zinc-900 bg-black/20 text-center">
-              <GitCommit size={32} className="mx-auto mb-3 text-zinc-800" />
-              <p className="text-zinc-600 text-xs mb-4">Track your GitHub activity</p>
-              <button
-                onClick={() => setShowGithubInput(true)}
-                className="px-4 py-2 border border-orange-500/30 text-orange-400 text-xs font-black uppercase hover:bg-orange-500/10"
-              >
-                Add Username
-              </button>
-            </div>
-          )}
+
+                        return (
+                          <a
+                            key={i}
+                            href={eventUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-3 p-2 border border-zinc-900 bg-black/40 hover:bg-zinc-800 transition-colors cursor-pointer group"
+                          >
+                            <GitCommit size={14} className="text-orange-400 shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <div className="text-xs font-bold text-zinc-300 truncate group-hover:text-white">{repoName}</div>
+                              <div className="text-[10px] text-zinc-600">{formatEventType(event.type)}</div>
+                            </div>
+                            {eventUrl && <ExternalLink size={12} className="text-zinc-500 group-hover:text-orange-400" />}
+                          </a>
+                        );
+                      }
+                    })
+                  ) : (
+                    <div className="text-center py-4 text-zinc-600 text-xs">
+                      {(allContribs[selectedDay] || 0) > 0
+                        ? "Private work or too long ago to list — the count above still includes it."
+                        : "No activity this day"}
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </section>
 
         {/* HABITS */}
         <section className="mb-12">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
             <div className="flex items-center gap-3">
               <Target size={20} className="text-orange-400" />
               <span className="text-xs font-black uppercase tracking-[0.2em] text-zinc-400">Habits</span>
@@ -483,14 +566,13 @@ export default function TrackerPage() {
               )}
             </div>
             <div className="flex items-center gap-2">
-              {/* Refresh habits */}
               <button
                 onClick={() => refreshHabits()}
                 disabled={loadingHabits}
-                className={`flex items-center gap-2 px-3 py-1.5 border border-zinc-800 text-zinc-500 text-[10px] font-bold uppercase hover:border-orange-500/30 hover:text-orange-400 transition-colors ${loadingHabits ? "opacity-50" : ""}`}
+                title="Refresh"
+                className={`p-2 border border-zinc-800 text-zinc-500 hover:border-orange-500/30 hover:text-orange-400 transition-colors ${loadingHabits ? "opacity-50" : ""}`}
               >
                 <RefreshCw size={12} className={loadingHabits ? "animate-spin" : ""} />
-                {loadingHabits ? "..." : "Refresh"}
               </button>
               {adminMode && (
                 <button
@@ -504,10 +586,39 @@ export default function TrackerPage() {
             </div>
           </div>
 
+          {/* Week picker, Monday to Sunday */}
+          <div className="flex items-center justify-between gap-3 mb-4 px-1">
+            <button
+              onClick={() => setWeekOffset((w) => w - 1)}
+              className="p-2 border border-zinc-800 text-zinc-400 hover:text-orange-400 hover:border-orange-500/40 transition-colors"
+              aria-label="Previous week"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <button
+              onClick={() => setWeekOffset(0)}
+              className="text-center"
+              title="Back to this week"
+            >
+              <div className="text-sm font-black uppercase tracking-wider text-white">
+                {weekOffset === 0 ? "This week" : weekOffset === -1 ? "Last week" : `${-weekOffset} weeks ago`}
+              </div>
+              <div className="text-[10px] uppercase tracking-wider text-zinc-500 mt-0.5">{weekLabel}</div>
+            </button>
+            <button
+              onClick={() => setWeekOffset((w) => Math.min(0, w + 1))}
+              disabled={weekOffset === 0}
+              className="p-2 border border-zinc-800 text-zinc-400 hover:text-orange-400 hover:border-orange-500/40 transition-colors disabled:opacity-20 disabled:pointer-events-none"
+              aria-label="Next week"
+            >
+              <ChevronRight size={16} />
+            </button>
+          </div>
+
           {/* View-only notice */}
           {!adminMode && habits.length > 0 && (
             <div className="mb-4 px-3 py-2 border border-zinc-800 bg-zinc-900/30 text-[10px] text-zinc-500 uppercase tracking-wider">
-              View only — enable admin mode to edit
+              View only — unlock in the menu (☰) to tick days or edit
             </div>
           )}
 
@@ -529,48 +640,20 @@ export default function TrackerPage() {
                   className="w-full bg-transparent border-b-2 border-zinc-800 px-0 py-3 text-base md:text-lg text-white outline-none focus:border-orange-500 mb-4 md:mb-6 placeholder:text-zinc-700"
                 />
 
-                {/* Color Picker */}
                 <div className="mb-4 md:mb-6">
-                  <div className="text-[10px] font-black uppercase tracking-wider text-zinc-600 mb-3">Color</div>
-                  <div className="flex gap-2 flex-wrap">
-                    {HABIT_COLORS.map((color) => (
-                      <button
-                        key={color.value}
-                        onClick={() => setNewHabitColor(color.value)}
-                        className={`w-7 h-7 md:w-8 md:h-8 rounded-full ${color.bg} transition-all ${
-                          newHabitColor === color.value
-                            ? "ring-2 ring-white ring-offset-2 ring-offset-black scale-110"
-                            : "opacity-50 hover:opacity-100"
-                        }`}
-                      />
-                    ))}
-                  </div>
+                  <div className="text-[10px] font-black uppercase tracking-wider text-zinc-500 mb-3">Color</div>
+                  <ColorPicker value={newHabitColor} onChange={setNewHabitColor} />
                 </div>
 
-                {/* Frequency Picker */}
                 <div className="mb-4 md:mb-6">
-                  <div className="text-[10px] font-black uppercase tracking-wider text-zinc-600 mb-3">Frequency</div>
-                  <div className="grid grid-cols-2 sm:flex gap-2">
-                    {FREQUENCIES.map((freq) => (
-                      <button
-                        key={freq.value}
-                        onClick={() => setNewHabitFrequency(freq.value)}
-                        className={`px-3 md:px-4 py-2 border text-[10px] md:text-xs font-bold uppercase transition-all ${
-                          newHabitFrequency === freq.value
-                            ? `${getHabitColor(newHabitColor, "border")} ${getHabitColor(newHabitColor, "text")} bg-opacity-20`
-                            : "border-zinc-800 text-zinc-500 hover:border-zinc-700"
-                        }`}
-                      >
-                        {freq.label}
-                      </button>
-                    ))}
-                  </div>
+                  <div className="text-[10px] font-black uppercase tracking-wider text-zinc-500 mb-3">How often</div>
+                  <TargetPicker value={newHabitTarget} color={newHabitColor} onChange={setNewHabitTarget} />
                 </div>
 
                 <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
                   <button
                     onClick={addHabit}
-                    className={`flex-1 py-3 bg-opacity-10 border border-opacity-30 text-xs font-black uppercase tracking-wider hover:bg-opacity-20 transition-colors ${getHabitColor(newHabitColor, "text")} ${getHabitColor(newHabitColor, "border")}`}
+                    className="flex-1 py-3 border border-orange-500/40 bg-orange-500/10 text-orange-400 text-xs font-black uppercase tracking-wider hover:bg-orange-500/20 transition-colors"
                   >
                     Create Habit
                   </button>
@@ -587,83 +670,27 @@ export default function TrackerPage() {
 
           {/* Habit Cards */}
           <div className="space-y-4">
-            {habits.map((habit) => {
-              const streak = getStreak(habit);
-              const completedToday = habit.history.includes(today);
-              const color = habit.color || "orange";
-
-              return (
-                <motion.div
-                  key={habit.id}
-                  layout
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className={`p-4 md:p-6 border transition-all ${
-                    completedToday ? "border-zinc-700 bg-zinc-900/50" : "border-zinc-800 bg-black/40"
-                  }`}
-                >
-                  {/* Mobile: stack vertically, Desktop: horizontal */}
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 md:mb-6">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-3 h-3 shrink-0 rounded-full ${completedToday ? getHabitColor(color, "bg") : "bg-zinc-700"}`} />
-                      <span className="text-base md:text-lg font-bold text-white truncate">{habit.name}</span>
-                    </div>
-                    <div className="flex items-center justify-between sm:justify-end gap-3">
-                      <div className="flex items-center gap-2">
-                        <Flame size={14} className={getHabitColor(color, "text")} />
-                        <span className={`text-base md:text-lg font-black ${getHabitColor(color, "text")}`}>{streak}</span>
-                        <span className="text-[10px] text-zinc-500 uppercase hidden sm:inline">streak</span>
-                      </div>
-                      <span className="text-[9px] md:text-[10px] text-zinc-600 uppercase px-2 py-1 border border-zinc-800">
-                        {FREQUENCIES.find(f => f.value === (habit.frequency || 1))?.label || "Daily"}
-                      </span>
-                      {adminMode && (
-                        <button
-                          onClick={() => removeHabit(habit.id)}
-                          className="p-1.5 text-zinc-700 hover:text-red-400 transition-colors"
-                        >
-                          <X size={14} />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Week checkboxes - smaller on mobile */}
-                  <div className="grid grid-cols-7 gap-1 md:gap-2">
-                    {weekDays.map((day) => {
-                      const isCompleted = habit.history.includes(day.date);
-                      return (
-                        <button
-                          key={day.date}
-                          onClick={() => toggleHabitForDate(habit.id, day.date)}
-                          disabled={!adminMode}
-                          className={`p-2 md:p-3 border text-center transition-all ${
-                            isCompleted
-                              ? `${getHabitColor(color, "border")} ${getHabitColor(color, "bg")} text-black`
-                              : "border-zinc-800 text-zinc-600 hover:border-zinc-700"
-                          } ${!adminMode ? "cursor-default opacity-80" : ""}`}
-                        >
-                          <div className={`text-[8px] md:text-[9px] font-bold uppercase mb-0.5 md:mb-1 ${isCompleted ? "text-black" : ""}`}>{day.dayName}</div>
-                          {isCompleted ? (
-                            <Check size={14} className="mx-auto md:w-[18px] md:h-[18px]" />
-                          ) : (
-                            <div className="w-[14px] h-[14px] md:w-[18px] md:h-[18px] mx-auto" />
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </motion.div>
-              );
-            })}
+            {habits.map((habit) => (
+              <HabitCard
+                key={habit.id}
+                habit={habit}
+                week={shownWeek}
+                today={today}
+                isThisWeek={weekOffset === 0}
+                adminMode={adminMode}
+                onToggle={(date) => toggleHabitForDate(habit.id, date)}
+                onUpdate={(set) => queueOps([{ type: "update", id: habit.id, set }])}
+                onRemove={() => queueOps([{ type: "remove", id: habit.id }])}
+              />
+            ))}
 
             {habits.length === 0 && !showAddHabit && (
               <div className="text-center py-16 border border-zinc-800 bg-black/20">
                 <Flame size={48} className="mx-auto mb-4 text-zinc-800" />
                 <p className="text-zinc-600 text-sm font-bold uppercase tracking-wider">No habits yet</p>
-                {adminMode && (
-                  <p className="text-zinc-700 text-xs mt-2">Click &quot;Add&quot; above to create one</p>
-                )}
+                <p className="text-zinc-700 text-xs mt-2">
+                  {adminMode ? <>Tap &quot;Add&quot; above to create one</> : <>Unlock in the menu (☰) to add one</>}
+                </p>
               </div>
             )}
           </div>
@@ -690,10 +717,22 @@ export default function TrackerPage() {
             </div>
             <div className="p-6 border border-zinc-900 bg-[#0a0a0a] text-center">
               <div className="text-3xl md:text-4xl font-black text-orange-400">{githubThisWeek}</div>
-              <div className="text-[10px] font-bold text-zinc-600 uppercase tracking-wider mt-2">Commits This Week</div>
+              <div className="text-[10px] font-bold text-zinc-600 uppercase tracking-wider mt-2">Contribs This Week</div>
             </div>
           </div>
         </section>
+
+        {/* THINGS TO REMEMBER */}
+        <TipsBoard
+          tips={tips}
+          adminMode={adminMode}
+          queueOps={queueTipOps}
+          syncLabel={
+            adminMode && tipSync !== "synced" ? (
+              <span className={`text-[10px] font-bold ${SYNC_LABEL[tipSync].cls}`}>{SYNC_LABEL[tipSync].text}</span>
+            ) : null
+          }
+        />
 
         {/* LINKS */}
         <section>
@@ -740,7 +779,7 @@ export default function TrackerPage() {
                   <input
                     type="text"
                     inputMode="url"
-                    placeholder="Address, e.g. arena.ai/leaderboard/code"
+                    placeholder="Address, e.g. arena.ai/leaderboard/agent/code"
                     value={newLinkUrl}
                     onChange={(e) => {
                       setNewLinkUrl(e.target.value);
@@ -784,28 +823,29 @@ export default function TrackerPage() {
               {adminMode && <p className="text-zinc-700 text-[11px] mt-2 normal-case">Add the pages you check often.</p>}
             </div>
           ) : (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-3 md:gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {links.map((link) => (
                 <motion.div key={link.id} layout className="relative group">
                   <a
                     href={link.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-start gap-3 p-4 border border-zinc-900 bg-[#0a0a0a] hover:border-orange-500/40 hover:bg-orange-500/[0.03] transition-colors h-full"
+                    className="flex items-stretch border border-zinc-900 bg-[#0a0a0a] hover:border-orange-500/40 hover:bg-orange-500/[0.03] transition-colors h-full min-h-[76px]"
                   >
-                    <span className="w-9 h-9 shrink-0 grid place-items-center border border-zinc-800 bg-black">
+                    {/* The logo takes the card's full height, flush to its edge. */}
+                    <span className="w-[76px] shrink-0 grid place-items-center border-r border-zinc-900 bg-black group-hover:border-orange-500/30 transition-colors">
                       <LinkIcon url={link.url} />
                     </span>
-                    <span className="min-w-0 flex-1">
+                    <span className="min-w-0 flex-1 px-4 py-3 flex flex-col justify-center">
                       <span className="block text-sm font-black uppercase tracking-wide text-white truncate group-hover:text-orange-300 transition-colors">
                         {link.title}
                       </span>
-                      {link.note && <span className="block text-[11px] text-zinc-600 truncate mt-0.5">{link.note}</span>}
-                      <span className="block text-[10px] text-zinc-700 font-mono truncate mt-1.5">{hostOf(link.url)}</span>
+                      {link.note && <span className="block text-[11px] text-zinc-500 truncate mt-0.5">{link.note}</span>}
+                      <span className="block text-[10px] text-zinc-700 font-mono truncate mt-1">{hostOf(link.url)}</span>
                     </span>
                     <ExternalLink
                       size={14}
-                      className="text-zinc-800 group-hover:text-orange-400 transition-colors shrink-0 mt-0.5"
+                      className="text-zinc-800 group-hover:text-orange-400 transition-colors shrink-0 mt-3 mr-3"
                     />
                   </a>
                   {adminMode && (

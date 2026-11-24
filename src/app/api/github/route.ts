@@ -67,7 +67,18 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: 'BAD_USERNAME' }, { status: 400 });
   }
 
-  const cacheKey = `${CACHE_PREFIX}${user.toLowerCase()}`;
+  // With ?year=YYYY the calendar covers that calendar year instead of the
+  // rolling last twelve months. GitHub opened in 2008.
+  const yearParam = url.searchParams.get('year');
+  const thisYear = new Date().getUTCFullYear();
+  const year = yearParam ? Number(yearParam) : null;
+  if (year !== null && (!Number.isInteger(year) || year < 2008 || year > thisYear)) {
+    return NextResponse.json({ error: 'BAD_YEAR' }, { status: 400 });
+  }
+  // A finished year no longer changes, so it can be kept much longer.
+  const freshMs = year !== null && year < thisYear ? 24 * 60 * 60 * 1000 : FRESH_MS;
+
+  const cacheKey = `${CACHE_PREFIX}${user.toLowerCase()}${year !== null ? `:${year}` : ''}`;
   let cached: Cached | null = null;
   try {
     cached = await readKey<Cached>(cacheKey);
@@ -75,13 +86,15 @@ export async function GET(req: Request) {
     // A cache read failure should never stop a live fetch.
   }
 
-  const fresh = cached && Date.now() - Date.parse(cached.fetchedAt) < FRESH_MS;
+  const fresh = cached && Date.now() - Date.parse(cached.fetchedAt) < freshMs;
   if (fresh && cached) {
     return NextResponse.json({ ...cached, cached: true }, { headers: { 'Cache-Control': 'no-store' } });
   }
 
+  const range = year !== null ? `?from=${year}-01-01&to=${year}-12-31` : '';
+
   try {
-    const res = await fetch(`https://github.com/users/${user}/contributions`, {
+    const res = await fetch(`https://github.com/users/${user}/contributions${range}`, {
       headers: {
         // GitHub serves the calendar fragment to any client that asks politely.
         accept: 'text/html',

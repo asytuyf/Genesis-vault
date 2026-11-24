@@ -1,16 +1,27 @@
 import { NextResponse } from 'next/server';
-import { applyLinkOps, isLinkOp, DEFAULT_LINKS, type LinkOp, type TrackerLink } from '@/lib/links';
+import { applyLinkOps, isLinkOp, upgradeLinks, DEFAULT_LINKS, LINK_UPGRADES, type LinkOp, type TrackerLink } from '@/lib/links';
 import { readKey, writeKey, checkPassword } from '@/lib/kv';
 
 export const dynamic = 'force-dynamic';
 
 const KEY = 'tracker_links';
+const UPGRADES_KEY = 'tracker_links_upgrades';
 
-/** Stored links, or a starting pair the first time the tracker is opened. */
+/**
+ * Stored links, or the starting set the first time the tracker is opened.
+ * Upgrades not yet applied to the stored list are applied and saved once.
+ */
 async function current(): Promise<TrackerLink[]> {
   const stored = await readKey<TrackerLink[]>(KEY);
-  if (Array.isArray(stored) && stored.length) return stored;
-  return DEFAULT_LINKS;
+  if (!Array.isArray(stored) || stored.length === 0) return DEFAULT_LINKS;
+
+  const applied = (await readKey<string[]>(UPGRADES_KEY)) ?? [];
+  if (LINK_UPGRADES.every((u) => applied.includes(u.id))) return stored;
+
+  const next = upgradeLinks(stored, applied);
+  await writeKey(KEY, next.links);
+  await writeKey(UPGRADES_KEY, next.applied);
+  return next.links;
 }
 
 export async function GET() {
