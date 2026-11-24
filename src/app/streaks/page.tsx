@@ -21,16 +21,35 @@ const MONTH_NAMES = [
   "July", "August", "September", "October", "November", "December",
 ];
 
+// A site's home-screen icon is a full, sharp square tile (120–180px), so it can
+// fill the logo panel. Not every site has one, so fall back to Google's favicon
+// service, then to a globe.
+const iconSources = (host: string) => [
+  `https://${host}/apple-touch-icon.png`,
+  `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=128`,
+];
+
 const LinkIcon = ({ url }: { url: string }) => {
-  const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
+  const [small, setSmall] = useState(false);
   const host = hostOf(url);
-  if (failed || !host) return <Globe size={28} className="text-zinc-600" />;
+  const sources = host ? iconSources(host) : [];
+  if (attempt >= sources.length) return <Globe size={28} className="text-zinc-600" />;
+  const next = () => setAttempt((a) => a + 1);
   return (
     <img
-      src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=128`}
+      key={sources[attempt]}
+      src={sources[attempt]}
       alt=""
-      className="w-9 h-9 md:w-10 md:h-10 object-contain"
-      onError={() => setFailed(true)}
+      // A tiny favicon stretched to the panel turns to mush; show it at its size.
+      className={small ? "w-10 h-10 object-contain" : "absolute inset-0 w-full h-full object-contain"}
+      onError={next}
+      onLoad={(e) => {
+        const w = e.currentTarget.naturalWidth;
+        // Some sites answer with a 1×1 placeholder instead of an error.
+        if (attempt === 0 && w < 48) next();
+        else setSmall(w < 64);
+      }}
       draggable="false"
     />
   );
@@ -344,6 +363,9 @@ export default function TrackerPage() {
               <GitCommit size={20} className="text-orange-400" />
               <span className="text-xs font-black uppercase tracking-[0.2em] text-zinc-400">Contributions</span>
               {githubUsername && <span className="text-[10px] text-zinc-500">@{githubUsername}</span>}
+              <span className="px-2 py-0.5 border border-orange-500/30 bg-orange-500/10 text-[10px] font-black uppercase tracking-wider text-orange-400">
+                {githubThisWeek} this week
+              </span>
               {githubFetchedAt && (
                 <span className="text-[9px] text-zinc-700 uppercase tracking-wider hidden sm:inline">
                   read {new Date(githubFetchedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })}
@@ -698,26 +720,22 @@ export default function TrackerPage() {
 
         {/* STATS */}
         <section className="mb-12">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="p-6 border border-zinc-900 bg-[#0a0a0a] text-center">
+          <div className="grid grid-cols-3 gap-3 md:gap-4">
+            <div className="p-4 md:p-6 border border-zinc-900 bg-[#0a0a0a] text-center">
               <div className="text-3xl md:text-4xl font-black text-orange-400">{habits.length}</div>
               <div className="text-[10px] font-bold text-zinc-600 uppercase tracking-wider mt-2">Habits</div>
             </div>
-            <div className="p-6 border border-zinc-900 bg-[#0a0a0a] text-center">
+            <div className="p-4 md:p-6 border border-zinc-900 bg-[#0a0a0a] text-center">
               <div className="text-3xl md:text-4xl font-black text-orange-400">
                 {habits.filter((h) => h.history.includes(today)).length}
               </div>
               <div className="text-[10px] font-bold text-zinc-600 uppercase tracking-wider mt-2">Done Today</div>
             </div>
-            <div className="p-6 border border-zinc-900 bg-[#0a0a0a] text-center">
+            <div className="p-4 md:p-6 border border-zinc-900 bg-[#0a0a0a] text-center">
               <div className="text-3xl md:text-4xl font-black text-orange-400">
                 {habits.length > 0 ? Math.max(...habits.map((h) => getStreak(h))) : 0}
               </div>
               <div className="text-[10px] font-bold text-zinc-600 uppercase tracking-wider mt-2">Best Streak</div>
-            </div>
-            <div className="p-6 border border-zinc-900 bg-[#0a0a0a] text-center">
-              <div className="text-3xl md:text-4xl font-black text-orange-400">{githubThisWeek}</div>
-              <div className="text-[10px] font-bold text-zinc-600 uppercase tracking-wider mt-2">Contribs This Week</div>
             </div>
           </div>
         </section>
@@ -830,10 +848,10 @@ export default function TrackerPage() {
                     href={link.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-stretch border border-zinc-900 bg-[#0a0a0a] hover:border-orange-500/40 hover:bg-orange-500/[0.03] transition-colors h-full min-h-[76px]"
+                    className="flex items-stretch border border-zinc-900 bg-[#0a0a0a] hover:border-orange-500/40 hover:bg-orange-500/[0.03] transition-colors h-[84px]"
                   >
                     {/* The logo takes the card's full height, flush to its edge. */}
-                    <span className="w-[76px] shrink-0 grid place-items-center border-r border-zinc-900 bg-black group-hover:border-orange-500/30 transition-colors">
+                    <span className="relative w-[84px] shrink-0 grid place-items-center overflow-hidden border-r border-zinc-900 bg-black group-hover:border-orange-500/30 transition-colors">
                       <LinkIcon url={link.url} />
                     </span>
                     <span className="min-w-0 flex-1 px-4 py-3 flex flex-col justify-center">

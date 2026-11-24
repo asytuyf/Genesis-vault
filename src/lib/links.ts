@@ -123,6 +123,7 @@ export function applyLinkOps(list: TrackerLink[], ops: LinkOp[]): TrackerLink[] 
 
 export const DEFAULT_LINKS: TrackerLink[] = [
   { id: "seed-arena", title: "Arena", url: "https://arena.ai/leaderboard/agent/code", note: "Coding agent rankings" },
+  { id: "seed-tutorbench", title: "TutorBench", url: "https://labs.scale.com/leaderboard/tutorbench", note: "Best AI for studying · tutor rankings" },
   { id: "seed-github", title: "GitHub", url: "https://github.com/asytuyf", note: "Your profile and activity" },
   { id: "seed-yes-trips", title: "Yes Trips", url: "https://yes-trips.com/", note: "Student trips · ESN" },
 ];
@@ -148,6 +149,16 @@ export const LINK_UPGRADES: { id: string; run: (list: TrackerLink[]) => TrackerL
       list.some((l) => hostOf(l.url) === "yes-trips.com")
         ? list
         : [...list, DEFAULT_LINKS.find((l) => l.id === "seed-yes-trips")!],
+  },
+  {
+    // Scale's TutorBench ranks AI models on how well they tutor: Arena, for studying.
+    id: "2026-11-tutorbench",
+    run: (list) => {
+      if (list.some((l) => l.url.includes("/leaderboard/tutorbench"))) return list;
+      const link = DEFAULT_LINKS.find((l) => l.id === "seed-tutorbench")!;
+      const arena = list.findIndex((l) => hostOf(l.url) === "arena.ai");
+      return arena === -1 ? [...list, link] : [...list.slice(0, arena + 1), link, ...list.slice(arena + 1)];
+    },
   },
 ];
 
