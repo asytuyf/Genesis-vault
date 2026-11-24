@@ -3,6 +3,7 @@ import { JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { NavigationWrapper } from "@/components/NavigationWrapper";
 import { ServiceWorkerRegistrar } from "@/components/ServiceWorkerRegistrar";
+import { AppResume } from "@/components/AppResume";
 import { pwaMetadata } from "@/lib/pwa";
 
 const jbMono = JetBrains_Mono({ subsets: ["latin"] });
@@ -37,6 +38,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en">
       <body className={jbMono.className}>
         <ServiceWorkerRegistrar />
+        <AppResume />
         <NavigationWrapper>
           {children}
         </NavigationWrapper>

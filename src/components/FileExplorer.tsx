@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { motion, useDragControls, useMotionValue, animate } from "framer-motion";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { isStandalone } from "@/lib/pwa-client";
 import { Terminal, Folder, File, ChevronRight, ChevronDown, Hash, X, Lock, Unlock, Zap, Flame, Sun, Database } from "lucide-react";
 
 interface FileExplorerProps {
@@ -119,6 +120,18 @@ export const FileExplorer = ({ mobileOpen, setMobileOpen, desktopOpen }: FileExp
     animate(panelX, targetX, { type: "spring", stiffness: 400, damping: 30 });
   }, [desktopOpenValue, panelX]);
 
+  // In a browser tab a page from the menu is loaded in full, so that adding it
+  // to the home screen picks up that page's own manifest and start page.
+  // Safari keeps the manifest of the page it first loaded, so after an in-app
+  // move the app it made opened on the homepage. Installed, the menu stays an
+  // instant in-app move.
+  const openPage = (e: React.MouseEvent<HTMLAnchorElement>, isMobileView: boolean) => {
+    if (isMobileView) setMobileOpenValue(false);
+    if (isStandalone() || e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+    e.preventDefault();
+    window.location.assign(e.currentTarget.href);
+  };
+
   const renderFileTreeContent = (isMobileView: boolean) => {
     return (
       <div className="relative h-full flex flex-col overflow-hidden">
@@ -211,7 +224,7 @@ export const FileExplorer = ({ mobileOpen, setMobileOpen, desktopOpen }: FileExp
                         <Link
                           href="/"
                           className="flex items-center gap-2 group/file py-1"
-                          onClick={() => isMobileView && setMobileOpenValue(false)}
+                          onClick={(e) => openPage(e, isMobileView)}
                         >
                           <File
                             size={18}
@@ -258,7 +271,7 @@ export const FileExplorer = ({ mobileOpen, setMobileOpen, desktopOpen }: FileExp
                               <Link
                                 href="/archive"
                                 className="flex items-center gap-2 group/file py-1"
-                                onClick={() => isMobileView && setMobileOpenValue(false)}
+                                onClick={(e) => openPage(e, isMobileView)}
                               >
                                 <File
                                   size={18}
@@ -308,7 +321,7 @@ export const FileExplorer = ({ mobileOpen, setMobileOpen, desktopOpen }: FileExp
                               <Link
                                 href="/goals"
                                 className="flex items-center gap-2 group/file py-1"
-                                onClick={() => isMobileView && setMobileOpenValue(false)}
+                                onClick={(e) => openPage(e, isMobileView)}
                               >
                                 <File
                                   size={18}
@@ -358,7 +371,7 @@ export const FileExplorer = ({ mobileOpen, setMobileOpen, desktopOpen }: FileExp
                               <Link
                                 href="/study"
                                 className="flex items-center gap-2 group/file py-1"
-                                onClick={() => isMobileView && setMobileOpenValue(false)}
+                                onClick={(e) => openPage(e, isMobileView)}
                               >
                                 <File
                                   size={18}
@@ -408,7 +421,7 @@ export const FileExplorer = ({ mobileOpen, setMobileOpen, desktopOpen }: FileExp
                               <Link
                                 href="/streaks"
                                 className="flex items-center gap-2 group/file py-1"
-                                onClick={() => isMobileView && setMobileOpenValue(false)}
+                                onClick={(e) => openPage(e, isMobileView)}
                               >
                                 <File
                                   size={18}
@@ -459,7 +472,7 @@ export const FileExplorer = ({ mobileOpen, setMobileOpen, desktopOpen }: FileExp
                                 <Link
                                   href="/spend"
                                   className="flex items-center gap-2 group/file py-1"
-                                  onClick={() => isMobileView && setMobileOpenValue(false)}
+                                  onClick={(e) => openPage(e, isMobileView)}
                                 >
                                   <File size={18} className="text-cyan-400 transition-colors" />
                                   <span
@@ -505,7 +518,7 @@ export const FileExplorer = ({ mobileOpen, setMobileOpen, desktopOpen }: FileExp
                               <Link
                                 href="/library"
                                 className="flex items-center gap-2 group/file py-1"
-                                onClick={() => isMobileView && setMobileOpenValue(false)}
+                                onClick={(e) => openPage(e, isMobileView)}
                               >
                                 <File
                                   size={18}
