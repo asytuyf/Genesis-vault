@@ -14,14 +14,14 @@ import {
   type Goal, type GoalOp, type GoalPatch, type SubGoal,
   formatCountdown, formatClock, formatDuration, formatTimeLeft, hoursFromNow,
   subClearsAt, timerRemaining, timerRunning, timerFinished, toggleSubDone, lateText,
-  cleanLink, formatSlot, linkLabel, localDay, makeSlot, slotState,
+  cleanLink, formatSlot, linkLabel, slotState,
 } from "@/lib/goals";
 import { requestNotifPermission } from "@/lib/notify";
 import { isPageKey, isSaveCombo } from "@/lib/keys";
 import { LinkifiedText } from "@/components/LinkifiedText";
 import type { SyncState } from "@/lib/useGoalSync";
 import { DeviceReminders, GoalReminders } from "@/components/ReminderSettings";
-import { DateTimeInput } from "@/components/DateTimeInput";
+import { DateTimeInput, TimeSlotInput } from "@/components/DateTimeInput";
 
 // --- shared bits ------------------------------------------------------------
 
@@ -95,9 +95,6 @@ const SubgoalItem = ({
   const [draft, setDraft] = useState(sg.text);
   const [timeAmount, setTimeAmount] = useState(() => (sg.timer ? splitDuration(sg.timer.duration).amount : ""));
   const [timeUnit, setTimeUnit] = useState<TimeUnit>(() => (sg.timer ? splitDuration(sg.timer.duration).unit : "m"));
-  const [slotDay, setSlotDay] = useState("");
-  const [slotFrom, setSlotFrom] = useState("");
-  const [slotTo, setSlotTo] = useState("");
   const [linkDraft, setLinkDraft] = useState("");
   const [linkBad, setLinkBad] = useState(false);
 
@@ -169,27 +166,13 @@ const SubgoalItem = ({
   // The options open on what is saved, not on what was typed in them last time.
   const toggleOptions = () => {
     if (!expanded) {
-      setSlotDay(sg.slot?.start.slice(0, 10) ?? localDay());
-      setSlotFrom(sg.slot?.start.slice(11, 16) ?? "");
-      setSlotTo(sg.slot?.end.slice(11, 16) ?? "");
       setLinkDraft(sg.link ?? "");
       setLinkBad(false);
     }
     onToggleExpanded();
   };
 
-  /** Saved the moment both times are in. */
-  const changeSlot = (day: string, from: string, to: string) => {
-    setSlotDay(day);
-    setSlotFrom(from);
-    setSlotTo(to);
-    if (!day || !from || !to || from === to) return;
-    onChange({ ...sg, slot: makeSlot(day, from, to) });
-  };
-
   const clearSlot = () => {
-    setSlotFrom("");
-    setSlotTo("");
     const next = { ...sg };
     delete next.slot;
     onChange(next);
@@ -474,33 +457,19 @@ const SubgoalItem = ({
                     <Clock size={9} /> Time slot
                   </span>
                 </Label>
-                <div className="flex items-center gap-1.5">
-                  <DateTimeInput
-                    type="time"
-                    aria-label="From"
-                    value={slotFrom}
-                    onChange={(v) => changeSlot(slotDay, v, slotTo)}
+                {/* One field: the day and both times are picked together, and it
+                    stays empty until a slot is picked. */}
+                <div className="flex gap-1.5">
+                  <TimeSlotInput
+                    aria-label="Time slot"
+                    value={sg.slot}
+                    onChange={(slot) => (slot ? onChange({ ...sg, slot }) : clearSlot())}
                     className={`${field} flex-1 min-w-0`}
                   />
-                  <span className="text-xs text-zinc-600">–</span>
-                  <DateTimeInput
-                    type="time"
-                    aria-label="Until"
-                    value={slotTo}
-                    onChange={(v) => changeSlot(slotDay, slotFrom, v)}
-                    className={`${field} flex-1 min-w-0`}
-                  />
-                  <button onClick={clearSlot} disabled={!sg.slot && !slotFrom && !slotTo} className={clearBtn}>
+                  <button onClick={clearSlot} disabled={!sg.slot} className={clearBtn}>
                     Clear
                   </button>
                 </div>
-                <DateTimeInput
-                  type="date"
-                  aria-label="Day of the time slot"
-                  value={slotDay}
-                  onChange={(v) => changeSlot(v, slotFrom, slotTo)}
-                  className={`${field} w-full mt-1.5`}
-                />
               </div>
 
               <div>
@@ -673,9 +642,11 @@ export const GoalDetailModal = ({
     document.body.style.overflow = "hidden";
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
-      // While a field is focused, Escape belongs to that field.
+      // While a field is focused, Escape belongs to that field, and while a
+      // date picker is open, to the picker.
       const tag = document.activeElement?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA") return;
+      if (document.querySelector("[data-picker]")) return;
       onClose();
     };
     // Capture phase, so the check happens before React clears the focused field.
@@ -1022,6 +993,18 @@ export const GoalDetailModal = ({
               dropZoneId={otherGoals.length ? MOVE_ZONE : undefined}
               onDropZone={(id) => setMovingId(id)}
               onDragStateChange={setDraggingId}
+              // What follows the pointer while a to-do is dragged: a copy of its
+              // row, drawn above the window so the list can scroll under it.
+              renderOverlay={(id) => {
+                const sg = subgoals.find((s) => s.id === id);
+                if (!sg) return null;
+                return (
+                  <div className="h-full flex items-start gap-1 p-2 pl-2.5 border border-emerald-500/60 bg-zinc-900 shadow-2xl shadow-black/70 cursor-grabbing font-mono">
+                    <span className="shrink-0 h-9 w-9 grid place-items-center text-sm text-zinc-700">[&nbsp;]</span>
+                    <span className="flex-1 min-w-0 py-1.5 pl-1 text-sm text-zinc-200 break-words leading-snug">{sg.text}</span>
+                  </div>
+                );
+              }}
             >
             <div className="p-5">
               {isAdmin && otherGoals.length > 0 && (

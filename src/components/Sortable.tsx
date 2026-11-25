@@ -19,16 +19,22 @@
 // which read as shaking (worst in Safari, which redraws stretched text
 // roughly). It also stays inside the visible list: dragged past the bottom it
 // used to make the list longer, which made it scroll, which made it longer.
+//
+// A list can also drag a floating copy instead of the row itself (give it
+// renderOverlay). The copy lives outside the scrolling list, on top of the
+// page, so the list scrolling under it near an edge cannot make it tremble;
+// the row stays behind as a faint placeholder showing where it will land.
 
-import { createContext, useContext, useMemo, useSyncExternalStore, type ReactNode } from "react";
+import { createContext, useContext, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import {
   DndContext,
+  DragOverlay,
   KeyboardSensor,
   MeasuringStrategy,
   MouseSensor,
   TouchSensor,
   closestCorners,
-  pointerWithin,
   useDroppable,
   useSensor,
   useSensors,
@@ -65,6 +71,10 @@ const AUTO_SCROLL = { threshold: { x: 0, y: 0.1 }, acceleration: 3 };
 const ROW_MOUSE = { distance: { y: MOUSE_DISTANCE }, tolerance: { x: 8 } };
 
 const EnabledContext = createContext(false);
+/** The list drags a floating copy, so the row itself only marks the spot. */
+const OverlayContext = createContext(false);
+/** How the floating copy settles into place on drop. */
+const DROP_ANIMATION = { duration: 180, easing: "cubic-bezier(0.2, 0, 0, 1)" };
 
 /**
  * A grid that has collapsed to one column behaves like a list, and reads much
@@ -104,6 +114,8 @@ interface SortableListProps {
   onDropZone?: (id: string) => void;
   children: ReactNode;
   onDragStateChange?: (draggingId: string | null) => void;
+  /** What follows the pointer while an item is dragged, instead of the item itself. */
+  renderOverlay?: (id: string) => ReactNode;
 }
 
 export function SortableList({
@@ -116,7 +128,9 @@ export function SortableList({
   onDropZone,
   children,
   onDragStateChange,
+  renderOverlay,
 }: SortableListProps) {
+  const [activeId, setActiveId] = useState<string | null>(null);
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: swipeRows ? ROW_MOUSE : { distance: MOUSE_DISTANCE } }),
     useSensor(TouchSensor, {
@@ -135,16 +149,27 @@ export function SortableList({
   );
 
   const handleStart = (event: DragStartEvent) => {
+    setActiveId(String(event.active.id));
     onDragStateChange?.(String(event.active.id));
   };
 
   // The drop zone counts only while the finger (or pointer) is really inside
-  // it; everywhere else the list sorts as usual and ignores the zone.
+  // it; everywhere else the list sorts as usual and ignores the zone. Where it
+  // is gets read off the screen each time: it stays pinned to the top while
+  // the list scrolls, and the library's own record of it moves with the
+  // scroll, so after any scrolling the zone could no longer be hit.
   const collision = useMemo<CollisionDetection>(() => {
     if (!dropZoneId) return closestCorners;
     return (args) => {
-      const inZone = pointerWithin(args).find((c) => c.id === dropZoneId);
-      if (inZone) return [inZone];
+      const zone = args.droppableContainers.find((c) => c.id === dropZoneId);
+      const el = zone?.node.current;
+      const p = args.pointerCoordinates;
+      if (zone && el && p && !zone.disabled) {
+        const r = el.getBoundingClientRect();
+        if (p.x >= r.left && p.x <= r.right && p.y >= r.top && p.y <= r.bottom) {
+          return [{ id: dropZoneId, data: { droppableContainer: zone, value: 0 } }];
+        }
+      }
       return closestCorners({
         ...args,
         droppableContainers: args.droppableContainers.filter((c) => c.id !== dropZoneId),
@@ -153,6 +178,7 @@ export function SortableList({
   }, [dropZoneId]);
 
   const handleEnd = (event: DragEndEvent) => {
+    setActiveId(null);
     onDragStateChange?.(null);
     const { active, over } = event;
     if (over && dropZoneId && over.id === dropZoneId) {
@@ -173,6 +199,7 @@ export function SortableList({
 
   return (
     <EnabledContext.Provider value={true}>
+    <OverlayContext.Provider value={!!renderOverlay}>
       <DndContext
         sensors={sensors}
         collisionDetection={collision}
@@ -183,12 +210,26 @@ export function SortableList({
         autoScroll={AUTO_SCROLL}
         onDragStart={handleStart}
         onDragEnd={handleEnd}
-        onDragCancel={() => onDragStateChange?.(null)}
+        onDragCancel={() => {
+          setActiveId(null);
+          onDragStateChange?.(null);
+        }}
       >
         <SortableContext items={ids} strategy={strategy}>
           {children}
         </SortableContext>
+        {/* On the page itself, not inside a window that may be moved or scaled
+            by its own animation, which would throw the copy off the pointer. */}
+        {renderOverlay &&
+          typeof document !== "undefined" &&
+          createPortal(
+            <DragOverlay dropAnimation={DROP_ANIMATION} zIndex={950}>
+              {activeId ? renderOverlay(activeId) : null}
+            </DragOverlay>,
+            document.body
+          )}
       </DndContext>
+    </OverlayContext.Provider>
     </EnabledContext.Provider>
   );
 }
@@ -209,6 +250,7 @@ export interface SortableHandleProps {
  */
 export function useSortableItem(id: string): SortableHandleProps {
   const enabled = useContext(EnabledContext);
+  const overlay = useContext(OverlayContext);
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id,
     disabled: !enabled,
@@ -223,8 +265,9 @@ export function useSortableItem(id: string): SortableHandleProps {
       // Translate only: no scaling to the size of the item underneath.
       transform: CSS.Translate.toString(transform),
       transition,
-      // Lifted items ride above the rest and ignore pointer tests.
-      ...(isDragging ? { zIndex: 50, opacity: 0.85, cursor: "grabbing" } : {}),
+      // Lifted items ride above the rest and ignore pointer tests. With a
+      // floating copy, the row left behind is only a faint marker.
+      ...(isDragging ? (overlay ? { opacity: 0.25 } : { zIndex: 50, opacity: 0.85, cursor: "grabbing" }) : {}),
       // Stops iOS offering to select text or showing the callout menu on a hold.
       WebkitTouchCallout: "none",
       WebkitUserSelect: "none",
