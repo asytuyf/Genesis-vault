@@ -224,6 +224,7 @@ const SYNC_CHIP: Record<SyncState, { text: string; cls: string }> = {
   unsaved: { text: "○ QUEUED", cls: "text-zinc-500 border-zinc-800" },
   error: { text: "! UNSENT_KEPT_ON_DEVICE", cls: "text-red-400 border-red-500/30" },
   rejected: { text: "! ADMIN_KEY_REJECTED", cls: "text-red-400 border-red-500/30" },
+  stale: { text: "○ NOT_REFRESHED · RETRYING", cls: "text-yellow-500/80 border-yellow-500/25" },
 };
 
 export default function DirectiveLog() {

@@ -19,8 +19,14 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { applyOps, type Goal, type GoalOp } from "@/lib/goals";
+import { READ_TIMEOUT_MS, SAVE_TIMEOUT_MS, backoff, fetchWithTimeout, onNetworkChange } from "@/lib/net";
 
-export type SyncState = "synced" | "syncing" | "unsaved" | "error" | "rejected";
+/**
+ * "stale": nothing is waiting to be sent, but the last refresh failed (no
+ * signal, a captive portal), so what is shown may be out of date. It retries
+ * by itself and clears on the next good reply.
+ */
+export type SyncState = "synced" | "syncing" | "unsaved" | "error" | "rejected" | "stale";
 
 const OUTBOX_KEY = "goals_outbox_v1";
 const FLUSH_DELAY = 400;
@@ -29,14 +35,19 @@ const REFRESH_THROTTLE = 3000;
 // Browsers cap keepalive request bodies at 64 KB.
 const KEEPALIVE_MAX = 60000;
 
-const post = (body: string, keepalive: boolean) =>
-  fetch("/api/goals", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body,
-    keepalive,
-    cache: "no-store",
-  });
+const post = (body: string, keepalive: boolean, controller?: AbortController) =>
+  fetchWithTimeout(
+    "/api/goals",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body,
+      keepalive,
+      cache: "no-store",
+    },
+    SAVE_TIMEOUT_MS,
+    controller
+  );
 
 /**
  * The admin key as stored on this device, read straight from localStorage.
@@ -80,6 +91,15 @@ export function useGoalSync(password: string, unlocked = true) {
   // What the GET sends. Empty while locked, so a locked app is served the same
   // list as any visitor.
   const authRef = useRef("");
+  // The save on its way, so one stuck since before the app went away, or
+  // since the network changed, can be cut short and sent again.
+  const inflightAbortRef = useRef<AbortController | null>(null);
+  const inflightSinceRef = useRef(0);
+  // The last refresh failed: what is shown may be out of date.
+  const staleRef = useRef(false);
+  const refreshFailsRef = useRef(0);
+  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const refreshRef = useRef<() => void>(() => {});
 
 
   const saveOutbox = useCallback(() => {
@@ -106,7 +126,9 @@ export function useGoalSync(password: string, unlocked = true) {
           ? failedRef.current
             ? "error"
             : "unsaved"
-          : "synced"
+          : staleRef.current
+            ? "stale"
+            : "synced"
     );
   }, []);
 
@@ -134,7 +156,10 @@ export function useGoalSync(password: string, unlocked = true) {
 
     const body = JSON.stringify({ password: pw, ops });
     try {
-      const res = await post(body, body.length < KEEPALIVE_MAX);
+      const controller = new AbortController();
+      inflightAbortRef.current = controller;
+      inflightSinceRef.current = Date.now();
+      const res = await post(body, body.length < KEEPALIVE_MAX, controller);
       // A refused request (wrong admin key, bad payload) will be refused again:
       // keep the work queued, show the error, and wait for a manual retry, or
       // for the key to be put right.
@@ -152,6 +177,8 @@ export function useGoalSync(password: string, unlocked = true) {
       if (Array.isArray(data?.goals)) {
         serverRef.current = data.goals;
         versionRef.current += 1;
+        // The reply is the whole list: fresh, whatever the last refresh said.
+        staleRef.current = false;
       }
       inflightRef.current = null;
       failedRef.current = false;
@@ -198,11 +225,15 @@ export function useGoalSync(password: string, unlocked = true) {
         // On the very first load React state is still empty, so fall back to
         // what this device already has saved.
         const key = initial ? authRef.current || storedKey() : authRef.current;
-        const res = await fetch("/api/goals", {
-          cache: "no-store",
-          // Private goals and notes come back only for a request with the key.
-          headers: key ? { "x-admin-key": key } : undefined,
-        });
+        const res = await fetchWithTimeout(
+          "/api/goals",
+          {
+            cache: "no-store",
+            // Private goals and notes come back only for a request with the key.
+            headers: key ? { "x-admin-key": key } : undefined,
+          },
+          READ_TIMEOUT_MS
+        );
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         // Sent with a key the server did not accept: say so now, before the
         // first save bounces, rather than quietly showing the public list.
@@ -220,14 +251,32 @@ export function useGoalSync(password: string, unlocked = true) {
           publish();
         }
         setLoadFailed(false);
+        refreshFailsRef.current = 0;
+        if (staleRef.current) {
+          staleRef.current = false;
+          publish();
+        }
       } catch {
         if (initial) setLoadFailed(true);
+        // Keep what is shown, say it may be old, and try again shortly.
+        staleRef.current = true;
+        publish();
+        refreshFailsRef.current += 1;
+        if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+        refreshTimerRef.current = setTimeout(() => {
+          refreshTimerRef.current = null;
+          if (document.visibilityState === "visible") refreshRef.current();
+        }, backoff(refreshFailsRef.current));
       } finally {
         if (initial) setLoading(false);
       }
     },
     [publish]
   );
+
+  useEffect(() => {
+    refreshRef.current = () => void refresh();
+  }, [refresh]);
 
   // Entering the key, or locking and unlocking, changes what the server sends.
   // Unlocking with a different key (it was checked on the way) also sends
@@ -295,31 +344,43 @@ export function useGoalSync(password: string, unlocked = true) {
       refresh();
     };
 
+    // A save older than this when the app comes back, or the network changes,
+    // was most likely sent on a connection that is gone.
+    const cutStuckSave = () => {
+      if (inflightRef.current && Date.now() - inflightSinceRef.current > 8000) inflightAbortRef.current?.abort();
+    };
+
     const onVisibility = () => {
       if (document.visibilityState === "hidden") {
         flushBeforeUnload();
       } else {
+        cutStuckSave();
         maybeRefresh();
         if (pendingRef.current.length) schedule(0);
       }
     };
 
-    const onOnline = () => {
+    // Back online, or on another network: drop a save that may be stuck on the
+    // old one, fetch fresh, and send what is waiting.
+    const onNetwork = () => {
+      cutStuckSave();
+      refresh();
       if (pendingRef.current.length) schedule(0);
     };
 
     document.addEventListener("visibilitychange", onVisibility);
     window.addEventListener("pagehide", flushBeforeUnload);
     window.addEventListener("focus", maybeRefresh);
-    window.addEventListener("online", onOnline);
+    const stopNetwork = onNetworkChange(onNetwork);
     const poll = setInterval(maybeRefresh, POLL_MS);
 
     return () => {
       document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("pagehide", flushBeforeUnload);
       window.removeEventListener("focus", maybeRefresh);
-      window.removeEventListener("online", onOnline);
+      stopNetwork();
       clearInterval(poll);
+      if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
     };
   }, [flushBeforeUnload, refresh, schedule]);
 

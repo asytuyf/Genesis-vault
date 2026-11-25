@@ -26,10 +26,11 @@ const SYNC_LABEL: Record<SyncState, { text: string; cls: string }> = {
   unsaved: { text: "○ QUEUED", cls: "text-zinc-500" },
   error: { text: "! UNSENT_KEPT_ON_DEVICE", cls: "text-red-400" },
   rejected: { text: "! ADMIN_KEY_REJECTED · LOCK, RE-ENTER, UNLOCK", cls: "text-red-400" },
+  stale: { text: "○ NOT_REFRESHED · RETRYING", cls: "text-yellow-500/80" },
 };
 
 // Four lists sync side by side; the worst of their states is the one to show.
-const SYNC_RANK: SyncState[] = ["synced", "unsaved", "syncing", "error", "rejected"];
+const SYNC_RANK: SyncState[] = ["synced", "stale", "unsaved", "syncing", "error", "rejected"];
 const worst = (...states: SyncState[]) =>
   states.reduce((a, b) => (SYNC_RANK.indexOf(b) > SYNC_RANK.indexOf(a) ? b : a));
 

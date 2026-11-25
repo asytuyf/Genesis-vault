@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { Plus, X, Lock, Eye } from "lucide-react";
 import { type Goal, hoursFromNow } from "@/lib/goals";
 import { isSaveCombo } from "@/lib/keys";
+import { DateTimeInput } from "@/components/DateTimeInput";
 
 interface AddGoalFormProps {
   /** Hands the new goal to the page, which queues it for saving. */
@@ -136,11 +137,11 @@ export const AddGoalForm = ({ onAdd, onClose }: AddGoalFormProps) => {
                   ))}
                 </div>
                 <div className="flex gap-2">
-                    <input
+                    <DateTimeInput
                         type="datetime-local"
                         className="flex-1 min-w-0 bg-black border border-zinc-800 px-4 py-2.5 text-base outline-none focus:border-emerald-400 text-zinc-300 font-mono"
                         value={deadline}
-                        onChange={(e) => setDeadline(e.target.value)}
+                        onChange={(v) => setDeadline(v)}
                     />
                     {deadline && (
                         <button

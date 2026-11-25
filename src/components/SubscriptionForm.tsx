@@ -7,6 +7,7 @@ import { CYCLES, DEFAULT_CURRENCY, type Cycle, type Expense, parseCents, todayLo
 import { brandLook } from "@/lib/brands";
 import { BrandIcon } from "@/components/BrandIcon";
 import { MoneySheet, field, hint, label } from "@/components/MoneySheet";
+import { DateTimeInput } from "@/components/DateTimeInput";
 
 const CURRENCIES = ["EUR", "USD", "GBP"];
 
@@ -127,7 +128,7 @@ export function SubscriptionForm({ expense, onSave, onClose }: SubscriptionFormP
         ) : (
           <div className="min-w-0">
             <label className={label}>Next charge</label>
-            <input className={field} type="date" value={anchor} onChange={(e) => e.target.value && setAnchor(e.target.value)} />
+            <DateTimeInput className={field} type="date" value={anchor} onChange={(v) => v && setAnchor(v)} required accent="cyan" />
           </div>
         )}
       </div>
@@ -135,7 +136,7 @@ export function SubscriptionForm({ expense, onSave, onClose }: SubscriptionFormP
       {cycle === "custom" && (
         <div>
           <label className={label}>Next charge</label>
-          <input className={field} type="date" value={anchor} onChange={(e) => e.target.value && setAnchor(e.target.value)} />
+          <DateTimeInput className={field} type="date" value={anchor} onChange={(v) => v && setAnchor(v)} required accent="cyan" />
         </div>
       )}
 
@@ -178,7 +179,7 @@ export function SubscriptionForm({ expense, onSave, onClose }: SubscriptionFormP
 
       <div>
         <label className={label}>Free trial ends (optional)</label>
-        <input className={field} type="date" value={trialEndsAt} onChange={(e) => setTrialEndsAt(e.target.value)} />
+        <DateTimeInput className={field} type="date" value={trialEndsAt} onChange={(v) => setTrialEndsAt(v)} accent="cyan" />
         <p className={hint}>Its card turns yellow until the trial ends and it starts charging.</p>
       </div>
 

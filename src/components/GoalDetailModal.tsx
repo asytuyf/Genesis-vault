@@ -21,6 +21,7 @@ import { isPageKey, isSaveCombo } from "@/lib/keys";
 import { LinkifiedText } from "@/components/LinkifiedText";
 import type { SyncState } from "@/lib/useGoalSync";
 import { DeviceReminders, GoalReminders } from "@/components/ReminderSettings";
+import { DateTimeInput } from "@/components/DateTimeInput";
 
 // --- shared bits ------------------------------------------------------------
 
@@ -454,11 +455,11 @@ const SubgoalItem = ({
                   </span>
                 </Label>
                 <div className="flex gap-1.5">
-                  <input
+                  <DateTimeInput
                     type="datetime-local"
                     aria-label="Due date and time"
                     value={sg.deadline || ""}
-                    onChange={(e) => setDeadline(e.target.value)}
+                    onChange={(v) => setDeadline(v)}
                     className={`${field} flex-1 min-w-0`}
                   />
                   <button onClick={() => setDeadline("")} disabled={!sg.deadline} className={clearBtn}>
@@ -474,30 +475,30 @@ const SubgoalItem = ({
                   </span>
                 </Label>
                 <div className="flex items-center gap-1.5">
-                  <input
+                  <DateTimeInput
                     type="time"
                     aria-label="From"
                     value={slotFrom}
-                    onChange={(e) => changeSlot(slotDay, e.target.value, slotTo)}
+                    onChange={(v) => changeSlot(slotDay, v, slotTo)}
                     className={`${field} flex-1 min-w-0`}
                   />
                   <span className="text-xs text-zinc-600">–</span>
-                  <input
+                  <DateTimeInput
                     type="time"
                     aria-label="Until"
                     value={slotTo}
-                    onChange={(e) => changeSlot(slotDay, slotFrom, e.target.value)}
+                    onChange={(v) => changeSlot(slotDay, slotFrom, v)}
                     className={`${field} flex-1 min-w-0`}
                   />
                   <button onClick={clearSlot} disabled={!sg.slot && !slotFrom && !slotTo} className={clearBtn}>
                     Clear
                   </button>
                 </div>
-                <input
+                <DateTimeInput
                   type="date"
                   aria-label="Day of the time slot"
                   value={slotDay}
-                  onChange={(e) => changeSlot(e.target.value, slotFrom, slotTo)}
+                  onChange={(v) => changeSlot(v, slotFrom, slotTo)}
                   className={`${field} w-full mt-1.5`}
                 />
               </div>
@@ -802,9 +803,12 @@ export const GoalDetailModal = ({
     if (!isAdmin) return;
     setMovingId(null);
     setExpandedId(null);
-    // Added to the new goal before it leaves this one, in the same save.
+    // Added to the new goal before it leaves this one, in the same save, and
+    // put at the top of its list there: it is what you are thinking about now.
+    // Naming only this one keeps the rest of that list in its own order.
     onOps([
       { type: "sub", id: target.id, sub },
+      { type: "subOrder", id: target.id, ids: [sub.id] },
       { type: "subRemove", id: goal.id, subId: sub.id },
     ]);
     setNotice({
@@ -830,6 +834,7 @@ export const GoalDetailModal = ({
     unsaved: { text: "○ QUEUED", cls: "text-zinc-500" },
     error: { text: "! UNSENT_KEPT_ON_DEVICE", cls: "text-red-400" },
     rejected: { text: "! ADMIN_KEY_REJECTED", cls: "text-red-400" },
+    stale: { text: "○ NOT_REFRESHED · RETRYING", cls: "text-yellow-500/80" },
   };
 
   return (
@@ -1287,10 +1292,10 @@ export const GoalDetailModal = ({
                         </button>
                       ))}
                     </div>
-                    <input
+                    <DateTimeInput
                       type="datetime-local"
                       value={goal.deadline || ""}
-                      onChange={(e) => patch({ deadline: e.target.value })}
+                      onChange={(v) => patch({ deadline: v })}
                       className="w-full bg-black border border-zinc-800 px-3 py-2.5 text-sm outline-none focus:border-emerald-500/50 text-zinc-300 font-mono"
                     />
                     {goal.deadline && <div className="text-[10px] text-zinc-600 font-mono">{fmtDateTime(goal.deadline, true)}</div>}

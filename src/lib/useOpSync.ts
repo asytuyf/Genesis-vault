@@ -21,8 +21,14 @@
 // "flip it".
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { READ_TIMEOUT_MS, SAVE_TIMEOUT_MS, backoff, fetchWithTimeout, onNetworkChange } from "@/lib/net";
 
-export type SyncState = "synced" | "syncing" | "unsaved" | "error" | "rejected";
+/**
+ * "stale": nothing is waiting to be sent, but the last refresh failed (no
+ * signal, a captive portal), so what is shown may be out of date. It retries
+ * by itself and clears on the next good reply.
+ */
+export type SyncState = "synced" | "syncing" | "unsaved" | "error" | "rejected" | "stale";
 
 const FLUSH_DELAY = 400;
 const POLL_MS = 45000;
@@ -74,6 +80,15 @@ export function useOpSync<T, Op>({
   const passwordRef = useRef(password);
   // The key a read may use: empty while locked.
   const authRef = useRef("");
+  // The save on its way, so one stuck since before the app went away, or
+  // since the network changed, can be cut short and sent again.
+  const inflightAbortRef = useRef<AbortController | null>(null);
+  const inflightSinceRef = useRef(0);
+  // The last refresh failed: what is shown may be out of date.
+  const staleRef = useRef(false);
+  const refreshFailsRef = useRef(0);
+  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const refreshRef = useRef<() => void>(() => {});
   const applyRef = useRef(apply);
   applyRef.current = apply;
 
@@ -103,7 +118,9 @@ export function useOpSync<T, Op>({
           ? failedRef.current
             ? "error"
             : "unsaved"
-          : "synced"
+          : staleRef.current
+            ? "stale"
+            : "synced"
     );
   }, []);
 
@@ -131,13 +148,21 @@ export function useOpSync<T, Op>({
 
     const body = JSON.stringify({ password: pw, ops });
     try {
-      const res = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body,
-        keepalive: body.length < KEEPALIVE_MAX,
-        cache: "no-store",
-      });
+      const controller = new AbortController();
+      inflightAbortRef.current = controller;
+      inflightSinceRef.current = Date.now();
+      const res = await fetchWithTimeout(
+        endpoint,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body,
+          keepalive: body.length < KEEPALIVE_MAX,
+          cache: "no-store",
+        },
+        SAVE_TIMEOUT_MS,
+        controller
+      );
       // A refused request (wrong admin key, bad payload) will be refused again:
       // keep the work queued, show the error, and wait for a manual retry, or
       // for the key to be put right.
@@ -155,6 +180,8 @@ export function useOpSync<T, Op>({
       if (Array.isArray(data?.[resultKey])) {
         serverRef.current = data[resultKey];
         versionRef.current += 1;
+        // The reply is the whole list: fresh, whatever the last refresh said.
+        staleRef.current = false;
       }
       inflightRef.current = null;
       failedRef.current = false;
@@ -210,10 +237,11 @@ export function useOpSync<T, Op>({
           if (initial) setLoading(false);
           return;
         }
-        const res = await fetch(endpoint, {
-          cache: "no-store",
-          headers: key ? { "x-admin-key": key } : undefined,
-        });
+        const res = await fetchWithTimeout(
+          endpoint,
+          { cache: "no-store", headers: key ? { "x-admin-key": key } : undefined },
+          READ_TIMEOUT_MS
+        );
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
         if (!Array.isArray(data)) throw new Error("Unexpected payload");
@@ -224,14 +252,32 @@ export function useOpSync<T, Op>({
           publish();
         }
         setLoadFailed(false);
+        refreshFailsRef.current = 0;
+        if (staleRef.current) {
+          staleRef.current = false;
+          publish();
+        }
       } catch {
         if (initial) setLoadFailed(true);
+        // Keep what is shown, say it may be old, and try again shortly.
+        staleRef.current = true;
+        publish();
+        refreshFailsRef.current += 1;
+        if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+        refreshTimerRef.current = setTimeout(() => {
+          refreshTimerRef.current = null;
+          if (document.visibilityState === "visible") refreshRef.current();
+        }, backoff(refreshFailsRef.current));
       } finally {
         if (initial) setLoading(false);
       }
     },
     [authReads, endpoint, publish]
   );
+
+  useEffect(() => {
+    refreshRef.current = () => void refresh();
+  }, [refresh]);
 
   // The key both saves changes and, for a private list, unlocks reading it.
   // Locking clears it, so a locked page asks for nothing it may not see.
@@ -301,31 +347,43 @@ export function useOpSync<T, Op>({
       refresh();
     };
 
+    // A save older than this when the app comes back, or the network changes,
+    // was most likely sent on a connection that is gone.
+    const cutStuckSave = () => {
+      if (inflightRef.current && Date.now() - inflightSinceRef.current > 8000) inflightAbortRef.current?.abort();
+    };
+
     const onVisibility = () => {
       if (document.visibilityState === "hidden") {
         flushBeforeUnload();
       } else {
+        cutStuckSave();
         maybeRefresh();
         if (pendingRef.current.length) schedule(0);
       }
     };
 
-    const onOnline = () => {
+    // Back online, or on another network: drop a save that may be stuck on the
+    // old one, fetch fresh, and send what is waiting.
+    const onNetwork = () => {
+      cutStuckSave();
+      refresh();
       if (pendingRef.current.length) schedule(0);
     };
 
     document.addEventListener("visibilitychange", onVisibility);
     window.addEventListener("pagehide", flushBeforeUnload);
     window.addEventListener("focus", maybeRefresh);
-    window.addEventListener("online", onOnline);
+    const stopNetwork = onNetworkChange(onNetwork);
     const poll = setInterval(maybeRefresh, POLL_MS);
 
     return () => {
       document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("pagehide", flushBeforeUnload);
       window.removeEventListener("focus", maybeRefresh);
-      window.removeEventListener("online", onOnline);
+      stopNetwork();
       clearInterval(poll);
+      if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
     };
   }, [flushBeforeUnload, refresh, schedule]);
 

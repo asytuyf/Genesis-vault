@@ -5,6 +5,7 @@
 import { useState } from "react";
 import { DEFAULT_CURRENCY, type Spend, centsText, formatMoney, parseCents, todayLocal } from "@/lib/money";
 import { MoneySheet, field, label } from "@/components/MoneySheet";
+import { DateTimeInput } from "@/components/DateTimeInput";
 
 interface ExpenseFormProps {
   /** The one being changed, or nothing when adding. */
@@ -69,7 +70,7 @@ export function ExpenseForm({ spend, klarnaLeft, defaults, onSave, onClose }: Ex
         </div>
         <div className="min-w-0">
           <label className={label}>Date</label>
-          <input className={field} type="date" value={date} onChange={(e) => e.target.value && setDate(e.target.value)} />
+          <DateTimeInput className={field} type="date" value={date} onChange={(v) => v && setDate(v)} required accent="cyan" />
         </div>
       </div>
 

@@ -75,6 +75,7 @@ const SYNC_LABEL: Record<SyncState, { text: string; cls: string }> = {
   unsaved: { text: "○ QUEUED", cls: "text-zinc-500" },
   error: { text: "! UNSENT_KEPT_ON_DEVICE", cls: "text-red-400" },
   rejected: { text: "! ADMIN_KEY_REJECTED · LOCK, RE-ENTER, UNLOCK", cls: "text-red-400" },
+  stale: { text: "○ NOT_REFRESHED · RETRYING", cls: "text-yellow-500/80" },
 };
 
 export default function TrackerPage() {

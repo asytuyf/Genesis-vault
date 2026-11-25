@@ -9,6 +9,7 @@ import {
   Volume2, VolumeX, SkipForward, CheckSquare, Square, Trash2, ListTodo,
   CalendarClock, Timer, AlertTriangle, Activity, Tag, Circle, CheckCircle2
 } from "lucide-react";
+import { DateTimeInput } from "@/components/DateTimeInput";
 
 interface SubGoal {
   id: string;
@@ -1068,20 +1069,22 @@ export default function StudyPage() {
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
                         <div>
                           <label className="block text-[9px] font-black text-zinc-600 uppercase tracking-[0.15em] mb-1.5">Date</label>
-                          <input
+                          <DateTimeInput
                             type="date"
                             value={newDeadline.split("T")[0] || ""}
-                            onChange={(e) => setNewDeadline(e.target.value + "T" + (newDeadline.split("T")[1] || "12:00"))}
+                            onChange={(v) => setNewDeadline(v + "T" + (newDeadline.split("T")[1] || "12:00"))}
                             className="w-full bg-black border border-zinc-800 px-2 md:px-3 py-2 text-xs md:text-sm font-mono text-yellow-400 outline-none focus:border-yellow-500/50 appearance-none"
+                            accent="yellow"
                           />
                         </div>
                         <div>
                           <label className="block text-[9px] font-black text-zinc-600 uppercase tracking-[0.15em] mb-1.5">Time</label>
-                          <input
+                          <DateTimeInput
                             type="time"
                             value={newDeadline.split("T")[1] || ""}
-                            onChange={(e) => setNewDeadline((newDeadline.split("T")[0] || new Date().toISOString().split("T")[0]) + "T" + e.target.value)}
+                            onChange={(v) => setNewDeadline((newDeadline.split("T")[0] || new Date().toISOString().split("T")[0]) + "T" + v)}
                             className="w-full bg-black border border-zinc-800 px-2 md:px-3 py-2 text-xs md:text-sm font-mono text-yellow-400 outline-none focus:border-yellow-500/50"
+                            accent="yellow"
                           />
                         </div>
                         <div>
