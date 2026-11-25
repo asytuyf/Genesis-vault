@@ -12,6 +12,13 @@
 // then the finger scrolls as usual; once the item is lifted, scrolling is held
 // off for the rest of the gesture. A mouse skips the wait and starts after a
 // few pixels of travel, so a click still opens what it always opened.
+//
+// A lifted item only ever moves, never changes size. Left to itself the
+// library stretches it to the height of whatever it passes over, so a one-line
+// to-do crossing a two-line one grew by half and snapped back at every row,
+// which read as shaking (worst in Safari, which redraws stretched text
+// roughly). It also stays inside the visible list: dragged past the bottom it
+// used to make the list longer, which made it scroll, which made it longer.
 
 import { createContext, useContext, useMemo, useSyncExternalStore, type ReactNode } from "react";
 import {
@@ -29,7 +36,7 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
-import { restrictToParentElement, restrictToVerticalAxis } from "@dnd-kit/modifiers";
+import { restrictToFirstScrollableAncestor, restrictToParentElement, restrictToVerticalAxis } from "@dnd-kit/modifiers";
 import {
   SortableContext,
   rectSortingStrategy,
@@ -45,6 +52,12 @@ const TOUCH_DELAY_MS = 180;
 const TOUCH_TOLERANCE = 8;
 /** Mouse travel before a press counts as a drag rather than a click. */
 const MOUSE_DISTANCE = 5;
+/**
+ * Scrolling while dragging: only in the outer tenth of the list and at an easy
+ * pace. Faster scrolling makes the lifted item wobble, since the scroll and its
+ * position are updated a frame apart.
+ */
+const AUTO_SCROLL = { threshold: { x: 0, y: 0.1 }, acceleration: 3 };
 /**
  * Rows that also swipe sideways (to delete) only lift on an up-or-down pull:
  * a mouse that heads sideways first is left to the swipe.
@@ -117,7 +130,7 @@ export function SortableList({
 
   const strategy = asGrid ? rectSortingStrategy : verticalListSortingStrategy;
   const modifiers = useMemo(
-    () => (asGrid ? [restrictToParentElement] : [restrictToVerticalAxis]),
+    () => (asGrid ? [restrictToParentElement] : [restrictToVerticalAxis, restrictToFirstScrollableAncestor]),
     [asGrid]
   );
 
@@ -167,6 +180,7 @@ export function SortableList({
         // measured while dragging, not just at the start.
         measuring={dropZoneId ? { droppable: { strategy: MeasuringStrategy.Always } } : undefined}
         modifiers={modifiers}
+        autoScroll={AUTO_SCROLL}
         onDragStart={handleStart}
         onDragEnd={handleEnd}
         onDragCancel={() => onDragStateChange?.(null)}
@@ -206,7 +220,8 @@ export function useSortableItem(id: string): SortableHandleProps {
     setNodeRef,
     handle: enabled ? { ...attributes, ...listeners } : {},
     style: {
-      transform: CSS.Transform.toString(transform),
+      // Translate only: no scaling to the size of the item underneath.
+      transform: CSS.Translate.toString(transform),
       transition,
       // Lifted items ride above the rest and ignore pointer tests.
       ...(isDragging ? { zIndex: 50, opacity: 0.85, cursor: "grabbing" } : {}),
