@@ -59,11 +59,15 @@ const TOUCH_TOLERANCE = 8;
 /** Mouse travel before a press counts as a drag rather than a click. */
 const MOUSE_DISTANCE = 5;
 /**
- * Scrolling while dragging: only in the outer tenth of the list and at an easy
- * pace. Faster scrolling makes the lifted item wobble, since the scroll and its
- * position are updated a frame apart.
+ * Scrolling by itself while dragging, for a finger only: in the outer tenth of
+ * the list, at an easy pace. With a mouse the list never scrolls on its own,
+ * since a list that keeps scrolling (and rows that keep stepping aside as new
+ * ones pass under the pointer) while the mouse is held still near an edge
+ * reads as everything shaking. The wheel or trackpad scrolls it mid-drag
+ * instead, so nothing moves unless you move it.
  */
-const AUTO_SCROLL = { threshold: { x: 0, y: 0.1 }, acceleration: 3 };
+const TOUCH_AUTO_SCROLL = { threshold: { x: 0, y: 0.1 }, acceleration: 3 };
+const startedByTouch = (event: Event | null): boolean => !!event && event.type.startsWith("touch");
 /**
  * Rows that also swipe sideways (to delete) only lift on an up-or-down pull:
  * a mouse that heads sideways first is left to the swipe.
@@ -131,6 +135,7 @@ export function SortableList({
   renderOverlay,
 }: SortableListProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [touchDrag, setTouchDrag] = useState(false);
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: swipeRows ? ROW_MOUSE : { distance: MOUSE_DISTANCE } }),
     useSensor(TouchSensor, {
@@ -150,6 +155,7 @@ export function SortableList({
 
   const handleStart = (event: DragStartEvent) => {
     setActiveId(String(event.active.id));
+    setTouchDrag(startedByTouch(event.activatorEvent));
     onDragStateChange?.(String(event.active.id));
   };
 
@@ -207,7 +213,7 @@ export function SortableList({
         // measured while dragging, not just at the start.
         measuring={dropZoneId ? { droppable: { strategy: MeasuringStrategy.Always } } : undefined}
         modifiers={modifiers}
-        autoScroll={AUTO_SCROLL}
+        autoScroll={touchDrag ? TOUCH_AUTO_SCROLL : false}
         onDragStart={handleStart}
         onDragEnd={handleEnd}
         onDragCancel={() => {
@@ -223,7 +229,9 @@ export function SortableList({
         {renderOverlay &&
           typeof document !== "undefined" &&
           createPortal(
-            <DragOverlay dropAnimation={DROP_ANIMATION} zIndex={950}>
+            // Lets the wheel and trackpad reach the list under the copy, so it
+            // can be scrolled mid-drag.
+            <DragOverlay dropAnimation={DROP_ANIMATION} zIndex={950} style={{ pointerEvents: "none" }}>
               {activeId ? renderOverlay(activeId) : null}
             </DragOverlay>,
             document.body
