@@ -982,7 +982,10 @@ export const GoalDetailModal = ({
         </div>
 
         {/* body */}
-        <motion.div layoutScroll className="flex-1 overflow-y-auto overscroll-contain custom-scrollbar-mobile">
+        {/* The Mac's own scrollbar, not a custom-styled one: Safari on a
+            computer scrolls a box with a styled scrollbar the slow way, and
+            dragged rows inside it shimmered. The phone never styles it. */}
+        <motion.div layoutScroll className="flex-1 overflow-y-auto overscroll-contain [color-scheme:dark]">
           {tab === "tasks" ? (
             <SortableList
               ids={subgoals.map((sg) => sg.id)}

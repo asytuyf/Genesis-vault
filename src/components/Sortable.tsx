@@ -24,6 +24,12 @@
 // renderOverlay). The copy lives outside the scrolling list, on top of the
 // page, so the list scrolling under it near an edge cannot make it tremble;
 // the row stays behind as a faint placeholder showing where it will land.
+//
+// Rows are measured when a drag starts, not on every movement: a trackpad
+// held down sends a steady stream of tiny movements, and re-measuring every
+// row for each one kept a long list redrawing (and shimmering) while still.
+// The drop zone does not need it either: it is checked against where it is
+// on screen at that moment.
 
 import { createContext, useContext, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 import { createPortal } from "react-dom";
@@ -31,7 +37,6 @@ import {
   DndContext,
   DragOverlay,
   KeyboardSensor,
-  MeasuringStrategy,
   MouseSensor,
   TouchSensor,
   closestCorners,
@@ -209,9 +214,6 @@ export function SortableList({
       <DndContext
         sensors={sensors}
         collisionDetection={collision}
-        // The drop zone only appears once a drag has begun, so it has to be
-        // measured while dragging, not just at the start.
-        measuring={dropZoneId ? { droppable: { strategy: MeasuringStrategy.Always } } : undefined}
         modifiers={modifiers}
         autoScroll={touchDrag ? TOUCH_AUTO_SCROLL : false}
         onDragStart={handleStart}
