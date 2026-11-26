@@ -14,7 +14,7 @@ import {
   type Goal, type GoalOp, type GoalPatch, type SubGoal,
   formatCountdown, formatClock, formatDuration, formatTimeLeft, hoursFromNow,
   subClearsAt, timerRemaining, timerRunning, timerFinished, toggleSubDone, lateText,
-  cleanLink, formatSlot, linkLabel, slotState,
+  formatSlot, linkLabel, parseLinks, shortLink, slotState, subLinks, withSubLinks,
 } from "@/lib/goals";
 import { requestNotifPermission } from "@/lib/notify";
 import { isPageKey, isSaveCombo } from "@/lib/keys";
@@ -97,13 +97,17 @@ const SubgoalItem = ({
   const [timeUnit, setTimeUnit] = useState<TimeUnit>(() => (sg.timer ? splitDuration(sg.timer.duration).unit : "m"));
   const [linkDraft, setLinkDraft] = useState("");
   const [linkBad, setLinkBad] = useState(false);
+  /** The row's list of links, for a to-do with more than one. */
+  const [showLinks, setShowLinks] = useState(false);
+  /** How many tabs the browser stopped on the last "Open all". */
+  const [blockedTabs, setBlockedTabs] = useState(0);
 
   const running = timerRunning(sg.timer);
   const finished = timerFinished(sg.timer);
   const remaining = sg.timer ? timerRemaining(sg.timer) : 0;
   const cd = sg.deadline ? formatCountdown(sg.deadline) : null;
   const slotNow = sg.slot ? slotState(sg.slot) : null;
-  const href = sg.link ? cleanLink(sg.link) : "";
+  const links = subLinks(sg);
   const isActive = !!sg.active && !sg.completed;
 
   const commitText = () => {
@@ -163,10 +167,10 @@ const SubgoalItem = ({
     onChange(next);
   };
 
-  // The options open on what is saved, not on what was typed in them last time.
+  // The options open with an empty link box, not what was typed in it last time.
   const toggleOptions = () => {
     if (!expanded) {
-      setLinkDraft(sg.link ?? "");
+      setLinkDraft("");
       setLinkBad(false);
     }
     onToggleExpanded();
@@ -178,26 +182,38 @@ const SubgoalItem = ({
     onChange(next);
   };
 
-  const commitLink = () => {
-    const clean = cleanLink(linkDraft);
-    if (linkDraft.trim() && !clean) {
+  // Adds what is in the link box: one link, or several pasted together. Only
+  // the ones that are not links stay in the box, to be fixed.
+  const addLinks = () => {
+    if (!linkDraft.trim()) return;
+    const { links: typed, bad } = parseLinks(linkDraft);
+    const fresh = typed.filter((l, i) => !links.includes(l) && typed.indexOf(l) === i);
+    if (fresh.length) onChange(withSubLinks(sg, [...links, ...fresh]));
+    if (bad) {
+      setLinkDraft(linkDraft.split(/\s+/).filter((part) => part && !parseLinks(part).links.length).join(" "));
       setLinkBad(true);
       return;
     }
-    setLinkDraft(clean);
-    if (clean === (sg.link ?? "")) return;
-    const next = { ...sg };
-    if (clean) next.link = clean;
-    else delete next.link;
-    onChange(next);
-  };
-
-  const clearLink = () => {
     setLinkDraft("");
     setLinkBad(false);
-    const next = { ...sg };
-    delete next.link;
-    onChange(next);
+  };
+
+  const removeLink = (href: string) => {
+    const rest = links.filter((l) => l !== href);
+    if (rest.length < 2) setShowLinks(false);
+    onChange(withSubLinks(sg, rest));
+  };
+
+  // One tab per link. Browsers usually let a click open only one, so the
+  // rest may be stopped; then say how to let them through.
+  const openAll = () => {
+    let blocked = 0;
+    for (const href of links) {
+      const tab = window.open(href, "_blank");
+      if (tab) tab.opener = null;
+      else blocked++;
+    }
+    setBlockedTabs(blocked);
   };
 
   // The whole row is what you hold to move it. A key press only starts a move
@@ -333,23 +349,74 @@ const SubgoalItem = ({
               )}
             </div>
           )}
+
+          {isAdmin && showLinks && links.length > 1 && !editing && (
+            <div className="mt-1.5">
+              <div className="flex flex-wrap items-center gap-1.5">
+                {links.map((href) => (
+                  <a
+                    key={href}
+                    href={href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    draggable={false}
+                    title={href}
+                    className="inline-flex items-center gap-1 max-w-full px-2 py-0.5 border border-zinc-800 bg-zinc-900/60 text-zinc-400 text-[10px] font-bold font-mono transition-colors hover:border-emerald-500/40 hover:text-emerald-400 [-webkit-touch-callout:none]"
+                  >
+                    <ExternalLink size={9} className="shrink-0" />
+                    <span className="truncate max-w-[14rem]">{shortLink(href)}</span>
+                  </a>
+                ))}
+                <button
+                  onClick={openAll}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 text-[10px] font-bold uppercase transition-colors hover:bg-emerald-500/20"
+                >
+                  Open all {links.length}
+                </button>
+              </div>
+              {blockedTabs > 0 && (
+                <p className="mt-1.5 text-[10px] text-zinc-500 leading-snug">
+                  Your browser stopped {blockedTabs === 1 ? "1 tab" : `${blockedTabs} tabs`}. Allow pop-ups for this
+                  site to open them all at once.
+                </p>
+              )}
+            </div>
+          )}
         </div>
 
         {isAdmin && (
           <div className="flex items-center shrink-0 -mr-1">
-            {/* Only there when the to-do has a link, so the rest stay as they are. */}
-            {href && (
+            {/* Only there when the to-do has a link, so the rest stay as they are.
+                One link opens straight away; several are listed under the text. */}
+            {links.length === 1 && (
               <a
-                href={href}
+                href={links[0]}
                 target="_blank"
                 rel="noopener noreferrer"
                 draggable={false}
-                title={`Open ${linkLabel(href)}`}
-                aria-label={`Open ${linkLabel(href)}`}
+                title={`Open ${linkLabel(links[0])}`}
+                aria-label={`Open ${linkLabel(links[0])}`}
                 className="h-9 w-8 grid place-items-center text-zinc-500 hover:text-emerald-400 transition-colors [-webkit-touch-callout:none]"
               >
                 <ExternalLink size={14} />
               </a>
+            )}
+            {links.length > 1 && (
+              <button
+                onClick={() => {
+                  setShowLinks((open) => !open);
+                  setBlockedTabs(0);
+                }}
+                title={showLinks ? "Hide the links" : `${links.length} links`}
+                aria-label={`${links.length} links`}
+                aria-expanded={showLinks}
+                className={`relative h-9 w-8 grid place-items-center transition-colors ${
+                  showLinks ? "text-emerald-400" : "text-zinc-500 hover:text-emerald-400"
+                }`}
+              >
+                <ExternalLink size={14} />
+                <span className="absolute top-1 right-0 text-[8px] font-black font-mono leading-none">{links.length}</span>
+              </button>
             )}
             {/* Working on it: far from the tick box, so a thumb cannot hit the wrong one. */}
             <button
@@ -365,7 +432,7 @@ const SubgoalItem = ({
             </button>
             <button
               onClick={toggleOptions}
-              title="Timer, due date, time slot, link"
+              title="Timer, due date, time slot, links"
               aria-label="To-do options"
               aria-expanded={expanded}
               className={`h-9 w-8 grid place-items-center transition-colors ${expanded ? "text-emerald-400" : "text-zinc-700 hover:text-zinc-300"}`}
@@ -475,29 +542,63 @@ const SubgoalItem = ({
               <div>
                 <Label>
                   <span className="inline-flex items-center gap-1.5">
-                    <Link2 size={9} /> Link
+                    <Link2 size={9} /> Links
                   </span>
                 </Label>
+                {links.length > 0 && (
+                  <ul className="space-y-1.5 mb-1.5">
+                    {links.map((href) => (
+                      <li key={href} className="flex gap-1.5">
+                        <a
+                          href={href}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title={href}
+                          className={`${field} flex-1 min-w-0 truncate hover:text-emerald-400`}
+                        >
+                          {shortLink(href)}
+                        </a>
+                        <button
+                          onClick={() => removeLink(href)}
+                          title="Remove this link"
+                          aria-label={`Remove ${shortLink(href)}`}
+                          className={clearBtn}
+                        >
+                          <X size={12} />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
                 <div className="flex gap-1.5">
+                  {/* A text box, not a url one: it takes several links pasted at once. */}
                   <input
-                    type="url"
+                    type="text"
                     inputMode="url"
                     autoCapitalize="none"
                     autoCorrect="off"
                     spellCheck={false}
-                    placeholder="https://..."
-                    aria-label="Link"
+                    placeholder={links.length ? "Add another link" : "https://..."}
+                    aria-label="Add a link"
                     value={linkDraft}
                     onChange={(e) => {
                       setLinkDraft(e.target.value);
                       setLinkBad(false);
                     }}
-                    onBlur={commitLink}
-                    onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+                    onBlur={addLinks}
+                    onKeyDown={(e) => {
+                      if (e.key !== "Enter") return;
+                      e.preventDefault();
+                      addLinks();
+                    }}
                     className={`${field} flex-1 min-w-0`}
                   />
-                  <button onClick={clearLink} disabled={!sg.link && !linkDraft} className={clearBtn}>
-                    Clear
+                  <button
+                    onClick={addLinks}
+                    disabled={!linkDraft.trim()}
+                    className="px-3 py-2 border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 text-[10px] font-bold uppercase transition-colors hover:bg-emerald-500/20 disabled:opacity-30 disabled:pointer-events-none"
+                  >
+                    Add
                   </button>
                 </div>
                 {linkBad && <p className="mt-1.5 text-[10px] text-red-400">That does not look like a link.</p>}

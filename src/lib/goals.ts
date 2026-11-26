@@ -39,7 +39,12 @@ export interface SubGoal {
   private?: boolean;
   /** When it is planned to be worked on. */
   slot?: SubSlot;
-  /** Where the work happens: a doc, a repo, an app link. Kept from anyone without the admin key. */
+  /**
+   * Where the work happens: docs, a repo, app links. Kept from anyone without
+   * the admin key. Read them with subLinks, which also picks up `link`.
+   */
+  links?: string[];
+  /** The single link to-dos had before they could have several. */
   link?: string;
 }
 
@@ -432,6 +437,46 @@ export const linkLabel = (href: string): string => {
   }
 };
 
+/** "github.com/asytuyf/repo": enough to tell two links on the same site apart. */
+export const shortLink = (href: string): string => {
+  try {
+    const url = new URL(href);
+    // An app link reads best whole: "notion://page", "obsidian://open?vault=…".
+    if (url.protocol !== "http:" && url.protocol !== "https:") return href.replace(/\/$/, "");
+    const path = (url.pathname + url.search).replace(/\/$/, "");
+    return url.hostname.replace(/^www\./, "") + (path === "/" ? "" : path);
+  } catch {
+    return href;
+  }
+};
+
+/** A to-do's links, ready to open, in the order they were added. */
+export const subLinks = (sg: SubGoal): string[] => {
+  const saved = Array.isArray(sg.links) ? sg.links.filter(isStr) : [];
+  const all = [...(sg.link ? [sg.link] : []), ...saved].map(cleanLink).filter(Boolean);
+  return [...new Set(all)];
+};
+
+/** The to-do holding these links (the old single `link` folded in). */
+export const withSubLinks = (sg: SubGoal, links: string[]): SubGoal => {
+  const next = { ...sg };
+  delete next.link;
+  if (links.length) next.links = links;
+  else delete next.links;
+  return next;
+};
+
+/**
+ * Every link in what was typed or pasted, ready to open. Several can go in at
+ * once, one per line or with spaces between; `bad` is true when any part was
+ * not a link.
+ */
+export const parseLinks = (raw: string): { links: string[]; bad: boolean } => {
+  const parts = raw.split(/\s+/).filter(Boolean);
+  const links = parts.map(cleanLink);
+  return { links: links.filter(Boolean), bad: links.some((l) => !l) };
+};
+
 /**
  * The goal as someone without the admin key may see it: no private to-dos.
  * The server strips them before they leave, and the page does the same the
@@ -447,13 +492,14 @@ export const withoutPrivateSubs = (goal: Goal): Goal =>
  * so, like a description, it only goes to someone with the admin key.
  */
 export const withoutSubLinks = (goal: Goal): Goal =>
-  goal.subgoals?.some((sg) => sg.link)
+  goal.subgoals?.some((sg) => sg.link || sg.links)
     ? {
         ...goal,
         subgoals: goal.subgoals.map((sg) => {
-          if (!sg.link) return sg;
+          if (!sg.link && !sg.links) return sg;
           const rest = { ...sg };
           delete rest.link;
+          delete rest.links;
           return rest;
         }),
       }
