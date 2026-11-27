@@ -454,7 +454,10 @@ const SubgoalItem = ({
             transition={{ duration: 0.18 }}
             className="overflow-hidden"
           >
-            <div className="border-t border-zinc-800/80 px-3 py-3 space-y-4 bg-black/40">
+            {/* The row turns off text selection and the long-press menu so a hold
+                drags it; the options give both back, or a field here could not be
+                pasted into on an iPhone. */}
+            <div className="border-t border-zinc-800/80 px-3 py-3 space-y-4 bg-black/40 select-text [-webkit-user-select:text] [-webkit-touch-callout:default]">
               <div>
                 <Label>
                   <span className="inline-flex items-center gap-1.5">
@@ -591,7 +594,7 @@ const SubgoalItem = ({
                       e.preventDefault();
                       addLinks();
                     }}
-                    className={`${field} flex-1 min-w-0`}
+                    className={`${field} flex-1 min-w-0 max-md:text-base`}
                   />
                   <button
                     onClick={addLinks}

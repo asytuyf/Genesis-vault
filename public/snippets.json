@@ -70,5 +70,11 @@
     "cat": "nix",
     "desc": "Garbage-collect old generations and optimize the Nix store.",
     "date": "2026-02-11"
+  },
+  {
+    "cmd": "cmd + L",
+    "cat": "macOS",
+    "desc": "In the Notes app on a Mac, draws a divider line under the current line.",
+    "date": "2026-11-27"
   }
 ]
